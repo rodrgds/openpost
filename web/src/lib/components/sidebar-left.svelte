@@ -6,6 +6,7 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
+	import Logo from './Logo.svelte';
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import FileTextIcon from 'lucide-svelte/icons/file-text';
@@ -67,6 +68,14 @@
 
 <Sidebar.Root>
 	<Sidebar.Header>
+		<!-- Logo -->
+		<div class="flex items-center justify-center py-2 px-2">
+			<a href="/" class="hover:opacity-90 transition-opacity">
+				<Logo width={28} height={28} showText={true} />
+			</a>
+		</div>
+		<Sidebar.Separator />
+
 		<!-- Workspace Switcher -->
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>

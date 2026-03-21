@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://github.com/openpost/openpost" target="_blank">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://via.placeholder.com/280x80/1a1a1a/22c55e?text=OpenPost">
-    <img alt="OpenPost Logo" src="https://via.placeholder.com/280x80/ffffff/16a34a?text=OpenPost" width="280"/>
+    <source media="(prefers-color-scheme: dark)" srcset="./web/static/logo-white.png">
+    <img alt="OpenPost Logo" src="./web/static/logo-black.png" width="280"/>
   </picture>
   </a>
 </p>

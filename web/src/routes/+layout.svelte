@@ -10,6 +10,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import SidebarLeft from '$lib/components/sidebar-left.svelte';
 	import SidebarRight from '$lib/components/sidebar-right.svelte';
+	import Logo from '$lib/components/Logo.svelte';
 	
 	let { children } = $props();
 	
@@ -50,7 +51,9 @@
 	{#if currentPath === '/'}
 		<div class="min-h-[80vh] flex items-center justify-center">
 			<div class="max-w-md mx-auto px-4 py-12 text-center">
-				<h1 class="text-3xl font-bold mb-4">OpenPost</h1>
+				<div class="flex justify-center mb-6">
+					<Logo width={100} height={29} />
+				</div>
 				<p class="text-muted-foreground mb-6">Schedule posts across multiple social platforms.</p>
 				<div class="flex gap-4 justify-center">
 					<a href="/login" class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Sign In</a>

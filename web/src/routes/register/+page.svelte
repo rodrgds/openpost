@@ -5,6 +5,7 @@
 	import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import Logo from '$lib/components/Logo.svelte';
 	
 	let email = $state('');
 	let password = $state('');
@@ -48,7 +49,12 @@
 </svelte:head>
 
 {#if registrationSuccess}
-	<div class="min-h-[80vh] flex items-center justify-center">
+	<div class="min-h-[80vh] flex flex-col items-center justify-center gap-6">
+		<div class="flex justify-center">
+			<a href="/">
+				<Logo width={80} height={23} />
+			</a>
+		</div>
 		<Card class="w-full max-w-md">
 			<CardContent class="pt-6 text-center">
 				<div class="text-green-600 mb-4">
@@ -62,7 +68,12 @@
 		</Card>
 	</div>
 {:else}
-	<div class="min-h-[80vh] flex items-center justify-center">
+	<div class="min-h-[80vh] flex flex-col items-center justify-center gap-6">
+		<div class="flex justify-center">
+			<a href="/">
+				<Logo width={80} height={23} />
+			</a>
+		</div>
 		<Card class="w-full max-w-md">
 			<CardHeader>
 				<CardTitle class="text-center">Create Account</CardTitle>

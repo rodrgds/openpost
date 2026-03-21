@@ -5,6 +5,7 @@
 	import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import Logo from '$lib/components/Logo.svelte';
 	
 	let email = $state('');
 	let password = $state('');
@@ -32,7 +33,12 @@
 	<title>Login - OpenPost</title>
 </svelte:head>
 
-<div class="min-h-[80vh] flex items-center justify-center">
+<div class="min-h-[80vh] flex flex-col items-center justify-center gap-6">
+	<div class="flex justify-center">
+		<a href="/">
+			<Logo width={80} height={23} />
+		</a>
+	</div>
 	<Card class="w-full max-w-md">
 		<CardHeader>
 			<CardTitle class="text-center">Sign In</CardTitle>
@@ -74,7 +80,7 @@
 			</form>
 			
 			<p class="mt-6 text-center text-sm text-muted-foreground">
-				Don't have an account? 
+				Don't have an account?
 				<a href="/register" class="text-primary hover:underline font-medium">Create one</a>
 			</p>
 		</CardContent>
