@@ -1,9 +1,6 @@
 <p align="center">
   <a href="https://github.com/openpost/openpost" target="_blank">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./web/static/logo-white.png">
-    <img alt="OpenPost Logo" src="./web/static/logo-black.png" width="280"/>
-  </picture>
+    <img alt="OpenPost Logo" src="./web/static/logo.svg" width="280"/>
   </a>
 </p>
 

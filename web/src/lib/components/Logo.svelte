@@ -15,21 +15,23 @@
 
 {#if showText}
 	<div class="flex items-center gap-2 {className}">
-		<img
-			src={isDark ? '/logo-white.png' : '/logo-black.png'}
-			alt="OpenPost"
+		<object
+			data="/logo.svg"
+			type="image/svg+xml"
+			aria-label="OpenPost"
 			{width}
 			{height}
 			class="h-auto max-w-full"
-		/>
+		></object>
 		<span class="font-bold text-sidebar-foreground whitespace-nowrap">OpenPost</span>
 	</div>
 {:else}
-	<img
-		src={isDark ? '/logo-white.png' : '/logo-black.png'}
-		alt="OpenPost"
+	<object
+		data="/logo.svg"
+		type="image/svg+xml"
+		aria-label="OpenPost"
 		{width}
 		{height}
 		class="h-auto max-w-full {className}"
-	/>
+	></object>
 {/if}

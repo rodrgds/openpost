@@ -104,11 +104,16 @@
 
 	onMount(loadOverview);
 
+	// Track previous month to detect actual changes
+	let previousMonth = $state('');
+	
 	$effect(() => {
-		monthString;
-		if (!loading) {
+		const currentMonth = monthString;
+		// Only reload if month actually changed and we've already loaded once
+		if (previousMonth && previousMonth !== currentMonth) {
 			loadOverview();
 		}
+		previousMonth = currentMonth;
 	});
 
 	async function loadOverview() {
