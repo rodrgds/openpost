@@ -1,0 +1,51 @@
+# Environment files
+.env
+.env.local
+*.env
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# Backend binary
+backend/openpost
+backend/openpost.db
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node/Web
+node_modules/
+web/.svelte-kit/
+web/build/
+web/.vite/
+web/package-lock.json
+web/yarn.lock
+web/pnpm-lock.yaml
+web/bun.lock
+
+# Logs
+*.log
+logs/
+
+# Data directories
+data/
+media/
