@@ -49,3 +49,7 @@ logs/
 # Data directories
 data/
 media/
+
+# devenv
+.devenv/
+devenv.lock
