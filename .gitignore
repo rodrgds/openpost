@@ -56,3 +56,5 @@ media/
 # devenv
 .devenv/
 devenv.lock
+
+.pre-commit-config.yaml
