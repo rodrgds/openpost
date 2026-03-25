@@ -10,12 +10,15 @@
 		CardTitle,
 		CardDescription
 	} from '$lib/components/ui/card';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { goto } from '$app/navigation';
 	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
+
+	interface MastodonServer {
+		name: string;
+		instance_url: string;
+	}
 
 	let workspaces = $state<Workspace[] | null>(null);
 	let selectedWorkspaceId = $state('');
@@ -25,8 +28,7 @@
 	let accounts = $state<SocialAccount[]>([]);
 	let accountsLoading = $state(false);
 
-	let mastodonInstance = $state('mastodon.social');
-	let showMastodonModal = $state(false);
+	let mastodonServers = $state<MastodonServer[]>([]);
 	let selectedWorkspaceName = $derived(
 		workspaces?.find((workspace) => workspace.id === selectedWorkspaceId)?.name ||
 			'Select workspace'
@@ -48,6 +50,16 @@
 		}
 	}
 
+	async function loadMastodonServers() {
+		try {
+			const { data } = await client.GET('/accounts/mastodon/servers', {});
+			mastodonServers = (data ?? []) as unknown as MastodonServer[];
+		} catch (e) {
+			console.error('Failed to load Mastodon servers:', e);
+			mastodonServers = [];
+		}
+	}
+
 	onMount(() => {
 		auth.subscribe(async (state) => {
 			if (!state.isLoading && !state.isAuthenticated) {
@@ -60,6 +72,7 @@
 						selectedWorkspaceId = workspaces[0].id;
 						await loadAccounts();
 					}
+					await loadMastodonServers();
 				} catch (e) {
 					console.error('Failed to load workspaces:', e);
 				} finally {
@@ -90,29 +103,20 @@
 		}
 	}
 
-	async function connectMastodon() {
+	async function connectMastodon(serverName: string) {
 		if (!selectedWorkspaceId) {
 			alert('Please create a workspace first');
 			return;
 		}
-		if (!mastodonInstance.trim()) {
-			alert('Please enter a Mastodon instance URL');
-			return;
-		}
 
 		try {
-			let instance = mastodonInstance.trim();
-			if (!instance.startsWith('http')) {
-				instance = 'https://' + instance;
-			}
-
 			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
-			localStorage.setItem('oauth_mastodon_instance', instance);
+			localStorage.setItem('oauth_mastodon_server', serverName);
 
 			const { data, error: err } = await client.GET('/accounts/{platform}/auth-url', {
 				params: {
 					path: { platform: 'mastodon' },
-					query: { workspace_id: selectedWorkspaceId, instance }
+					query: { workspace_id: selectedWorkspaceId, server_name: serverName }
 				}
 			});
 			if (data?.url) window.location.href = data.url;
@@ -190,7 +194,6 @@
 		{/if}
 
 		<div class="mb-6">
-			<Label class="mb-2">Workspace</Label>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -293,25 +296,45 @@
 				</CardContent>
 			</Card>
 
-			<Card>
-				<CardContent class="flex items-center justify-between p-4">
-					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-							<span class="text-lg font-bold text-white">🐘</span>
+			{#if mastodonServers.length > 0}
+				{#each mastodonServers as server}
+					<Card>
+						<CardContent class="flex items-center justify-between p-4">
+							<div class="flex items-center gap-3">
+								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
+									<span class="text-lg font-bold text-white">🐘</span>
+								</div>
+								<div>
+									<h3 class="font-medium">{server.name}</h3>
+									<p class="text-sm text-muted-foreground">
+										{server.instance_url.replace('https://', '')}
+									</p>
+								</div>
+							</div>
+							<div class="flex gap-2">
+								<Button href="/accounts/mastodon/callback" variant="outline">Enter Code</Button>
+								<Button onclick={() => connectMastodon(server.name)}>Connect</Button>
+							</div>
+						</CardContent>
+					</Card>
+				{/each}
+			{:else}
+				<Card>
+					<CardContent class="flex items-center justify-between p-4">
+						<div class="flex items-center gap-3">
+							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
+								<span class="text-lg font-bold text-white">🐘</span>
+							</div>
+							<div>
+								<h3 class="font-medium">Mastodon</h3>
+								<p class="text-sm text-muted-foreground">
+									No Mastodon servers configured. Add MASTODON_SERVERS to your .env file.
+								</p>
+							</div>
 						</div>
-						<div>
-							<h3 class="font-medium">Mastodon</h3>
-							<p class="text-sm text-muted-foreground">
-								Connect your Mastodon account from any instance
-							</p>
-						</div>
-					</div>
-					<div class="flex gap-2">
-						<Button href="/accounts/mastodon/callback" variant="outline">Enter Code</Button>
-						<Button onclick={() => (showMastodonModal = true)}>Connect</Button>
-					</div>
-				</CardContent>
-			</Card>
+					</CardContent>
+				</Card>
+			{/if}
 
 			<Card class="opacity-60">
 				<CardContent class="flex items-center justify-between p-4">
@@ -358,47 +381,5 @@
 				</CardContent>
 			</Card>
 		</div>
-	</div>
-{/if}
-
-{#if showMastodonModal}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-		onclick={() => (showMastodonModal = false)}
-	>
-		<Card class="mx-4 w-full max-w-md" onclick={(e: MouseEvent) => e.stopPropagation()}>
-			<CardHeader>
-				<CardTitle>Connect Mastodon</CardTitle>
-			</CardHeader>
-			<CardContent>
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						connectMastodon();
-					}}
-					class="space-y-4"
-				>
-					<div class="space-y-2">
-						<Label for="instance">Mastodon Instance</Label>
-						<Input
-							type="text"
-							id="instance"
-							bind:value={mastodonInstance}
-							placeholder="mastodon.social"
-							required
-						/>
-						<p class="text-xs text-muted-foreground">
-							Enter your Mastodon instance URL (e.g., mastodon.social, fosstodon.org)
-						</p>
-					</div>
-					<div class="flex justify-end gap-3">
-						<Button type="button" variant="outline" onclick={() => (showMastodonModal = false)}
-							>Cancel</Button
-						>
-						<Button type="submit">Connect</Button>
-					</div>
-				</form>
-			</CardContent>
-		</Card>
 	</div>
 {/if}

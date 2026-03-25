@@ -16,21 +16,32 @@ import (
 )
 
 type OAuthHandler struct {
-	db       *bun.DB
-	crypto   *crypto.TokenEncryptor
-	twitter  *oauth.TwitterOAuth
-	mastodon *oauth.MastodonOAuth
-	auth     *auth.Service
+	db              *bun.DB
+	crypto          *crypto.TokenEncryptor
+	twitter         *oauth.TwitterOAuth
+	mastodonServers map[string]*oauth.MastodonOAuth
+	auth            *auth.Service
 }
 
-func NewOAuthHandler(db *bun.DB, encryptor *crypto.TokenEncryptor, tw *oauth.TwitterOAuth, ma *oauth.MastodonOAuth, authService *auth.Service) *OAuthHandler {
+func NewOAuthHandler(db *bun.DB, encryptor *crypto.TokenEncryptor, tw *oauth.TwitterOAuth, mastodonServers map[string]*oauth.MastodonOAuth, authService *auth.Service) *OAuthHandler {
 	return &OAuthHandler{
-		db:       db,
-		crypto:   encryptor,
-		twitter:  tw,
-		mastodon: ma,
-		auth:     authService,
+		db:              db,
+		crypto:          encryptor,
+		twitter:         tw,
+		mastodonServers: mastodonServers,
+		auth:            authService,
 	}
+}
+
+// --- List Mastodon Servers ---
+
+type MastodonServerInfo struct {
+	Name        string `json:"name" doc:"Server configuration name"`
+	InstanceURL string `json:"instance_url" doc:"Mastodon instance URL"`
+}
+
+type ListMastodonServersOutput struct {
+	Body []MastodonServerInfo
 }
 
 // --- Get Auth URL ---
@@ -38,7 +49,7 @@ func NewOAuthHandler(db *bun.DB, encryptor *crypto.TokenEncryptor, tw *oauth.Twi
 type GetAuthURLInput struct {
 	Platform    string `path:"platform" doc:"Social platform (x, mastodon)"`
 	WorkspaceID string `query:"workspace_id" doc:"Workspace ID to link account to"`
-	Instance    string `query:"instance" doc:"Mastodon instance URL (required for mastodon)"`
+	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
 }
 
 type GetAuthURLOutput struct {
@@ -50,9 +61,10 @@ type GetAuthURLOutput struct {
 // --- Callback ---
 
 type OAuthCallbackInput struct {
-	Platform string `path:"platform" doc:"Social platform"`
-	Code     string `query:"code" doc:"OAuth authorization code"`
-	State    string `query:"state" doc:"OAuth state (workspace ID)"`
+	Platform   string `path:"platform" doc:"Social platform"`
+	Code       string `query:"code" doc:"OAuth authorization code"`
+	State      string `query:"state" doc:"OAuth state (workspace ID)"`
+	ServerName string `query:"server_name" doc:"Mastodon server name (required for mastodon)"`
 }
 
 // --- Exchange Code ---
@@ -60,7 +72,7 @@ type OAuthCallbackInput struct {
 type ExchangeCodeInput struct {
 	Body struct {
 		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
-		Instance    string `json:"instance" doc:"Mastodon instance URL"`
+		ServerName  string `json:"server_name" doc:"Mastodon server name from config"`
 		Code        string `json:"code" doc:"Authorization code from OOB flow"`
 	}
 }
@@ -82,6 +94,26 @@ type AccountResponse struct {
 
 type ListAccountsOutput struct {
 	Body []AccountResponse
+}
+
+func (h *OAuthHandler) ListMastodonServers(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-mastodon-servers",
+		Method:      http.MethodGet,
+		Path:        "/accounts/mastodon/servers",
+		Summary:     "List configured Mastodon servers",
+		Tags:        []string{"Accounts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+	}, func(ctx context.Context, input *struct{}) (*ListMastodonServersOutput, error) {
+		servers := make([]MastodonServerInfo, 0, len(h.mastodonServers))
+		for name, provider := range h.mastodonServers {
+			servers = append(servers, MastodonServerInfo{
+				Name:        name,
+				InstanceURL: provider.InstanceURL(),
+			})
+		}
+		return &ListMastodonServersOutput{Body: servers}, nil
+	})
 }
 
 func (h *OAuthHandler) GetAuthURL(api huma.API) {
@@ -109,10 +141,11 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return resp, nil
 
 		case "mastodon":
-			if input.Instance == "" {
-				return nil, huma.Error400BadRequest("instance query param required for mastodon")
+			provider, ok := h.mastodonServers[input.ServerName]
+			if !ok {
+				return nil, huma.Error400BadRequest("unknown mastodon server name")
 			}
-			url := h.mastodon.GenerateAuthURL(input.Instance, state)
+			url := provider.GenerateAuthURL(state)
 			resp := &GetAuthURLOutput{}
 			resp.Body.URL = url
 			return resp, nil
@@ -141,7 +174,12 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		case "x":
 			tokenResp, err = h.twitter.ExchangeCode(ctx, input.Code, "")
 		case "mastodon":
-			tokenResp, err = h.mastodon.ExchangeCode(ctx, instanceURL, input.Code)
+			provider, ok := h.mastodonServers[input.ServerName]
+			if !ok {
+				return nil, huma.Error400BadRequest("unknown mastodon server name")
+			}
+			instanceURL = provider.InstanceURL()
+			tokenResp, err = provider.ExchangeCode(ctx, input.Code)
 		default:
 			return nil, huma.Error400BadRequest("unsupported platform")
 		}
@@ -201,7 +239,12 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
-		tokenResp, err := h.mastodon.ExchangeCode(ctx, input.Body.Instance, input.Body.Code)
+		provider, ok := h.mastodonServers[input.Body.ServerName]
+		if !ok {
+			return nil, huma.Error400BadRequest("unknown mastodon server name")
+		}
+
+		tokenResp, err := provider.ExchangeCode(ctx, input.Body.Code)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("token exchange failed")
 		}
@@ -226,7 +269,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			WorkspaceID:     input.Body.WorkspaceID,
 			Platform:        "mastodon",
 			AccountID:       "fetch-id-via-profile-api",
-			InstanceURL:     input.Body.Instance,
+			InstanceURL:     provider.InstanceURL(),
 			AccessTokenEnc:  encAccess,
 			RefreshTokenEnc: encRefresh,
 			TokenExpiresAt:  expiresAt,

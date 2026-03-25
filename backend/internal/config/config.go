@@ -1,8 +1,17 @@
 package config
 
 import (
+	"encoding/json"
+	"log"
 	"os"
 )
+
+type MastodonServerConfig struct {
+	Name         string `json:"name"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	InstanceURL  string `json:"instance_url"`
+}
 
 type Config struct {
 	Port          string
@@ -14,13 +23,12 @@ type Config struct {
 	TwitterClientID     string
 	TwitterClientSecret string
 
-	MastodonClientID     string
-	MastodonClientSecret string
-	MastodonRedirectURI  string
+	MastodonRedirectURI string
+	MastodonServers     []MastodonServerConfig
 }
 
 func Load() *Config {
-	return &Config{
+	cfg := &Config{
 		Port:          getEnv("OPENPOST_PORT", "8080"),
 		DatabasePath:  getEnv("OPENPOST_DB_PATH", "file:openpost.db?cache=shared&mode=rwc"),
 		JWTSecret:     getEnv("JWT_SECRET", "development-jwt-secret-change-in-production"),
@@ -30,10 +38,19 @@ func Load() *Config {
 		TwitterClientID:     getEnv("TWITTER_CLIENT_ID", ""),
 		TwitterClientSecret: getEnv("TWITTER_CLIENT_SECRET", ""),
 
-		MastodonClientID:     getEnv("MASTODON_CLIENT_ID", ""),
-		MastodonClientSecret: getEnv("MASTODON_CLIENT_SECRET", ""),
-		MastodonRedirectURI:  getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
+		MastodonRedirectURI: getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
 	}
+
+	if raw := getEnv("MASTODON_SERVERS", ""); raw != "" {
+		var servers []MastodonServerConfig
+		if err := json.Unmarshal([]byte(raw), &servers); err != nil {
+			log.Printf("WARNING: failed to parse MASTODON_SERVERS JSON: %v", err)
+		} else {
+			cfg.MastodonServers = servers
+		}
+	}
+
+	return cfg
 }
 
 func getEnv(key, fallback string) string {

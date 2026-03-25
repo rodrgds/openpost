@@ -58,11 +58,17 @@ func main() {
 		cfg.TwitterClientSecret,
 		"http://localhost:8080/api/v1/accounts/x/callback",
 	)
-	maAuth := oauth.NewMastodonOAuth(
-		cfg.MastodonClientID,
-		cfg.MastodonClientSecret,
-		cfg.MastodonRedirectURI,
-	)
+
+	mastodonServers := make(map[string]*oauth.MastodonOAuth)
+	for _, server := range cfg.MastodonServers {
+		mastodonServers[server.Name] = oauth.NewMastodonOAuth(
+			server.ClientID,
+			server.ClientSecret,
+			cfg.MastodonRedirectURI,
+			server.InstanceURL,
+		)
+		log.Printf("Registered Mastodon server: %s (%s)", server.Name, server.InstanceURL)
+	}
 
 	publishSvc := publisher.NewService(db, tokenManager)
 
@@ -99,7 +105,8 @@ func main() {
 	postHandler.ListPosts(api)
 	postHandler.GetScheduleOverview(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, twAuth, maAuth, authService)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, twAuth, mastodonServers, authService)
+	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)
 	oauthHandler.ExchangeCode(api)

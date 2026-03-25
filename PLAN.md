@@ -1,98 +1,157 @@
-# OpenPost - Comprehensive Research & Planning Document
+# OpenPost - Development Plan & Status
 
-## Executive Summary
+## Overview
 
-OpenPost is envisioned as a lightweight, self-hosted, open-source alternative to tools like Typefully for scheduling posts across multiple social media platforms. Designed for extreme simplicity in deployment (a single Go binary) while maintaining high reliability through a custom SQLite-backed queue.
-
-This document merges the foundational research with the **actual current state of the codebase** to outline what exists, what is half-finished, and a concrete roadmap to a production-ready v1.
+OpenPost is a lightweight, self-hosted social media scheduler — an open-source alternative to Typefully, Buffer, and Hypefury. Single Go binary with embedded SvelteKit frontend. SQLite-backed everything. No external dependencies.
 
 ---
 
-## 1. Architecture Overview (Current & Target)
+## Current Status
 
-- **Frontend:** SvelteKit (SPA output embedded into Go binary). Styling via TailwindCSS.
-- **Backend API:** Go + **Echo** framework (chosen over Fiber for standard HTTP compatibility & mature middleware ecosystem).
-- **Database:** SQLite (configured with PRAGMA WAL) managed by **Bun** ORM.
-- **Background Queue:** A custom **SQLite-backed polling worker** (avoids needing Redis or volatile in-memory cron).
-- **Authentication:** Standard Email/Password for users, OAuth 2.0 / AT Protocol for connecting social accounts.
-- **Multi-Tenant:** Full **Workspace UI** from day one to support collaborative teams, roles, and separated social accounts.
+### Backend
 
----
+| Area | Status | Details |
+|------|--------|---------|
+| API Framework | ✅ Done | Echo + Huma (OpenAPI). All handlers registered with middleware. |
+| Database Schema | ✅ Done | Bun ORM models for Users, Workspaces, Posts, SocialAccounts, Jobs. SQLite with WAL pragma. |
+| Background Queue | ✅ Done | SQLite-backed polling worker. Picks up scheduled jobs and publishes posts. |
+| User Auth (JWT) | ✅ Done | Register, Login, `/me` endpoints. Bearer token auth middleware. |
+| Workspace CRUD | ✅ Done | Create, list workspaces. Multi-tenant architecture. |
+| Twitter OAuth | ✅ Done | OAuth 2.0 PKCE flow. Token exchange and storage. |
+| Mastodon OAuth | ✅ Done | Multi-server support via `MASTODON_SERVERS` JSON env var. Per-instance credentials. |
+| Token Encryption | ✅ Done | AES-256-GCM encryption for all OAuth tokens at rest. |
+| Token Management | ✅ Done | Token refresh logic for expiring tokens. |
+| Post Publishing | ✅ Done | Background worker publishes to X and Mastodon via their APIs. |
+| Post Scheduling | ✅ Done | Posts saved with `scheduled_at`, jobs table drives the queue. |
+| SPA Embedding | ✅ Done | SvelteKit static output embedded in Go binary via `go:embed`. |
 
-## 2. Current State vs. Missing Functionality
+### Frontend
 
-Based on an audit of the repository, here is the exact state of the project.
+| Area | Status | Details |
+|------|--------|---------|
+| SvelteKit Setup | ✅ Done | Svelte 5 runes, TailwindCSS 4, Paraglide i18n. |
+| Auth UI | ✅ Done | Login and Register pages with JWT storage. |
+| Workspace Switcher | ✅ Done | Dropdown to create and switch workspaces. |
+| Accounts Page | ✅ Done | Connect Twitter, Mastodon (multi-server). Shows connected accounts. |
+| Post Composer | ✅ Done | Rich text editor with platform selection and scheduling. |
+| Schedule Calendar | ✅ Done | Monthly overview with per-platform breakdown. |
+| Dashboard | ✅ Done | Workspace overview, recent posts, schedule summary. |
 
-### 2.1 Backend / Infrastructure
+### What's Working End-to-End
 
-| Area | Status | Notes / Missing Elements |
-|---|---|---|
-| **API Framework** | 🟡 Half-finished | `Echo` is set up in `main.go`. Some handlers (OAuth, Post, Workspace) are stubbed but missing core logic and imports (`context`, `time`, etc.). |
-| **Database Schema** | 🟢 Mostly Complete | `models.go` has models for Users, Workspaces, Posts, SocialAccounts, Jobs. Missing some ORM tags for cascading deletes. |
-| **Background Queue** | 🟡 Half-finished | `worker.go` correctly implements basic polling locking via SQLite. The actual `executeJob` delegates to empty/missing publishers. |
-| **Authentication (User)** | 🔴 Missing | The `users` table exists, but there are no API routes for Register, Login (JWT/Session), or middleware to protect routes. |
-| **Workspace Logic** | 🔴 Missing | Handlers are stubbed, but no complex logic exists to invite users, switch contexts, or manage roles ('admin', 'editor'). |
-| **Social OAuth (Twitter)** | 🟡 Half-finished | `twitter.go` and `oauth.go` handlers exist but lack proper state validation and error handling. |
-| **Social OAuth (Mastodon)**| 🟡 Half-finished | Similar to Twitter, stubbed but untested. Needs proper storage of instance URLs. |
-| **Token Encryption** | 🟢 Implemented | `encrypt.go` provides AES-256-GCM encryption for storing OAuth tokens securely. |
-| **Token Management** | 🔴 Missing | Need logic to actively refresh Twitter/Threads tokens before they expire and insert `refresh_token` jobs into the queue. |
-| **Media Storage** | 🟡 Half-finished | Local storage interface stubbed. S3 interface completely missing. |
-
-### 2.2 Frontend (SvelteKit)
-
-| Area | Status | Notes / Missing Elements |
-|---|---|---|
-| **SvelteKit Init** | 🟢 Implemented | The `web/` directory has a basic SvelteKit skeleton with Vite and Tailwind/Paraglide setup. |
-| **Authentication UI** | 🔴 Missing | No Login, Registration, or Password Reset forms. |
-| **Workspace Management** | 🔴 Missing | No UI to create workspaces, switch between them, or manage team members. |
-| **Social Connections UI** | 🔴 Missing | No dashboard to connect Twitter, Mastodon, etc., via the backend OAuth routes. |
-| **Post Composer** | 🔴 Missing | The core feature! Needs a rich text editor, thread builder, media uploader, and platform selector. |
-| **Schedule / Queue UI** | 🔴 Missing | Needs a list/calendar view to show upcoming posts from the database. |
-
----
-
-## 3. Implementation Roadmap
-
-To turn this repository into a "really big open source project," we need a systematic approach to complete the MVP.
-
-### Phase 1: Core Foundation & Auth (Weeks 1-2)
-*Goal: Fix compilation errors, solidify the database, and allow users to create accounts and workspaces.*
-
-- [ ] **Fix Build Errors:** Clean up unused imports and syntax errors in `backend/internal/api/handlers/oauth.go` and `main.go`.
-- [ ] **User Authentication API:** Implement `/api/v1/auth/register`, `/login`, and `/me` using JWT or cookie-based sessions.
-- [ ] **Auth Middleware:** Create Echo middleware to extract the user session and inject the User ID and active Workspace ID into the request context.
-- [ ] **Workspace API:** Complete CRUD operations for Workspaces and Workspace Members.
-- [ ] **Frontend Auth:** Build Login/Register pages in SvelteKit and a Workspace switcher component.
-
-### Phase 2: Social OAuth & Token Management (Weeks 3-4)
-*Goal: Allow users to securely connect social accounts and maintain their access.*
-
-- [ ] **Twitter & Mastodon Polish:** Finalize the OAuth handlers. Ensure the `workspace_id` state is securely passed and validated.
-- [ ] **Frontend Integration:** Build the "Social Accounts" settings page in SvelteKit where users can click "Connect Twitter", etc.
-- [ ] **Proactive Token Refresh:** Implement a chron job (via the SQLite queue or a simple backend goroutine) that scans for tokens expiring soon and refreshes them via the `TokenManager`.
-- [ ] **Threads & Bluesky Support:** Expand the OAuth handlers to support Threads (Instagram Graph API) and Bluesky (AT Protocol with DPoP).
-
-### Phase 3: The Post Composer & Queue (Weeks 5-6)
-*Goal: The core workflow of writing a post, scheduling it, and having the background worker publish it.*
-
-- [ ] **Post APIs:** Complete CRUD endpoints for `Posts` and `PostDestinations`.
-- [ ] **Composer UI:** Build a Svelte component for drafting a post, selecting target platforms (from the connected social accounts), and picking a scheduled time.
-- [ ] **Scheduler Integration:** When a post is scheduled, the backend must insert a `publish_post` job into the `jobs` table with `run_at` set to the scheduled time.
-- [ ] **Publisher Service:** Implement the actual API calls to Twitter, Mastodon, etc., in `services/publisher`. Ensure it handles rate limits by throwing specific errors so the background worker can back off and retry.
-
-### Phase 4: Media & Polish (Weeks 7-8)
-*Goal: Support image/video uploads and make the app production-ready.*
-
-- [ ] **Media Upload API:** Endpoint to accept multipart form uploads, save to local disk, and insert into `media_attachments`.
-- [ ] **SvelteKit Uploader:** Drag-and-drop media attachment UI in the post composer.
-- [ ] **S3 Integration (Optional MVP):** Add an S3-compatible backend for the BlobStorage interface for scalable deployments.
-- [ ] **Single Binary Pipeline:** Finalize the Makefile / generate steps to ensure `bun run build` in `/web` perfectly embeds into `/backend/cmd/openpost/public` for the `go build`.
+1. User registers → logs in → creates workspace
+2. Connects Twitter account via OAuth
+3. Connects one or more Mastodon servers (configured in env)
+4. Composes a post, selects target accounts, picks a schedule time
+5. Background worker publishes at the scheduled time
+6. Tokens auto-refresh when expiring
 
 ---
 
-## 4. Known Complexities & "Gotchas"
+## What's Left
 
-1. **Bluesky (AT Protocol):** Implementing Bluesky requires handling DPoP (Demonstrating Proof of Possession), which requires rotating nonces and JWT proofs per request. This will be the hardest platform to integrate.
-2. **Threads 60-Day Expiry:** Threads tokens max out at 60 days and must be actively refreshed. If a user doesn't log in, the backend must automatically renew it.
-3. **SQLite Concurrency:** Because the app uses SQLite as a queue, we must rely on `PRAGMA WAL` and `busy_timeout` to avoid `database is locked` errors when the background worker and user APIs hit the DB simultaneously.
-4. **Single Binary Static Assets:** SvelteKit routing can be tricky when embedded in Echo. We need to ensure the Echo static file handler correctly falls back to `index.html` for client-side routing (SPA fallback).
+### Platform Integrations
+
+| Platform | Status | Approach | Notes |
+|----------|--------|----------|-------|
+| X (Twitter) | ✅ Done | OAuth 2.0 PKCE | Single API, any account connects. |
+| Mastodon | ✅ Done | OAuth 2.0 (multi-server) | Each instance needs its own app registration. JSON config in env. |
+| Bluesky | 🔜 Planned | App Passwords (AT Protocol) | No OAuth needed. User provides handle + app password. PDS derived from handle. Simple single-config. |
+| Threads | 🔜 Planned | Instagram Graph API | OAuth 2.0. 60-day token expiry requires active refresh. |
+| LinkedIn | 🔜 Planned | OAuth 2.0 | Standard OAuth. |
+
+### Features
+
+- [ ] **Bluesky Integration**
+  - App password auth (handle + password)
+  - Post via AT Protocol API (`com.atproto.repo.createRecord`)
+  - No multi-server config needed — handle determines PDS automatically
+
+- [ ] **Threads Integration**
+  - Instagram Graph API OAuth
+  - 60-day token expiry with automatic refresh
+  - Post creation via `/me/threads` endpoint
+
+- [ ] **LinkedIn Integration**
+  - OAuth 2.0 authorization code flow
+  - Post creation via UGC API
+
+- [ ] **Media Upload Support**
+  - Image upload in post composer
+  - Video upload support
+  - Local file storage with configurable path (`OPENPOST_MEDIA_PATH`)
+  - Optional S3-compatible storage backend
+  - Platform-specific media requirements (size limits, formats)
+
+- [ ] **Thread/Long-form Support**
+  - Thread builder for X (multi-tweet threads)
+  - Long-form post support for Mastodon
+  - Character count per platform with live validation
+
+- [ ] **Post Templates & Auto-Plug**
+  - Save and reuse post templates
+  - Auto-plug: append a call-to-action or link to posts automatically
+  - Per-workspace template library
+
+- [ ] **Post Analytics**
+  - Fetch engagement metrics (likes, retweets, replies) from platform APIs
+  - Display stats in dashboard
+  - Track performance over time
+
+- [ ] **Email Notifications**
+  - Notify when a post is published
+  - Notify on failed publishes
+  - Configurable notification preferences
+
+- [ ] **Webhook Support**
+  - Outbound webhooks on post events (published, failed)
+  - Webhook management API
+
+- [ ] **Team & Role Management**
+  - Invite users to workspaces
+  - Role-based access (admin, editor, viewer)
+  - Activity log
+
+- [ ] **Rate Limit Handling**
+  - Detect rate limit responses from platform APIs
+  - Exponential backoff retry in background worker
+  - User-facing rate limit warnings
+
+- [ ] **Draft Management**
+  - Save posts as drafts without scheduling
+  - Draft list / management page
+  - Convert draft to scheduled post
+
+- [ ] **Bulk Scheduling**
+  - CSV import for bulk post scheduling
+  - Batch operations on posts
+
+---
+
+## Architecture Decisions
+
+### Why JSON env vars for Mastodon?
+
+Mastodon OAuth apps are per-instance. Unlike X (single API) or Bluesky (app passwords), each Mastodon server requires its own client ID and secret. A `MASTODON_SERVERS` JSON array is the cleanest way to support this without config files:
+
+```env
+MASTODON_SERVERS='[
+  {"name":"Personal","client_id":"abc","client_secret":"xyz","instance_url":"https://mastodon.social"},
+  {"name":"Work","client_id":"def","client_secret":"uvw","instance_url":"https://fosstodon.org"}
+]'
+```
+
+Bluesky and X don't need this — they use a single set of credentials.
+
+### Why SQLite for everything?
+
+Single binary, zero dependencies. SQLite with WAL mode handles concurrent reads/writes well for a self-hosted tool. The background queue uses the same SQLite database with row-level locking for job coordination.
+
+---
+
+## Known Complexities
+
+1. **Bluesky AT Protocol:** Simple auth (app passwords), but posting requires correct record schemas (`app.bsky.feed.post`). Rich text facets for mentions/links need careful byte-offset handling.
+2. **Threads 60-Day Expiry:** Long-lived tokens require proactive refresh. The token manager must scan and renew before expiry.
+3. **Media Size Limits:** Each platform has different limits (X: 5MB images, 512MB video; Mastodon: varies by instance). Validation must be per-platform.
+4. **Character Limits:** X (280), Mastodon (500 default, configurable), Threads (500), LinkedIn (3000). Composer needs live per-platform counting.

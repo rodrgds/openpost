@@ -14,7 +14,7 @@
 	import { Label } from '$lib/components/ui/label';
 
 	let code = $state('');
-	let instance = $state('');
+	let serverName = $state('');
 	let workspaceId = $state('');
 	let loading = $state(false);
 	let error = $state('');
@@ -23,10 +23,10 @@
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const storedWorkspace = localStorage.getItem('oauth_workspace_id');
-		const storedInstance = localStorage.getItem('oauth_mastodon_instance');
+		const storedServer = localStorage.getItem('oauth_mastodon_server');
 
 		if (storedWorkspace) workspaceId = storedWorkspace;
-		if (storedInstance) instance = storedInstance;
+		if (storedServer) serverName = storedServer;
 
 		const codeFromUrl = params.get('code');
 		if (codeFromUrl) {
@@ -43,8 +43,9 @@
 			error = 'Workspace ID not found. Please start the connection from the accounts page.';
 			return;
 		}
-		if (!instance) {
-			instance = 'https://mastodon.social';
+		if (!serverName) {
+			error = 'Server name not found. Please start the connection from the accounts page.';
+			return;
 		}
 
 		loading = true;
@@ -52,11 +53,11 @@
 
 		try {
 			const { error: err } = await client.POST('/accounts/mastodon/exchange', {
-				body: { workspace_id: workspaceId, instance: instance, code: code.trim() }
+				body: { workspace_id: workspaceId, server_name: serverName, code: code.trim() }
 			});
 			if (err) throw new Error(err.detail || 'Exchange failed');
 			localStorage.removeItem('oauth_workspace_id');
-			localStorage.removeItem('oauth_mastodon_instance');
+			localStorage.removeItem('oauth_mastodon_server');
 			success = true;
 			setTimeout(() => goto('/accounts'), 2000);
 		} catch (e) {
@@ -87,6 +88,11 @@
 				<CardDescription>Paste the authorization code from Mastodon below:</CardDescription>
 			</CardHeader>
 			<CardContent>
+				{#if serverName}
+					<p class="mb-4 text-sm text-muted-foreground">
+						Connecting to server: <strong>{serverName}</strong>
+					</p>
+				{/if}
 				<form
 					onsubmit={(e) => {
 						e.preventDefault();

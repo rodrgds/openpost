@@ -15,32 +15,39 @@ type MastodonOAuth struct {
 	clientID     string
 	clientSecret string
 	redirectURI  string
+	instanceURL  string
 }
 
-func NewMastodonOAuth(clientID, clientSecret, redirectURI string) *MastodonOAuth {
+func NewMastodonOAuth(clientID, clientSecret, redirectURI, instanceURL string) *MastodonOAuth {
 	return &MastodonOAuth{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURI:  redirectURI,
+		instanceURL:  instanceURL,
 	}
 }
 
-// GenerateAuthURL returns auth URL for a specific fediverse instance
-func (m *MastodonOAuth) GenerateAuthURL(instanceURL, state string) string {
+// InstanceURL returns the configured instance URL for this provider.
+func (m *MastodonOAuth) InstanceURL() string {
+	return m.instanceURL
+}
+
+// GenerateAuthURL returns the OAuth authorization URL for this server.
+func (m *MastodonOAuth) GenerateAuthURL(state string) string {
 	config := &oauth2.Config{
 		ClientID:     m.clientID,
 		ClientSecret: m.clientSecret,
 		RedirectURL:  m.redirectURI,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  instanceURL + "/oauth/authorize",
-			TokenURL: instanceURL + "/oauth/token",
+			AuthURL:  m.instanceURL + "/oauth/authorize",
+			TokenURL: m.instanceURL + "/oauth/token",
 		},
 		Scopes: []string{"read", "write"},
 	}
 	return config.AuthCodeURL(state)
 }
 
-func (m *MastodonOAuth) ExchangeCode(ctx context.Context, instanceURL, code string) (*TokenResponse, error) {
+func (m *MastodonOAuth) ExchangeCode(ctx context.Context, code string) (*TokenResponse, error) {
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
@@ -49,7 +56,7 @@ func (m *MastodonOAuth) ExchangeCode(ctx context.Context, instanceURL, code stri
 		"client_secret": {m.clientSecret},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", instanceURL+"/oauth/token", strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", m.instanceURL+"/oauth/token", strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}

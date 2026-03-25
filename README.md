@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/openpost/openpost" target="_blank">
+  <a href="https://github.com/rodrgds/openpost" target="_blank">
     <img alt="OpenPost Logo" src="./web/static/logo.svg" width="280"/>
   </a>
 </p>
@@ -21,7 +21,7 @@
   <h2>A lightweight, self-hosted social media scheduler</h2><br />
   </strong>
   The open-source alternative to Typefully, Buffer, and Hypefury.<br />
-  One binary. No dependencies. Full control.
+  One lightweight binary. No dependencies. Full control.
 </div>
 
 <div align="center">
@@ -56,7 +56,7 @@
 
 - **Single Binary Deployment** - Everything compiled into one executable. No Docker required (but supported).
 - **Multi-Platform Posting** - Schedule posts to X (Twitter), Mastodon, Bluesky, Threads, and LinkedIn.
-- **Custom Mastodon Instances** - Connect accounts from any Mastodon server.
+- **Custom Mastodon Instances** - Connect accounts from any number of Mastodon servers (configured via JSON env var).
 - **Workspaces & Teams** - Multi-tenant architecture with role-based access control.
 - **Background Scheduling** - SQLite-backed job queue survives server restarts.
 - **Encrypted Tokens** - AES-256-GCM encryption for all OAuth tokens at rest.
@@ -85,7 +85,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/openpost/openpost.git
+git clone https://github.com/rodrgds/openpost.git
 cd openpost
 
 # Install frontend dependencies and build
@@ -153,8 +153,8 @@ All configuration is done via environment variables or a `.env` file:
 | `ENCRYPTION_KEY` | ✅ Yes | AES-256 key for token encryption |
 | `TWITTER_CLIENT_ID` | For X | Twitter OAuth client ID |
 | `TWITTER_CLIENT_SECRET` | For X | Twitter OAuth secret |
-| `MASTODON_CLIENT_ID` | For Mastodon | Mastodon OAuth client ID |
-| `MASTODON_CLIENT_SECRET` | For Mastodon | Mastodon OAuth secret |
+| `MASTODON_SERVERS` | For Mastodon | JSON array of Mastodon server configs |
+| `MASTODON_REDIRECT_URI` | No | OAuth callback URI (default: OOB) |
 | `OPENPOST_PORT` | No | Server port (default: 8080) |
 | `OPENPOST_DB_PATH` | No | SQLite database path |
 | `OPENPOST_FRONTEND_URL` | No | CORS origin for frontend |
@@ -181,12 +181,22 @@ openssl rand -base64 32
 
 #### Mastodon
 
-1. Go to your instance Settings → Development
-2. Create a new Application
-3. Set callback URL: `http://localhost:8080/api/v1/accounts/mastodon/callback`
-4. Copy Client ID and Secret to your `.env`
+Mastodon supports **multiple servers** via the `MASTODON_SERVERS` environment variable. Each server needs its own OAuth app because Mastodon client credentials are per-instance.
 
-Note: Mastodon supports **any instance** - users enter their instance URL when connecting.
+1. For each Mastodon instance, go to Settings → Development → New Application
+2. Set the redirect URI to: `urn:ietf:wg:oauth:2.0:oob` (or your callback URL)
+3. Copy the Client ID and Secret
+4. Add to your `.env`:
+
+```env
+MASTODON_REDIRECT_URI=urn:ietf:wg:oauth:2.0:oob
+MASTODON_SERVERS='[
+  {"name":"Personal","client_id":"abc123","client_secret":"xyz789","instance_url":"https://mastodon.social"},
+  {"name":"Work","client_id":"def456","client_secret":"uvw012","instance_url":"https://fosstodon.org"}
+]'
+```
+
+The `name` is a label shown in the UI. You can configure as many servers as you need.
 
 ## 🏗️ Tech Stack
 
@@ -253,7 +263,7 @@ See [PLAN.md](PLAN.md) for the complete implementation status and roadmap.
 - [x] User authentication (register/login)
 - [x] Workspace management (multi-tenant)
 - [x] Twitter/X OAuth
-- [x] Mastodon OAuth (custom instances)
+- [x] Mastodon OAuth (multi-server support)
 - [x] Post scheduling with background worker
 - [x] Single binary deployment
 
