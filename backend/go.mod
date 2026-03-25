@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/danielgtaylor/huma/v2 v2.37.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect

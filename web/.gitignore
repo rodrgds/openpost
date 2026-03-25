@@ -24,3 +24,7 @@ vite.config.ts.timestamp-*
 # Paraglide
 src/lib/paraglide
 project.inlang/cache/
+
+# OpenAPI generated types
+openapi.json
+src/lib/api/types.d.ts

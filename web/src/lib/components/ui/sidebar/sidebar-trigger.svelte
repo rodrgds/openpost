@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { Button } from "$lib/components/ui/button/index.js";
+	import { Button } from '$lib/components/ui/button/index.js';
 	import RiSideBarLine from 'remixicon-svelte/icons/side-bar-line';
-	import { cn } from "$lib/utils.js";
-	import type { ComponentProps } from "svelte";
-	import { useSidebar } from "./context.svelte.js";
+	import { cn } from '$lib/utils.js';
+	import type { ComponentProps } from 'svelte';
+	import { useSidebar } from './context.svelte.js';
 
 	let {
 		ref = $bindable(null),
@@ -23,7 +23,7 @@
 	data-slot="sidebar-trigger"
 	variant="ghost"
 	size="icon-sm"
-	class={cn("cn-sidebar-trigger", className)}
+	class={cn('cn-sidebar-trigger', className)}
 	type="button"
 	onclick={(e) => {
 		onclick?.(e);
@@ -31,6 +31,6 @@
 	}}
 	{...restProps}
 >
-	<RiSideBarLine  />
+	<RiSideBarLine />
 	<span class="sr-only">Toggle Sidebar</span>
 </Button>

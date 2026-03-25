@@ -11,27 +11,33 @@
 	import SidebarLeft from '$lib/components/sidebar-left.svelte';
 	import SidebarRight from '$lib/components/sidebar-right.svelte';
 	import Logo from '$lib/components/Logo.svelte';
-	
+
 	let { children } = $props();
-	
+
 	let authState = $derived($auth);
 	let currentPath = $derived($page.url.pathname);
-	const publicRoutes = ['/login', '/register', '/demo', '/demo/paraglide', '/accounts/mastodon/callback'];
-	
+	const publicRoutes = [
+		'/login',
+		'/register',
+		'/demo',
+		'/demo/paraglide',
+		'/accounts/mastodon/callback'
+	];
+
 	onMount(() => {
 		auth.initialize();
 	});
-	
+
 	$effect(() => {
 		if (authState.isLoading) return;
-		
-		const isPublicRoute = publicRoutes.some(route => currentPath.startsWith(route));
+
+		const isPublicRoute = publicRoutes.some((route) => currentPath.startsWith(route));
 		const isLandingPage = currentPath === '/';
-		
+
 		if (!authState.isAuthenticated && !isPublicRoute && !isLandingPage) {
 			goto('/login');
 		}
-		
+
 		if (authState.isAuthenticated && (currentPath === '/login' || currentPath === '/register')) {
 			goto('/');
 		}
@@ -44,20 +50,28 @@
 
 <ModeWatcher />
 {#if authState.isLoading}
-	<div class="min-h-screen flex items-center justify-center">
-		<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+	<div class="flex min-h-screen items-center justify-center">
+		<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
 	</div>
 {:else if !authState.isAuthenticated}
 	{#if currentPath === '/'}
-		<div class="min-h-[80vh] flex items-center justify-center">
-			<div class="max-w-md mx-auto px-4 py-12 text-center">
-				<div class="flex justify-center mb-6">
+		<div class="flex min-h-[80vh] items-center justify-center">
+			<div class="mx-auto max-w-md px-4 py-12 text-center">
+				<div class="mb-6 flex justify-center">
 					<Logo width={100} height={29} />
 				</div>
-				<p class="text-muted-foreground mb-6">Schedule posts across multiple social platforms.</p>
-				<div class="flex gap-4 justify-center">
-					<a href="/login" class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Sign In</a>
-					<a href="/register" class="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">Create Account</a>
+				<p class="mb-6 text-muted-foreground">Schedule posts across multiple social platforms.</p>
+				<div class="flex justify-center gap-4">
+					<a
+						href="/login"
+						class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+						>Sign In</a
+					>
+					<a
+						href="/register"
+						class="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+						>Create Account</a
+					>
 				</div>
 			</div>
 		</div>
@@ -68,7 +82,7 @@
 	<Sidebar.Provider>
 		<SidebarLeft />
 		<Sidebar.Inset>
-			<header class="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+			<header class="sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b bg-background">
 				<div class="flex flex-1 items-center gap-2 px-3">
 					<Sidebar.Trigger class="text-sidebar-foreground" />
 					<Separator orientation="vertical" class="me-2 h-4 bg-border" />

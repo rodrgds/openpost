@@ -1,5 +1,19 @@
-{ pkgs, ... }:
-
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+let
+  npm-format = pkgs.writeShellApplication {
+    name = "npm-format";
+    runtimeInputs = [ pkgs.nodejs_latest ];
+    text = ''
+      cd "${config.git.root}/web"
+      npm run format
+    '';
+  };
+in
 {
   # Bun language support
   languages.javascript = {
@@ -36,7 +50,13 @@
 
   # Git hooks
   git-hooks.hooks = {
-    prettier.enable = true;
+    npm-format = {
+      enable = true;
+      name = "prettier-npm";
+      entry = "${lib.getExe npm-format}";
+      files = "\\.(js|ts|svelte|css|html)$";
+      pass_filenames = false;
+    };
     eslint.enable = true;
   };
 }

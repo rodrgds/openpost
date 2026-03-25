@@ -13,7 +13,8 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"generate:types": "openapi-typescript openapi.json -o src/lib/api/types.d.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.2",
@@ -34,6 +35,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.14.0",
 		"globals": "^17.3.0",
+		"openapi-typescript": "^7.13.0",
 		"playwright": "^1.58.2",
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.4.1",
@@ -54,6 +56,7 @@
 		"clsx": "^2.1.1",
 		"lucide-svelte": "^0.577.0",
 		"mode-watcher": "^1.1.0",
+		"openapi-fetch": "^0.17.0",
 		"tailwind-merge": "^3.5.0",
 		"tailwind-variants": "^3.2.2"
 	}

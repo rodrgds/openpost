@@ -23,7 +23,7 @@
 			{height}
 			class="h-auto max-w-full"
 		></object>
-		<span class="font-bold text-sidebar-foreground whitespace-nowrap">OpenPost</span>
+		<span class="font-bold whitespace-nowrap text-sidebar-foreground">OpenPost</span>
 	</div>
 {:else}
 	<object

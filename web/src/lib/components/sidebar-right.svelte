@@ -3,10 +3,9 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as CalendarUi from '$lib/components/ui/calendar';
 	import { Button } from '$lib/components/ui/button';
-	import { api } from '$lib/api/client';
+	import { client, type ScheduleOverview } from '$lib/api/client';
 	import type { DateValue } from '@internationalized/date';
 	import { getLocalTimeZone, today } from '@internationalized/date';
-	import type { ScheduleOverview } from '$lib/types';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import CircleDotIcon from 'lucide-svelte/icons/circle-dot';
 
@@ -34,7 +33,7 @@
 			return map;
 		}
 
-		for (const item of overview.days) {
+		for (const item of overview?.days ?? []) {
 			map.set(item.date, item.count);
 		}
 
@@ -47,7 +46,7 @@
 			return map;
 		}
 
-		for (const item of overview.days) {
+		for (const item of overview?.days ?? []) {
 			map.set(item.date, item.platforms || []);
 		}
 
@@ -58,14 +57,17 @@
 		if (!overview) {
 			return 0;
 		}
-		return overview.days.reduce((sum: number, day) => sum + day.count, 0);
+		return (overview?.days ?? []).reduce((sum: number, day) => sum + day.count, 0);
 	});
 
 	const activeWorkspaceName = $derived.by(() => {
 		if (!overview || !selectedWorkspaceId) {
 			return 'All workspaces';
 		}
-		return overview.workspaces.find((workspace) => workspace.id === selectedWorkspaceId)?.name || 'All workspaces';
+		return (
+			(overview?.workspaces ?? []).find((workspace) => workspace.id === selectedWorkspaceId)
+				?.name || 'All workspaces'
+		);
 	});
 
 	const platformLabel = (platform: string): string => {
@@ -106,7 +108,7 @@
 
 	// Track previous month to detect actual changes
 	let previousMonth = $state('');
-	
+
 	$effect(() => {
 		const currentMonth = monthString;
 		// Only reload if month actually changed and we've already loaded once
@@ -119,14 +121,20 @@
 	async function loadOverview() {
 		loading = true;
 		try {
-			overview = await api.getScheduleOverview({
-				workspaceId: selectedWorkspaceId || undefined,
-				platform: selectedPlatform === 'all' ? undefined : selectedPlatform,
-				month: monthString
+			const { data, error: err } = await client.GET('/posts/schedule-overview', {
+				params: {
+					query: {
+						workspace_id: selectedWorkspaceId || undefined,
+						platform: selectedPlatform === 'all' ? undefined : selectedPlatform,
+						month: monthString
+					}
+				}
 			});
+			if (err || !data) throw new Error('Failed to load');
+			overview = data;
 
 			if (!selectedWorkspaceId) {
-				selectedWorkspaceId = overview.selected_workspace_id || '';
+				selectedWorkspaceId = overview?.selected_workspace_id || '';
 			}
 		} catch {
 			overview = null;
@@ -181,7 +189,7 @@
 					readonly
 					bind:value={selectedDate}
 					day={dayMarker}
-					class="[--cell-size:--spacing(9)] [&_[data-bits-calendar-head-cell]]:w-[33px] [&_[role=gridcell]]:w-[33px] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground select-none"
+					class="select-none [--cell-size:--spacing(9)] [&_[data-bits-calendar-head-cell]]:w-[33px] [&_[role=gridcell]]:w-[33px] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground"
 				/>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
@@ -193,7 +201,10 @@
 			<Sidebar.GroupContent>
 				<Sidebar.Menu>
 					<Sidebar.MenuItem>
-						<Sidebar.MenuButton isActive={selectedWorkspaceId === ''} onclick={() => selectWorkspace('')}>
+						<Sidebar.MenuButton
+							isActive={selectedWorkspaceId === ''}
+							onclick={() => selectWorkspace('')}
+						>
 							All workspaces
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
@@ -218,7 +229,10 @@
 			<Sidebar.GroupContent>
 				<Sidebar.Menu>
 					<Sidebar.MenuItem>
-						<Sidebar.MenuButton isActive={selectedPlatform === 'all'} onclick={() => selectPlatform('all')}>
+						<Sidebar.MenuButton
+							isActive={selectedPlatform === 'all'}
+							onclick={() => selectPlatform('all')}
+						>
 							All platforms
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
@@ -245,7 +259,9 @@
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton class="text-sidebar-foreground/80">
 							<CircleDotIcon class="size-3.5" />
-							<span>{loading ? 'Loading schedule...' : `${totalScheduled} scheduled this month`}</span>
+							<span
+								>{loading ? 'Loading schedule...' : `${totalScheduled} scheduled this month`}</span
+							>
 						</Sidebar.MenuButton>
 					</Sidebar.MenuItem>
 					<Sidebar.MenuItem>
@@ -260,7 +276,10 @@
 	<Sidebar.Footer>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
-				<Button class="w-full justify-start" href={selectedWorkspaceId ? `/workspace/${selectedWorkspaceId}/compose` : '/'}>
+				<Button
+					class="w-full justify-start"
+					href={selectedWorkspaceId ? `/workspace/${selectedWorkspaceId}/compose` : '/'}
+				>
 					<PlusIcon class="size-4" />
 					<span>New Post</span>
 				</Button>

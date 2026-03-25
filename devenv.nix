@@ -13,8 +13,8 @@
     pkgs.jq
     pkgs.ripgrep
     pkgs.sqlite
-    pkgs.make
     pkgs.wget
+    pkgs.docker
   ];
 
   # Environment variables
@@ -25,19 +25,41 @@
   # Scripts available in the shell
   scripts = {
     dev.exec = ''
-      make dev
+      web-dev &
+      backend-run
     '';
 
     build.exec = ''
-      make build
+      web-build && backend-build
     '';
 
     test-all.exec = ''
-      make test
+      backend-test && web-test
     '';
 
     clean.exec = ''
-      make clean
+      rm -rf backend/openpost
+      rm -rf web/.svelte-kit
+      rm -rf web/node_modules
+      rm -f backend/*.db
+    '';
+
+    install.exec = ''
+      web-build
+      (cd backend && go mod download)
+    '';
+
+    setup.exec = ''
+      cp backend/.env.example backend/.env
+      echo "Created backend/.env - edit with your OAuth credentials"
+    '';
+
+    docker-build.exec = ''
+      docker build -t openpost:latest -f docker/Dockerfile .
+    '';
+
+    docker-run.exec = ''
+      docker run -d -p 8080:8080 --name openpost openpost:latest
     '';
   };
 
@@ -49,11 +71,15 @@
     echo "  Go:     $(go version 2>/dev/null || echo 'not installed')"
     echo "  Bun:    $(bun --version 2>/dev/null || echo 'not installed')"
     echo ""
-    echo "  Available commands:"
-    echo "    dev       - Start frontend and backend dev servers"
-    echo "    build     - Build production binary"
-    echo "    test-all  - Run all tests"
-    echo "    clean     - Clean build artifacts"
+    echo "  Commands:"
+    echo "    dev          - Start frontend and backend dev servers"
+    echo "    build        - Build production binary"
+    echo "    test-all     - Run all tests"
+    echo "    clean        - Clean build artifacts"
+    echo "    install      - Install dependencies"
+    echo "    setup        - Create .env from example"
+    echo "    docker-build - Build Docker image"
+    echo "    docker-run   - Run Docker container"
     echo ""
 
     # Load .env if it exists
