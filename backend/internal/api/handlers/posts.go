@@ -38,18 +38,26 @@ type CreatePostOutput struct {
 	Body *PostResponse
 }
 
+type PostDestinationResponse struct {
+	SocialAccountID string `json:"social_account_id" doc:"Social account ID"`
+	Platform        string `json:"platform" doc:"Platform name"`
+	Status          string `json:"status" doc:"Destination status"`
+}
+
 type PostResponse struct {
-	ID          string `json:"id" doc:"Post ID"`
-	WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
-	CreatedByID string `json:"created_by" doc:"Creator user ID"`
-	Content     string `json:"content" doc:"Post content"`
-	Status      string `json:"status" doc:"Post status (draft, scheduled, publishing, published, failed)"`
-	ScheduledAt string `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
-	CreatedAt   string `json:"created_at" doc:"Creation time (ISO 8601)"`
+	ID           string                    `json:"id" doc:"Post ID"`
+	WorkspaceID  string                    `json:"workspace_id" doc:"Workspace ID"`
+	CreatedByID  string                    `json:"created_by" doc:"Creator user ID"`
+	Content      string                    `json:"content" doc:"Post content"`
+	Status       string                    `json:"status" doc:"Post status (draft, scheduled, publishing, published, failed)"`
+	ScheduledAt  string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
+	CreatedAt    string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
+	Destinations []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
 }
 
 type ListPostsInput struct {
 	WorkspaceID string `query:"workspace_id" doc:"Filter by workspace ID"`
+	Date        string `query:"date" doc:"Filter by date (YYYY-MM-DD)"`
 }
 
 type ListPostsOutput struct {
@@ -187,26 +195,68 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListPostsInput) (*ListPostsOutput, error) {
 		var posts []models.Post
-		err := h.db.NewSelect().
+		query := h.db.NewSelect().
 			Model(&posts).
-			Where("workspace_id = ?", input.WorkspaceID).
-			Order("created_at DESC").
-			Limit(50).
-			Scan(ctx)
+			Where("workspace_id = ?", input.WorkspaceID)
+
+		if input.Date != "" {
+			parsed, err := time.Parse("2006-01-02", input.Date)
+			if err != nil {
+				return nil, huma.Error400BadRequest("date must be in YYYY-MM-DD format")
+			}
+			dayStart := parsed.UTC()
+			dayEnd := dayStart.AddDate(0, 0, 1)
+			query = query.Where("scheduled_at >= ? AND scheduled_at < ?", dayStart, dayEnd)
+		}
+
+		err := query.Order("scheduled_at ASC").Limit(50).Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list posts")
+		}
+
+		postIDs := make([]string, len(posts))
+		for i, p := range posts {
+			postIDs[i] = p.ID
+		}
+
+		var destinations []struct {
+			PostID          string `bun:"post_id"`
+			SocialAccountID string `bun:"social_account_id"`
+			Platform        string `bun:"platform"`
+			Status          string `bun:"status"`
+		}
+		if len(postIDs) > 0 {
+			err = h.db.NewSelect().
+				TableExpr("post_destinations AS pd").
+				ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+				Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
+				Where("pd.post_id IN (?)", bun.In(postIDs)).
+				Scan(ctx, &destinations)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to fetch destinations")
+			}
+		}
+
+		destByPost := make(map[string][]PostDestinationResponse)
+		for _, d := range destinations {
+			destByPost[d.PostID] = append(destByPost[d.PostID], PostDestinationResponse{
+				SocialAccountID: d.SocialAccountID,
+				Platform:        d.Platform,
+				Status:          d.Status,
+			})
 		}
 
 		result := make([]PostResponse, len(posts))
 		for i, p := range posts {
 			result[i] = PostResponse{
-				ID:          p.ID,
-				WorkspaceID: p.WorkspaceID,
-				CreatedByID: p.CreatedByID,
-				Content:     p.Content,
-				Status:      p.Status,
-				ScheduledAt: p.ScheduledAt.Format(time.RFC3339),
-				CreatedAt:   p.CreatedAt.Format(time.RFC3339),
+				ID:           p.ID,
+				WorkspaceID:  p.WorkspaceID,
+				CreatedByID:  p.CreatedByID,
+				Content:      p.Content,
+				Status:       p.Status,
+				ScheduledAt:  p.ScheduledAt.Format(time.RFC3339),
+				CreatedAt:    p.CreatedAt.Format(time.RFC3339),
+				Destinations: destByPost[p.ID],
 			}
 		}
 		return &ListPostsOutput{Body: result}, nil

@@ -6,7 +6,7 @@ const API_BASE = '/api/v1';
 
 // Re-export schema types for convenience
 export type User = components['schemas']['UserProfile'];
-export type Workspace = components['schemas']['Workspace'];
+export type Workspace = components['schemas']['Item'];
 export type Post = components['schemas']['PostResponse'];
 export type SocialAccount = components['schemas']['AccountResponse'];
 export type ScheduleOverview = components['schemas']['ScheduleOverviewOutputBody'];
