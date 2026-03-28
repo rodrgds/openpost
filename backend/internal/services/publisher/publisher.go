@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -225,8 +226,6 @@ func (s *Service) publishToBluesky(ctx context.Context, token, pdsURL, did, cont
 }
 
 func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, content string) error {
-	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-
 	payload := map[string]interface{}{
 		"author":     fmt.Sprintf("urn:li:person:%s", personID),
 		"commentary": content,
@@ -240,11 +239,6 @@ func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, conten
 		"isReshareDisabledByAuthor": false,
 	}
 
-	// Add lifecycleState if needed for newer API
-	if now != "" {
-		_ = now // lifecycle state is already set
-	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -255,10 +249,12 @@ func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, conten
 		return err
 	}
 
+	// Use current month as API version (LinkedIn requires YYYYMM format)
+	apiVersion := time.Now().UTC().Format("200601")
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
-	req.Header.Set("Linkedin-Version", "202401")
+	req.Header.Set("Linkedin-Version", apiVersion)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -268,7 +264,7 @@ func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, conten
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		respBody, _ := json.Marshal(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("linkedin API returned status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
