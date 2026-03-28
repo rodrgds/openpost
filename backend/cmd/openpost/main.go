@@ -149,6 +149,7 @@ func main() {
 	oauthHandler.ExchangeCode(api)
 	oauthHandler.BlueskyLogin(api)
 	oauthHandler.ListAccounts(api)
+	oauthHandler.DisconnectAccount(api)
 
 	// Health check (Huma-registered for OpenAPI docs)
 	huma.Register(api, huma.Operation{

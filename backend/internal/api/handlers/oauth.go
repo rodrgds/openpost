@@ -499,3 +499,37 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 		return &ListAccountsOutput{Body: response}, nil
 	})
 }
+
+// --- Disconnect Account ---
+
+type DisconnectAccountInput struct {
+	AccountID string `path:"account_id"`
+}
+
+func (h *OAuthHandler) DisconnectAccount(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "disconnect-account",
+		Method:      http.MethodDelete,
+		Path:        "/accounts/{account_id}",
+		Summary:     "Disconnect a social account",
+		Tags:        []string{"Accounts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{404},
+	}, func(ctx context.Context, input *DisconnectAccountInput) (*struct{}, error) {
+		result, err := h.db.NewUpdate().
+			Model((*models.SocialAccount)(nil)).
+			Set("is_active = ?", false).
+			Where("id = ?", input.AccountID).
+			Exec(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to disconnect account")
+		}
+
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return nil, huma.Error404NotFound("account not found")
+		}
+
+		return nil, nil
+	})
+}

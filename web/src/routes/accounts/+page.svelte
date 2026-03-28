@@ -70,6 +70,17 @@
 		}
 	}
 
+	async function disconnectAccount(accountId: string) {
+		try {
+			await (client as any).DELETE('/accounts/{account_id}', {
+				params: { path: { account_id: accountId } }
+			});
+			await loadAccounts();
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	onMount(() => {
 		auth.subscribe(async (state) => {
 			if (!state.isLoading && !state.isAuthenticated) {
@@ -358,9 +369,9 @@
 										</p>
 									</div>
 								</div>
-								<span class="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700"
-									>Connected</span
-								>
+								<Button variant="outline" size="sm" onclick={() => disconnectAccount(account.id)}>
+									Disconnect
+								</Button>
 							</CardContent>
 						</Card>
 					{/each}
