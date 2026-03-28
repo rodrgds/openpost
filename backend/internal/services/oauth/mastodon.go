@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,6 +17,13 @@ type MastodonOAuth struct {
 	clientSecret string
 	redirectURI  string
 	instanceURL  string
+}
+
+// MastodonProfile represents a user's profile from their instance
+type MastodonProfile struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Acct     string `json:"acct"`
 }
 
 func NewMastodonOAuth(clientID, clientSecret, redirectURI, instanceURL string) *MastodonOAuth {
@@ -70,13 +78,42 @@ func (m *MastodonOAuth) ExchangeCode(ctx context.Context, code string) (*TokenRe
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to exchange token, status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon token exchange failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode token response: %w", err)
 	}
 
 	return &tokenResp, nil
+}
+
+// GetProfile fetches the authenticated user's profile
+func (m *MastodonOAuth) GetProfile(ctx context.Context, accessToken string) (*MastodonProfile, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", m.instanceURL+"/api/v1/accounts/verify_credentials", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get mastodon profile (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var profile MastodonProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
+
+	return &profile, nil
 }
