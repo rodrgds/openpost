@@ -2,12 +2,19 @@
 	import { onMount } from 'svelte';
 	import { client, type SocialAccount, type Workspace } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
+	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import * as Select from '$lib/components/ui/select';
-	import { CalendarDate, getLocalTimeZone, today, type DateValue } from '@internationalized/date';
+	import {
+		CalendarDate,
+		getLocalTimeZone,
+		today,
+		isEqualDay,
+		type DateValue
+	} from '@internationalized/date';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 
 	interface Props {
@@ -31,11 +38,31 @@
 	let selectedDate = $state<CalendarDate | undefined>(undefined);
 	let selectedTime = $state<string | null>(null);
 
-	const timeSlots = Array.from({ length: 37 }, (_, i) => {
+	const allTimeSlots = Array.from({ length: 37 }, (_, i) => {
 		const totalMinutes = i * 15;
 		const hour = Math.floor(totalMinutes / 60) + 9;
 		const minute = totalMinutes % 60;
 		return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+	});
+
+	const isToday = $derived(
+		selectedDate ? isEqualDay(selectedDate, today(getLocalTimeZone())) : false
+	);
+
+	const timeSlots = $derived.by(() => {
+		if (!isToday) return allTimeSlots;
+		const now = new Date();
+		const currentMinutes = now.getHours() * 60 + now.getMinutes();
+		return allTimeSlots.filter((slot) => {
+			const [h, m] = slot.split(':').map(Number);
+			return h * 60 + m > currentMinutes;
+		});
+	});
+
+	$effect(() => {
+		if (isToday && selectedTime && !timeSlots.includes(selectedTime)) {
+			selectedTime = timeSlots.length > 0 ? timeSlots[0] : null;
+		}
 	});
 
 	onMount(async () => {
@@ -183,7 +210,7 @@
 	{/if}
 
 	<form onsubmit={handleSubmit} class="space-y-6 pb-6">
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+		<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 			<div class="space-y-6">
 				<div class="space-y-2">
 					<Label for="workspace">Workspace</Label>
@@ -278,17 +305,18 @@
 			<div class="space-y-2">
 				<Label>Schedule Date & Time</Label>
 				<Card class="gap-0 overflow-hidden border p-0 shadow-none">
-					<CardContent class="relative p-0 lg:pe-40">
+					<CardContent class="relative p-0 sm:pe-40">
 						<div class="p-4">
 							<Calendar
 								type="single"
 								bind:value={selectedDate}
-								class="bg-transparent p-0 [--cell-size:--spacing(10)] [&_[data-outside-month]]:hidden"
+								minValue={today(getLocalTimeZone())}
+								class="bg-transparent p-0 [--cell-size:--spacing(10)]"
 								weekdayFormat="short"
 							/>
 						</div>
 						<div
-							class="inset-y-0 end-0 no-scrollbar flex max-h-72 w-full scroll-pb-6 flex-col gap-4 overflow-y-auto border-t p-4 lg:absolute lg:max-h-none lg:w-40 lg:border-s lg:border-t-0"
+							class="inset-y-0 end-0 no-scrollbar flex max-h-72 w-full scroll-pb-6 flex-col gap-4 overflow-y-auto border-t p-4 sm:absolute sm:max-h-none sm:w-40 sm:border-s sm:border-t-0"
 						>
 							<div class="grid gap-2">
 								{#each timeSlots as time (time)}

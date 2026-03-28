@@ -6,10 +6,10 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as CalendarUi from '$lib/components/ui/calendar';
-	import * as Drawer from '$lib/components/ui/drawer';
 	import { Button } from '$lib/components/ui/button';
 	import Logo from './Logo.svelte';
-	import ComposePost from './compose-post.svelte';
+	import ComposeModal from './compose-modal.svelte';
+	import DayPostsModal from './day-posts-modal.svelte';
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import PlusIcon from 'lucide-svelte/icons/plus';
@@ -33,12 +33,13 @@
 	let pathname = $derived($page.url.pathname);
 
 	// Calendar state
-	let selectedDate = $state<DateValue>(today(getLocalTimeZone()));
+	let selectedDate = $state<DateValue | undefined>(undefined);
+	let calendarPlaceholder = $state<DateValue>(today(getLocalTimeZone()));
 	let overview = $state<ScheduleOverview | null>(null);
 	let loadingSchedule = $state(true);
 
 	const monthString = $derived.by(() => {
-		const jsDate = selectedDate.toDate(getLocalTimeZone());
+		const jsDate = calendarPlaceholder.toDate(getLocalTimeZone());
 		const year = jsDate.getFullYear();
 		const month = String(jsDate.getMonth() + 1).padStart(2, '0');
 		return `${year}-${month}`;
@@ -105,6 +106,17 @@
 			loadOverview();
 		}
 		previousMonth = currentMonth;
+	});
+
+	// Trigger day-posts modal on date selection
+	$effect(() => {
+		if (selectedDate) {
+			ui.openDayPosts(selectedDate);
+			// Reset selectedDate so clicking it again triggers the effect
+			setTimeout(() => {
+				selectedDate = undefined;
+			}, 100);
+		}
 	});
 
 	async function loadOverview() {
@@ -202,13 +214,9 @@
 				<CalendarUi.Calendar
 					type="single"
 					bind:value={selectedDate}
-					onValueChange={(date) => {
-						if (date) {
-							ui.openCompose(date);
-						}
-					}}
+					bind:placeholder={calendarPlaceholder}
 					day={dayMarker}
-					class="mx-auto select-none [--cell-size:--spacing(8)] [&_[data-bits-calendar-head-cell]]:w-[30px] [&_[role=gridcell]]:w-[30px] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground"
+					class="mx-auto bg-transparent p-2 select-none [--cell-size:--spacing(8)] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground [&_tr]:justify-center"
 				/>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
@@ -331,24 +339,5 @@
 	<Sidebar.Rail />
 </Sidebar.Root>
 
-<Drawer.Root bind:open={ui.isComposeOpen}>
-	<Drawer.Content class="max-h-[90vh]">
-		<div class="scrollbar-hide mx-auto w-full max-w-4xl overflow-auto p-6">
-			<Drawer.Header class="px-0">
-				<Drawer.Title class="text-2xl font-bold">Compose Post</Drawer.Title>
-				<Drawer.Description>Schedule your post across multiple platforms.</Drawer.Description>
-			</Drawer.Header>
-			<div class="mt-4">
-				<ComposePost
-					initialDate={ui.composeInitialDate}
-					onSuccess={() => {
-						ui.closeCompose();
-						ui.triggerRefresh();
-						loadOverview();
-					}}
-					onCancel={() => ui.closeCompose()}
-				/>
-			</div>
-		</div>
-	</Drawer.Content>
-</Drawer.Root>
+<ComposeModal onSuccess={loadOverview} />
+<DayPostsModal />
