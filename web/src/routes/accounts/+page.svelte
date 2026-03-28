@@ -10,6 +10,9 @@
 		CardTitle,
 		CardDescription
 	} from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { goto } from '$app/navigation';
 	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
@@ -33,6 +36,13 @@
 		workspaces?.find((workspace) => workspace.id === selectedWorkspaceId)?.name ||
 			'Select workspace'
 	);
+
+	// Bluesky modal state
+	let blueskyModalOpen = $state(false);
+	let blueskyHandle = $state('');
+	let blueskyAppPassword = $state('');
+	let blueskyLoading = $state(false);
+	let blueskyError = $state('');
 
 	async function loadAccounts() {
 		if (!selectedWorkspaceId) return;
@@ -117,6 +127,86 @@
 				params: {
 					path: { platform: 'mastodon' },
 					query: { workspace_id: selectedWorkspaceId, server_name: serverName }
+				}
+			});
+			if (data?.url) window.location.href = data.url;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
+	async function connectBluesky() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+		blueskyHandle = '';
+		blueskyAppPassword = '';
+		blueskyError = '';
+		blueskyModalOpen = true;
+	}
+
+	async function submitBlueskyLogin() {
+		if (!blueskyHandle.trim() || !blueskyAppPassword.trim()) {
+			blueskyError = 'Please enter both handle and app password';
+			return;
+		}
+
+		blueskyLoading = true;
+		blueskyError = '';
+
+		try {
+			const { error: err } = await (client as any).POST('/accounts/bluesky/login', {
+				body: {
+					workspace_id: selectedWorkspaceId,
+					handle: blueskyHandle.trim(),
+					app_password: blueskyAppPassword.trim()
+				}
+			});
+			if (err) throw new Error(err.detail || 'Login failed');
+			blueskyModalOpen = false;
+			await loadAccounts();
+		} catch (e) {
+			blueskyError = (e as Error).message;
+		} finally {
+			blueskyLoading = false;
+		}
+	}
+
+	async function connectLinkedIn() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+
+		try {
+			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+
+			const { data, error: err } = await client.GET('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'linkedin' },
+					query: { workspace_id: selectedWorkspaceId }
+				}
+			});
+			if (data?.url) window.location.href = data.url;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
+	async function connectThreads() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+
+		try {
+			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+
+			const { data, error: err } = await client.GET('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'threads' },
+					query: { workspace_id: selectedWorkspaceId }
 				}
 			});
 			if (data?.url) window.location.href = data.url;
@@ -336,7 +426,7 @@
 				</Card>
 			{/if}
 
-			<Card class="opacity-60">
+			<Card>
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
@@ -344,14 +434,14 @@
 						</div>
 						<div>
 							<h3 class="font-medium">Threads</h3>
-							<p class="text-sm text-muted-foreground">Coming soon</p>
+							<p class="text-sm text-muted-foreground">Connect your Threads account</p>
 						</div>
 					</div>
-					<Button disabled>Coming Soon</Button>
+					<Button onclick={connectThreads}>Connect</Button>
 				</CardContent>
 			</Card>
 
-			<Card class="opacity-60">
+			<Card>
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500">
@@ -359,14 +449,14 @@
 						</div>
 						<div>
 							<h3 class="font-medium">Bluesky</h3>
-							<p class="text-sm text-muted-foreground">Coming soon</p>
+							<p class="text-sm text-muted-foreground">Connect your Bluesky account</p>
 						</div>
 					</div>
-					<Button disabled>Coming Soon</Button>
+					<Button onclick={connectBluesky}>Connect</Button>
 				</CardContent>
 			</Card>
 
-			<Card class="opacity-60">
+			<Card>
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600">
@@ -374,12 +464,67 @@
 						</div>
 						<div>
 							<h3 class="font-medium">LinkedIn</h3>
-							<p class="text-sm text-muted-foreground">Coming soon</p>
+							<p class="text-sm text-muted-foreground">Connect your LinkedIn account</p>
 						</div>
 					</div>
-					<Button disabled>Coming Soon</Button>
+					<Button onclick={connectLinkedIn}>Connect</Button>
 				</CardContent>
 			</Card>
 		</div>
 	</div>
 {/if}
+
+<Dialog.Root bind:open={blueskyModalOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Connect Bluesky</Dialog.Title>
+			<Dialog.Description>
+				Enter your Bluesky handle and an app password. You can create an app password in Bluesky
+				Settings &gt; App Passwords.
+			</Dialog.Description>
+		</Dialog.Header>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				submitBlueskyLogin();
+			}}
+			class="space-y-4"
+		>
+			<div class="space-y-2">
+				<Label for="bluesky-handle">Handle</Label>
+				<Input
+					type="text"
+					id="bluesky-handle"
+					bind:value={blueskyHandle}
+					placeholder="user.bsky.social"
+					required
+				/>
+			</div>
+			<div class="space-y-2">
+				<Label for="bluesky-password">App Password</Label>
+				<Input
+					type="password"
+					id="bluesky-password"
+					bind:value={blueskyAppPassword}
+					placeholder="xxxx-xxxx-xxxx-xxxx"
+					required
+				/>
+			</div>
+			{#if blueskyError}
+				<div
+					class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+				>
+					{blueskyError}
+				</div>
+			{/if}
+			<div class="flex justify-end gap-2">
+				<Dialog.Close>
+					<Button variant="outline" type="button">Cancel</Button>
+				</Dialog.Close>
+				<Button type="submit" disabled={blueskyLoading}>
+					{blueskyLoading ? 'Connecting...' : 'Connect'}
+				</Button>
+			</div>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
