@@ -9,7 +9,7 @@ This document serves as a guideline for autonomous AI agents (like Copilot, Curs
 - **Styling:** TailwindCSS.
 - **i18n:** Paraglide.
 - **Testing:** Vitest.
-- **Package Manager:** Bun.
+- **Package Manager:** Bun (`bun.com`).
 
 **Backend:**
 - **Language:** Go (1.25+).

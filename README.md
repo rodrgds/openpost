@@ -69,9 +69,9 @@
 |----------|--------|-------|
 | X (Twitter) | ✅ Supported | OAuth 2.0 PKCE |
 | Mastodon | ✅ Supported | Custom instances |
-| Bluesky | 🔜 Planned | AT Protocol + DPoP |
-| Threads | 🔜 Planned | Instagram Graph API |
-| LinkedIn | 🔜 Planned | OAuth 2.0 |
+| Bluesky | ✅ Implemented | App passwords (no setup) |
+| Threads | ✅ Implemented | Meta Graph API |
+| LinkedIn | ✅ Implemented | OAuth 2.0 + Posts API |
 
 ## ⚡ Quick Start
 
@@ -155,9 +155,15 @@ All configuration is done via environment variables or a `.env` file:
 | `TWITTER_CLIENT_SECRET` | For X | Twitter OAuth secret |
 | `MASTODON_SERVERS` | For Mastodon | JSON array of Mastodon server configs |
 | `MASTODON_REDIRECT_URI` | No | OAuth callback URI (default: OOB) |
+| `LINKEDIN_CLIENT_ID` | For LinkedIn | LinkedIn OAuth client ID |
+| `LINKEDIN_CLIENT_SECRET` | For LinkedIn | LinkedIn OAuth secret |
+| `THREADS_CLIENT_ID` | For Threads | Meta App ID |
+| `THREADS_CLIENT_SECRET` | For Threads | Meta App Secret |
 | `OPENPOST_PORT` | No | Server port (default: 8080) |
 | `OPENPOST_DB_PATH` | No | SQLite database path |
 | `OPENPOST_FRONTEND_URL` | No | CORS origin for frontend |
+
+**Note:** Bluesky doesn't require any env vars - users connect directly with their handle and app password.
 
 ### Generating Secrets
 
@@ -197,6 +203,34 @@ MASTODON_SERVERS='[
 ```
 
 The `name` is a label shown in the UI. You can configure as many servers as you need.
+
+#### Bluesky
+
+Bluesky uses app passwords - no setup needed. Users just enter their handle and app password when connecting:
+
+1. Go to [Bluesky App Passwords](https://bsky.app/settings/app-passwords)
+2. Create a new app password
+3. In OpenPost, click Connect on Bluesky and enter your handle + app password
+
+See [docs/bluesky-integration.md](docs/bluesky-integration.md) for more details.
+
+#### LinkedIn
+
+1. Go to [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)
+2. Create a new app and request "Share on LinkedIn" product
+3. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
+4. Copy Client ID and Secret to your `.env`
+
+See [docs/linkedin-integration.md](docs/linkedin-integration.md) for detailed setup instructions.
+
+#### Threads
+
+1. Go to [Meta for Developers](https://developers.facebook.com/)
+2. Create a new app (Business type) and add Threads API product
+3. Add redirect URL: `http://localhost:8080/api/v1/accounts/threads/callback`
+4. Copy App ID and App Secret to your `.env` as `THREADS_CLIENT_ID` and `THREADS_CLIENT_SECRET`
+
+See [docs/threads-integration.md](docs/threads-integration.md) for detailed setup instructions.
 
 ## 🏗️ Tech Stack
 
@@ -264,14 +298,15 @@ See [PLAN.md](PLAN.md) for the complete implementation status and roadmap.
 - [x] Workspace management (multi-tenant)
 - [x] Twitter/X OAuth
 - [x] Mastodon OAuth (multi-server support)
+- [x] Bluesky OAuth (AT Protocol)
+- [x] LinkedIn OAuth
+- [x] Threads OAuth (Meta Graph API)
 - [x] Post scheduling with background worker
 - [x] Single binary deployment
+- [x] Token refresh for all platforms
 
 ### Coming Soon
 
-- [ ] Bluesky integration (AT Protocol + DPoP)
-- [ ] Threads integration (Instagram Graph API)
-- [ ] LinkedIn integration
 - [ ] Media upload support
 - [ ] Post analytics
 - [ ] Email notifications
