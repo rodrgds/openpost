@@ -70,7 +70,44 @@ func main() {
 		log.Printf("Registered Mastodon server: %s (%s)", server.Name, server.InstanceURL)
 	}
 
+	var blueskyAuth *oauth.BlueskyOAuth
+	// Bluesky uses app passwords, no OAuth setup needed
+	blueskyAuth = oauth.NewBlueskyOAuth("") // uses https://bsky.social by default
+
+	var linkedinAuth *oauth.LinkedInOAuth
+	if cfg.LinkedInClientID != "" {
+		linkedinAuth = oauth.NewLinkedInOAuth(
+			cfg.LinkedInClientID,
+			cfg.LinkedInClientSecret,
+			"http://localhost:8080/api/v1/accounts/linkedin/callback",
+		)
+	}
+
+	var threadsAuth *oauth.ThreadsOAuth
+	if cfg.ThreadsClientID != "" {
+		threadsAuth = oauth.NewThreadsOAuth(
+			cfg.ThreadsClientID,
+			cfg.ThreadsClientSecret,
+			"http://localhost:8080/api/v1/accounts/threads/callback",
+		)
+	}
+
 	publishSvc := publisher.NewService(db, tokenManager)
+	if blueskyAuth != nil {
+		publishSvc.SetBlueskyOAuth(blueskyAuth)
+	}
+	if linkedinAuth != nil {
+		publishSvc.SetLinkedInOAuth(linkedinAuth)
+		tokenManager.SetLinkedInOAuth(linkedinAuth)
+	}
+	if threadsAuth != nil {
+		publishSvc.SetThreadsOAuth(threadsAuth)
+		tokenManager.SetThreadsOAuth(threadsAuth)
+	}
+	if twAuth != nil {
+		tokenManager.SetTwitterOAuth(twAuth)
+	}
+	tokenManager.SetMastodonOAuth(mastodonServers)
 
 	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc)
 	go worker.Start(context.Background())
@@ -105,11 +142,12 @@ func main() {
 	postHandler.ListPosts(api)
 	postHandler.GetScheduleOverview(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, twAuth, mastodonServers, authService)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, twAuth, mastodonServers, blueskyAuth, linkedinAuth, threadsAuth, authService)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)
 	oauthHandler.ExchangeCode(api)
+	oauthHandler.BlueskyLogin(api)
 	oauthHandler.ListAccounts(api)
 
 	// Health check (Huma-registered for OpenAPI docs)

@@ -25,6 +25,12 @@ type Config struct {
 
 	MastodonRedirectURI string
 	MastodonServers     []MastodonServerConfig
+
+	LinkedInClientID     string
+	LinkedInClientSecret string
+
+	ThreadsClientID     string
+	ThreadsClientSecret string
 }
 
 func Load() *Config {
@@ -39,6 +45,12 @@ func Load() *Config {
 		TwitterClientSecret: getEnv("TWITTER_CLIENT_SECRET", ""),
 
 		MastodonRedirectURI: getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
+
+		LinkedInClientID:     getEnv("LINKEDIN_CLIENT_ID", ""),
+		LinkedInClientSecret: getEnv("LINKEDIN_CLIENT_SECRET", ""),
+
+		ThreadsClientID:     getEnv("THREADS_CLIENT_ID", ""),
+		ThreadsClientSecret: getEnv("THREADS_CLIENT_SECRET", ""),
 	}
 
 	if raw := getEnv("MASTODON_SERVERS", ""); raw != "" {

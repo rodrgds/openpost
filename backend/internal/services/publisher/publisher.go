@@ -1,6 +1,7 @@
 package publisher
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,19 +9,42 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/oauth"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
 
 type Service struct {
-	db *bun.DB
-	tm *tokenmanager.TokenManager
+	db       *bun.DB
+	tm       *tokenmanager.TokenManager
+	bluesky  *oauth.BlueskyOAuth
+	linkedin *oauth.LinkedInOAuth
+	threads  *oauth.ThreadsOAuth
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
-	return &Service{db: db, tm: tm}
+	return &Service{
+		db: db,
+		tm: tm,
+	}
+}
+
+// SetBlueskyOAuth sets the Bluesky OAuth provider
+func (s *Service) SetBlueskyOAuth(bs *oauth.BlueskyOAuth) {
+	s.bluesky = bs
+}
+
+// SetLinkedInOAuth sets the LinkedIn OAuth provider
+func (s *Service) SetLinkedInOAuth(li *oauth.LinkedInOAuth) {
+	s.linkedin = li
+}
+
+// SetThreadsOAuth sets the Threads OAuth provider
+func (s *Service) SetThreadsOAuth(th *oauth.ThreadsOAuth) {
+	s.threads = th
 }
 
 // HandlePublishJob is called by the queue worker
@@ -60,7 +84,6 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 			firstError = err
 			log.Printf("[Publisher] Failed to publish to %s: %v", dest.ID, err)
 
-			// Update destination status
 			_, _ = s.db.NewUpdate().Model(&dest).
 				Set("status = ?", "failed").
 				Set("error_message = ?", err.Error()).
@@ -68,7 +91,6 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 				Exec(ctx)
 		} else {
 			log.Printf("[Publisher] Successfully published to destination %s", dest.ID)
-			// Success
 			_, _ = s.db.NewUpdate().Model(&dest).
 				Set("status = ?", "success").
 				Where("id = ?", dest.ID).
@@ -76,7 +98,6 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 		}
 	}
 
-	// Update Post overall status
 	if firstError != nil {
 		_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "failed").Where("id = ?", post.ID).Exec(ctx)
 	} else {
@@ -111,6 +132,16 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 			return fmt.Errorf("mastodon instance URL is missing")
 		}
 		return s.publishToMastodon(ctx, token, account.InstanceURL, post.Content)
+	case "bluesky":
+		pdsURL := account.InstanceURL
+		if pdsURL == "" {
+			pdsURL = "https://bsky.social"
+		}
+		return s.publishToBluesky(ctx, token, pdsURL, account.AccountID, post.Content)
+	case "linkedin":
+		return s.publishToLinkedIn(ctx, token, account.AccountID, post.Content)
+	case "threads":
+		return s.publishToThreads(ctx, token, account.AccountID, post.Content)
 	default:
 		return fmt.Errorf("unsupported platform: %s", account.Platform)
 	}
@@ -149,5 +180,154 @@ func (s *Service) publishToMastodon(ctx context.Context, token, instanceURL, con
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("mastodon API returned status: %d", resp.StatusCode)
 	}
+	return nil
+}
+
+func (s *Service) publishToBluesky(ctx context.Context, token, pdsURL, did, content string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	payload := map[string]interface{}{
+		"repo":       did,
+		"collection": "app.bsky.feed.post",
+		"record": map[string]interface{}{
+			"$type":     "app.bsky.feed.post",
+			"text":      content,
+			"createdAt": now,
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", pdsURL+"/xrpc/com.atproto.repo.createRecord", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("bluesky API returned status: %d", resp.StatusCode)
+	}
+
+	log.Printf("[Publisher] Successfully published to Bluesky")
+	return nil
+}
+
+func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, content string) error {
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	payload := map[string]interface{}{
+		"author":     fmt.Sprintf("urn:li:person:%s", personID),
+		"commentary": content,
+		"visibility": "PUBLIC",
+		"distribution": map[string]interface{}{
+			"feedDistribution":               "MAIN_FEED",
+			"targetEntities":                 []interface{}{},
+			"thirdPartyDistributionChannels": []interface{}{},
+		},
+		"lifecycleState":            "PUBLISHED",
+		"isReshareDisabledByAuthor": false,
+	}
+
+	// Add lifecycleState if needed for newer API
+	if now != "" {
+		_ = now // lifecycle state is already set
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linkedin.com/rest/posts", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+	req.Header.Set("Linkedin-Version", "202401")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		respBody, _ := json.Marshal(resp.Body)
+		return fmt.Errorf("linkedin API returned status: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Printf("[Publisher] Successfully published to LinkedIn")
+	return nil
+}
+
+func (s *Service) publishToThreads(ctx context.Context, token, userID, content string) error {
+	// Step 1: Create media container
+	containerParams := url.Values{
+		"media_type":   {"TEXT"},
+		"text":         {content},
+		"access_token": {token},
+	}
+
+	containerURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads?%s", userID, containerParams.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, "POST", containerURL, nil)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("threads container creation failed: status %d", resp.StatusCode)
+	}
+
+	var containerResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&containerResp); err != nil {
+		return err
+	}
+
+	// Step 2: Publish the container
+	publishURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads_publish?creation_id=%s&access_token=%s",
+		userID, containerResp.ID, token)
+
+	req, err = http.NewRequestWithContext(ctx, "POST", publishURL, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("threads publish failed: status %d", resp.StatusCode)
+	}
+
+	log.Printf("[Publisher] Successfully published to Threads")
 	return nil
 }

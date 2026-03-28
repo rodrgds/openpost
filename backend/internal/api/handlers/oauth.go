@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -20,15 +22,34 @@ type OAuthHandler struct {
 	crypto          *crypto.TokenEncryptor
 	twitter         *oauth.TwitterOAuth
 	mastodonServers map[string]*oauth.MastodonOAuth
+	bluesky         *oauth.BlueskyOAuth
+	linkedin        *oauth.LinkedInOAuth
+	threads         *oauth.ThreadsOAuth
 	auth            *auth.Service
 }
 
-func NewOAuthHandler(db *bun.DB, encryptor *crypto.TokenEncryptor, tw *oauth.TwitterOAuth, mastodonServers map[string]*oauth.MastodonOAuth, authService *auth.Service) *OAuthHandler {
+type AuthSessionStore struct {
+	sync.Map
+}
+
+func NewOAuthHandler(
+	db *bun.DB,
+	encryptor *crypto.TokenEncryptor,
+	tw *oauth.TwitterOAuth,
+	mastodonServers map[string]*oauth.MastodonOAuth,
+	bs *oauth.BlueskyOAuth,
+	li *oauth.LinkedInOAuth,
+	th *oauth.ThreadsOAuth,
+	authService *auth.Service,
+) *OAuthHandler {
 	return &OAuthHandler{
 		db:              db,
 		crypto:          encryptor,
 		twitter:         tw,
 		mastodonServers: mastodonServers,
+		bluesky:         bs,
+		linkedin:        li,
+		threads:         th,
 		auth:            authService,
 	}
 }
@@ -47,7 +68,7 @@ type ListMastodonServersOutput struct {
 // --- Get Auth URL ---
 
 type GetAuthURLInput struct {
-	Platform    string `path:"platform" doc:"Social platform (x, mastodon)"`
+	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads)"`
 	WorkspaceID string `query:"workspace_id" doc:"Workspace ID to link account to"`
 	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
 }
@@ -73,7 +94,7 @@ type ExchangeCodeInput struct {
 	Body struct {
 		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
 		ServerName  string `json:"server_name" doc:"Mastodon server name from config"`
-		Code        string `json:"code" doc:"Authorization code from OOB flow"`
+		Code        string `json:"code" doc:"Authorization code from OAuth flow"`
 	}
 }
 
@@ -131,13 +152,9 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		switch input.Platform {
 		case "x":
 			url, verifier := h.twitter.GenerateAuthURL(state)
+			h.twitter.StoreVerifier(state, verifier)
 			resp := &GetAuthURLOutput{}
 			resp.Body.URL = url
-			echoCtx := ctx.Value("echo_context")
-			if echoCtx != nil {
-				// Not available in pure Huma context, cookie setting handled by adapter
-			}
-			_ = verifier // verifier cookie would be set via echo.Context
 			return resp, nil
 
 		case "mastodon":
@@ -146,6 +163,27 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 				return nil, huma.Error400BadRequest("unknown mastodon server name")
 			}
 			url := provider.GenerateAuthURL(state)
+			resp := &GetAuthURLOutput{}
+			resp.Body.URL = url
+			return resp, nil
+
+		case "bluesky":
+			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
+
+		case "linkedin":
+			if h.linkedin == nil {
+				return nil, huma.Error400BadRequest("linkedin not configured")
+			}
+			url := h.linkedin.GenerateAuthURL(state)
+			resp := &GetAuthURLOutput{}
+			resp.Body.URL = url
+			return resp, nil
+
+		case "threads":
+			if h.threads == nil {
+				return nil, huma.Error400BadRequest("threads not configured")
+			}
+			url := h.threads.GenerateAuthURL(state)
 			resp := &GetAuthURLOutput{}
 			resp.Body.URL = url
 			return resp, nil
@@ -164,15 +202,31 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		Summary:     "Handle OAuth callback from provider",
 		Tags:        []string{"Accounts"},
 		Errors:      []int{400},
-		Hidden:      true, // Called by OAuth providers, not by frontend
+		Hidden:      true,
 	}, func(ctx context.Context, input *OAuthCallbackInput) (*huma.StreamResponse, error) {
 		var tokenResp *oauth.TokenResponse
 		var err error
 		var instanceURL string
+		var accountID string
+		var accountUsername string
 
 		switch input.Platform {
 		case "x":
-			tokenResp, err = h.twitter.ExchangeCode(ctx, input.Code, "")
+			verifier, ok := h.twitter.GetVerifier(input.State)
+			if !ok {
+				return nil, huma.Error400BadRequest("invalid or expired state")
+			}
+			tokenResp, err = h.twitter.ExchangeCode(ctx, input.Code, verifier)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("token exchange failed")
+			}
+			user, err := h.twitter.GetMe(ctx, tokenResp.AccessToken)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to get user profile")
+			}
+			accountID = user.ID
+			accountUsername = user.Username
+
 		case "mastodon":
 			provider, ok := h.mastodonServers[input.ServerName]
 			if !ok {
@@ -180,12 +234,52 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			}
 			instanceURL = provider.InstanceURL()
 			tokenResp, err = provider.ExchangeCode(ctx, input.Code)
+			if err != nil {
+				return nil, huma.Error500InternalServerError(fmt.Sprintf("mastodon token exchange failed: %s", err.Error()))
+			}
+			profile, err := provider.GetProfile(ctx, tokenResp.AccessToken)
+			if err != nil {
+				// Non-fatal: profile fetch failed, use defaults
+				accountID = "mastodon-user"
+				accountUsername = ""
+			} else {
+				accountID = profile.ID
+				accountUsername = profile.Acct
+			}
+
+		case "linkedin":
+			if h.linkedin == nil {
+				return nil, huma.Error400BadRequest("linkedin not configured")
+			}
+			tokenResp, err = h.linkedin.ExchangeCode(ctx, input.Code)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("token exchange failed")
+			}
+			profile, err := h.linkedin.GetProfile(ctx, tokenResp.AccessToken)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to get profile")
+			}
+			accountID = profile.ID
+			accountUsername = profile.Name
+
+		case "threads":
+			if h.threads == nil {
+				return nil, huma.Error400BadRequest("threads not configured")
+			}
+			var userID string
+			tokenResp, userID, err = h.threads.ExchangeCode(ctx, input.Code)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("token exchange failed")
+			}
+			profile, err := h.threads.GetProfile(ctx, tokenResp.AccessToken, userID)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to get profile")
+			}
+			accountID = profile.ID
+			accountUsername = profile.Username
+
 		default:
 			return nil, huma.Error400BadRequest("unsupported platform")
-		}
-
-		if err != nil {
-			return nil, huma.Error500InternalServerError("token exchange failed")
 		}
 
 		encAccess, err := h.crypto.Encrypt(tokenResp.AccessToken)
@@ -193,9 +287,12 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			return nil, huma.Error500InternalServerError("encryption failed")
 		}
 
-		encRefresh, err := h.crypto.Encrypt(tokenResp.RefreshToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
+		var encRefresh []byte
+		if tokenResp.RefreshToken != "" {
+			encRefresh, err = h.crypto.Encrypt(tokenResp.RefreshToken)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("encryption failed")
+			}
 		}
 
 		var expiresAt time.Time
@@ -207,7 +304,8 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			ID:              uuid.New().String(),
 			WorkspaceID:     input.State,
 			Platform:        input.Platform,
-			AccountID:       "fetch-id-via-profile-api",
+			AccountID:       accountID,
+			AccountUsername: accountUsername,
 			InstanceURL:     instanceURL,
 			AccessTokenEnc:  encAccess,
 			RefreshTokenEnc: encRefresh,
@@ -220,7 +318,6 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to save account")
 		}
 
-		// Redirect to frontend
 		return &huma.StreamResponse{
 			Body: func(ctx huma.Context) {
 				ctx.SetStatus(http.StatusTemporaryRedirect)
@@ -239,12 +336,31 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
+		// This endpoint only handles Mastodon exchange
+		// Other platforms use the OAuth redirect flow
 		provider, ok := h.mastodonServers[input.Body.ServerName]
 		if !ok {
 			return nil, huma.Error400BadRequest("unknown mastodon server name")
 		}
 
+		instanceURL := provider.InstanceURL()
 		tokenResp, err := provider.ExchangeCode(ctx, input.Body.Code)
+		if err != nil {
+			return nil, huma.Error500InternalServerError(fmt.Sprintf("mastodon exchange failed: %s", err.Error()))
+		}
+
+		var accountID string
+		var accountUsername string
+		profile, err := provider.GetProfile(ctx, tokenResp.AccessToken)
+		if err != nil {
+			// Non-fatal: profile fetch failed, use defaults
+			accountID = "mastodon-user"
+			accountUsername = ""
+		} else {
+			accountID = profile.ID
+			accountUsername = profile.Acct
+		}
+
 		if err != nil {
 			return nil, huma.Error500InternalServerError("token exchange failed")
 		}
@@ -254,9 +370,12 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			return nil, huma.Error500InternalServerError("encryption failed")
 		}
 
-		encRefresh, err := h.crypto.Encrypt(tokenResp.RefreshToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
+		var encRefresh []byte
+		if tokenResp.RefreshToken != "" {
+			encRefresh, err = h.crypto.Encrypt(tokenResp.RefreshToken)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("encryption failed")
+			}
 		}
 
 		var expiresAt time.Time
@@ -268,11 +387,71 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			ID:              uuid.New().String(),
 			WorkspaceID:     input.Body.WorkspaceID,
 			Platform:        "mastodon",
-			AccountID:       "fetch-id-via-profile-api",
-			InstanceURL:     provider.InstanceURL(),
+			AccountID:       accountID,
+			AccountUsername: accountUsername,
+			InstanceURL:     instanceURL,
 			AccessTokenEnc:  encAccess,
 			RefreshTokenEnc: encRefresh,
 			TokenExpiresAt:  expiresAt,
+			IsActive:        true,
+			CreatedAt:       time.Now(),
+		}
+
+		if _, err := h.db.NewInsert().Model(account).Exec(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to save account")
+		}
+
+		return nil, nil
+	})
+}
+
+// --- Bluesky Login (app password) ---
+
+type BlueskyLoginInput struct {
+	Body struct {
+		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+		Handle      string `json:"handle" doc:"Bluesky handle (e.g. user.bsky.social)"`
+		AppPassword string `json:"app_password" doc:"Bluesky app password (Settings > App Passwords)"`
+	}
+}
+
+func (h *OAuthHandler) BlueskyLogin(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "bluesky-login",
+		Method:      http.MethodPost,
+		Path:        "/accounts/bluesky/login",
+		Summary:     "Connect Bluesky account using app password",
+		Tags:        []string{"Accounts"},
+		Errors:      []int{400},
+	}, func(ctx context.Context, input *BlueskyLoginInput) (*struct{}, error) {
+		if h.bluesky == nil {
+			return nil, huma.Error400BadRequest("bluesky not configured")
+		}
+
+		session, err := h.bluesky.CreateSession(ctx, input.Body.Handle, input.Body.AppPassword)
+		if err != nil {
+			return nil, huma.Error500InternalServerError(fmt.Sprintf("bluesky login failed: %s", err.Error()))
+		}
+
+		encAccess, err := h.crypto.Encrypt(session.AccessToken)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("encryption failed")
+		}
+
+		encRefresh, err := h.crypto.Encrypt(session.RefreshToken)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("encryption failed")
+		}
+
+		account := &models.SocialAccount{
+			ID:              uuid.New().String(),
+			WorkspaceID:     input.Body.WorkspaceID,
+			Platform:        "bluesky",
+			AccountID:       session.Did,
+			AccountUsername: session.Handle,
+			InstanceURL:     "https://bsky.social",
+			AccessTokenEnc:  encAccess,
+			RefreshTokenEnc: encRefresh,
 			IsActive:        true,
 			CreatedAt:       time.Now(),
 		}
