@@ -65,15 +65,39 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 	}
 
 	var dests []models.PostDestination
-	if err := s.db.NewSelect().Model(&dests).Where("post_id = ? AND status = 'pending'", post.ID).Scan(ctx); err != nil {
+	if err := s.db.NewSelect().Model(&dests).Where("post_id = ? AND status IN ('pending', 'failed')", post.ID).Scan(ctx); err != nil {
 		return err
 	}
 
 	log.Printf("[Publisher] Found %d destinations for post %s", len(dests), post.ID)
 
 	if len(dests) == 0 {
-		log.Printf("[Publisher] No destinations for post %s - marking as published", post.ID)
-		_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "published").Where("id = ?", post.ID).Exec(ctx)
+		// Check if all destinations are already successful
+		var totalDests int
+		totalDests, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
+			Where("post_id = ?", post.ID).
+			Count(ctx)
+
+		if totalDests == 0 {
+			log.Printf("[Publisher] No destinations for post %s - marking as published", post.ID)
+			_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "published").Where("id = ?", post.ID).Exec(ctx)
+		} else {
+			// All destinations are either success or failed - check for failures
+			var failedCount int
+			failedCount, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
+				Where("post_id = ? AND status = 'failed'", post.ID).
+				Count(ctx)
+			if failedCount > 0 {
+				log.Printf("[Publisher] Post %s has %d failed destinations", post.ID, failedCount)
+				_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "failed").Where("id = ?", post.ID).Exec(ctx)
+			} else {
+				_, _ = s.db.NewUpdate().Model(post).
+					Set("status = ?", "published").
+					Set("published_at = CURRENT_TIMESTAMP").
+					Where("id = ?", post.ID).
+					Exec(ctx)
+			}
+		}
 		return nil
 	}
 
