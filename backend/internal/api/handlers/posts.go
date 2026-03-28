@@ -56,15 +56,21 @@ type ListPostsOutput struct {
 	Body []PostResponse
 }
 
-type ScheduleDay struct {
-	Date      string                `json:"date" doc:"Date in YYYY-MM-DD format"`
-	Count     int                   `json:"count" doc:"Number of scheduled posts"`
-	Platforms []ScheduleDayPlatform `json:"platforms" doc:"Per-platform breakdown"`
-}
-
 type ScheduleDayPlatform struct {
 	Platform string `json:"platform" doc:"Platform name"`
 	Count    int    `json:"count" doc:"Count for this platform on this day"`
+}
+
+type ScheduleDayWorkspace struct {
+	WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+	Count       int    `json:"count" doc:"Count for this workspace on this day"`
+}
+
+type ScheduleDay struct {
+	Date       string                 `json:"date" doc:"Date in YYYY-MM-DD format"`
+	Count      int                    `json:"count" doc:"Number of scheduled posts"`
+	Platforms  []ScheduleDayPlatform  `json:"platforms" doc:"Per-platform breakdown"`
+	Workspaces []ScheduleDayWorkspace `json:"workspaces" doc:"Per-workspace breakdown"`
 }
 
 type ScheduleOverviewInput struct {
@@ -346,7 +352,12 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		dayIndexByDate := make(map[string]int, len(dayRows))
 		for _, row := range dayRows {
 			dayIndexByDate[row.Date] = len(days)
-			days = append(days, ScheduleDay{Date: row.Date, Count: row.Count, Platforms: []ScheduleDayPlatform{}})
+			days = append(days, ScheduleDay{
+				Date:       row.Date,
+				Count:      row.Count,
+				Platforms:  []ScheduleDayPlatform{},
+				Workspaces: []ScheduleDayWorkspace{},
+			})
 		}
 
 		// Query per-platform daily counts
@@ -392,6 +403,46 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			days[idx].Platforms = append(days[idx].Platforms, ScheduleDayPlatform{
 				Platform: row.Platform,
 				Count:    row.Count,
+			})
+		}
+
+		// Query per-workspace daily counts
+		var workspaceDayRows []struct {
+			Date        string `bun:"date"`
+			WorkspaceID string `bun:"workspace_id"`
+			Count       int    `bun:"count"`
+		}
+
+		workspaceCountsQuery := `
+			SELECT DATE(p.scheduled_at) AS date, p.workspace_id AS workspace_id, COUNT(DISTINCT p.id) AS count
+			FROM posts AS p
+			JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
+			WHERE wm.user_id = ?
+				AND p.scheduled_at >= ?
+				AND p.scheduled_at < ?
+				AND p.status IN ('scheduled', 'publishing', 'published')
+		`
+		workspaceArgs := []interface{}{userID, monthStart, monthEnd}
+
+		if selectedWorkspaceID != "" {
+			workspaceCountsQuery += ` AND p.workspace_id = ?`
+			workspaceArgs = append(workspaceArgs, selectedWorkspaceID)
+		}
+
+		workspaceCountsQuery += ` GROUP BY DATE(p.scheduled_at), p.workspace_id ORDER BY DATE(p.scheduled_at), p.workspace_id`
+
+		if err = h.db.NewRaw(workspaceCountsQuery, workspaceArgs...).Scan(ctx, &workspaceDayRows); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch schedule workspace days")
+		}
+
+		for _, row := range workspaceDayRows {
+			idx, ok := dayIndexByDate[row.Date]
+			if !ok {
+				continue
+			}
+			days[idx].Workspaces = append(days[idx].Workspaces, ScheduleDayWorkspace{
+				WorkspaceID: row.WorkspaceID,
+				Count:       row.Count,
 			})
 		}
 

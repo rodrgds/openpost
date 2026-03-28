@@ -1,47 +1,70 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { client, type Workspace } from '$lib/api/client';
+	import { client, type Workspace, type ScheduleOverview } from '$lib/api/client';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
+	import * as CalendarUi from '$lib/components/ui/calendar';
+	import * as Drawer from '$lib/components/ui/drawer';
+	import { Button } from '$lib/components/ui/button';
 	import Logo from './Logo.svelte';
+	import ComposePost from './compose-post.svelte';
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
-	import FileTextIcon from 'lucide-svelte/icons/file-text';
-	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import PlusIcon from 'lucide-svelte/icons/plus';
-	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
 	import BadgeCheckIcon from 'lucide-svelte/icons/badge-check';
 	import CreditCardIcon from 'lucide-svelte/icons/credit-card';
 	import BellIcon from 'lucide-svelte/icons/bell';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
+	import CircleDotIcon from 'lucide-svelte/icons/circle-dot';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
 	import SunIcon from 'lucide-svelte/icons/sun';
 	import MoonIcon from 'lucide-svelte/icons/moon';
+	import type { DateValue } from '@internationalized/date';
+	import { getLocalTimeZone, today, isEqualDay } from '@internationalized/date';
+	import { ui } from '$lib/stores/ui.svelte';
 
 	let authState = $derived($auth);
 	const sidebar = Sidebar.useSidebar();
 	let pathname = $derived($page.url.pathname);
 
-	let workspaces = $state<Workspace[]>([]);
-	let workspacesLoading = $state(true);
-	let selectedWorkspaceId = $derived($page.params.id || workspaces[0]?.id || '');
-	let selectedWorkspaceName = $derived(
-		workspaces.find((workspace) => workspace.id === selectedWorkspaceId)?.name || 'Select workspace'
-	);
+	// Calendar state
+	let selectedDate = $state<DateValue>(today(getLocalTimeZone()));
+	let overview = $state<ScheduleOverview | null>(null);
+	let loadingSchedule = $state(true);
+
+	const monthString = $derived.by(() => {
+		const jsDate = selectedDate.toDate(getLocalTimeZone());
+		const year = jsDate.getFullYear();
+		const month = String(jsDate.getMonth() + 1).padStart(2, '0');
+		return `${year}-${month}`;
+	});
+
+	const dayCounts = $derived.by(() => {
+		const map = new Map<string, number>();
+		if (!overview) return map;
+		for (const item of overview?.days ?? []) {
+			map.set(item.date, item.count);
+		}
+		return map;
+	});
+
+	const dayWorkspaceCounts = $derived.by(() => {
+		const map = new Map<string, { workspace_id: string; count: number }[]>();
+		if (!overview) return map;
+		for (const item of overview?.days ?? []) {
+			// @ts-ignore - added via backend change
+			map.set(item.date, item.workspaces || []);
+		}
+		return map;
+	});
 
 	const navItems = [
 		{ title: 'Dashboard', url: '/', icon: HouseIcon, isActive: () => pathname === '/' },
-		{
-			title: 'Workspaces',
-			url: '/',
-			icon: FileTextIcon,
-			isActive: () => pathname.startsWith('/workspace/')
-		},
 		{
 			title: 'Accounts',
 			url: '/accounts',
@@ -50,87 +73,105 @@
 		}
 	];
 
-	onMount(async () => {
-		try {
-			const { data, error: err } = await client.GET('/workspaces');
-			workspaces = data ?? [];
-		} catch {
-			workspaces = [];
-		} finally {
-			workspacesLoading = false;
+	const workspaceColors = [
+		'bg-blue-500',
+		'bg-emerald-500',
+		'bg-violet-500',
+		'bg-orange-500',
+		'bg-rose-500',
+		'bg-amber-500',
+		'bg-cyan-500',
+		'bg-indigo-500'
+	];
+
+	function getWorkspaceColor(workspaceId: string) {
+		let hash = 0;
+		for (let i = 0; i < workspaceId.length; i++) {
+			hash = workspaceId.charCodeAt(i) + ((hash << 5) - hash);
 		}
+		return workspaceColors[Math.abs(hash) % workspaceColors.length];
+	}
+
+	onMount(async () => {
+		loadOverview();
 	});
+
+	// Track previous month to detect actual changes
+	let previousMonth = $state('');
+
+	$effect(() => {
+		const currentMonth = monthString;
+		if (previousMonth && previousMonth !== currentMonth) {
+			loadOverview();
+		}
+		previousMonth = currentMonth;
+	});
+
+	async function loadOverview() {
+		loadingSchedule = true;
+		try {
+			const { data, error: err } = await client.GET('/posts/schedule-overview', {
+				params: {
+					query: {
+						month: monthString
+					}
+				}
+			});
+			if (err || !data) throw new Error('Failed to load');
+			overview = data;
+		} catch {
+			overview = null;
+		} finally {
+			loadingSchedule = false;
+		}
+	}
 
 	function handleLogout() {
 		auth.logout();
 		goto('/login');
 	}
 
-	function openWorkspace(workspaceId: string) {
-		goto(`/workspace/${workspaceId}`);
-	}
+	type DayMarkerArgs = {
+		day: DateValue;
+		outsideMonth: boolean;
+	};
 </script>
+
+{#snippet dayMarker({ day, outsideMonth }: DayMarkerArgs)}
+	{@const key = day.toString()}
+	{@const count = dayCounts.get(key) || 0}
+	{@const wsCounts = dayWorkspaceCounts.get(key) || []}
+	{@const dots = wsCounts.slice(0, 3)}
+	<div class="relative flex size-(--cell-size) items-center justify-center">
+		<CalendarUi.Day />
+		{#if !outsideMonth && count > 0}
+			<div class="pointer-events-none absolute bottom-0.5 flex items-center justify-center gap-0.5">
+				{#each dots as marker (`${key}-${marker.workspace_id}`)}
+					<span class={`h-1 w-1 rounded-full ${getWorkspaceColor(marker.workspace_id)}`}></span>
+				{/each}
+			</div>
+		{/if}
+	</div>
+{/snippet}
 
 <Sidebar.Root>
 	<Sidebar.Header>
 		<!-- Logo -->
-		<div class="flex items-center justify-center px-2 py-2">
+		<div class="flex items-center justify-center px-2 py-4">
 			<a href="/" class="transition-opacity hover:opacity-90">
 				<Logo width={28} height={28} showText={true} />
 			</a>
 		</div>
-		<Sidebar.Separator />
 
-		<!-- Workspace Switcher -->
-		<Sidebar.Menu>
-			<Sidebar.MenuItem>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Sidebar.MenuButton {...props} class="w-full px-1.5">
-								<div
-									class="flex aspect-square size-5 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
-								>
-									<FolderOpenIcon class="size-3" />
-								</div>
-								<span class="truncate font-medium text-sidebar-foreground"
-									>{selectedWorkspaceName}</span
-								>
-								<ChevronDownIcon class="size-4 text-sidebar-foreground opacity-50" />
-							</Sidebar.MenuButton>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-64 rounded-lg" align="start" side="bottom" sideOffset={4}>
-						<DropdownMenu.Label class="text-xs text-muted-foreground">Workspaces</DropdownMenu.Label
-						>
-						{#if workspacesLoading}
-							<DropdownMenu.Item disabled class="gap-2 p-2">Loading workspaces...</DropdownMenu.Item
-							>
-						{:else if workspaces.length === 0}
-							<DropdownMenu.Item disabled class="gap-2 p-2">No workspaces found</DropdownMenu.Item>
-						{:else}
-							{#each workspaces as workspace (workspace.id)}
-								<DropdownMenu.Item onSelect={() => openWorkspace(workspace.id)} class="gap-2 p-2">
-									<div class="flex size-6 items-center justify-center rounded-xs border">
-										<span class="text-[0.625rem] font-semibold"
-											>{workspace.name.slice(0, 1).toUpperCase()}</span
-										>
-									</div>
-									{workspace.name}
-								</DropdownMenu.Item>
-							{/each}
-						{/if}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item class="gap-2 p-2" onSelect={() => goto('/')}>
-							<div class="flex size-6 items-center justify-center rounded-md border bg-background">
-								<PlusIcon class="size-4" />
-							</div>
-							<div class="font-medium text-muted-foreground">Add workspace</div>
-						</DropdownMenu.Item>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-			</Sidebar.MenuItem>
-		</Sidebar.Menu>
+		<!-- New Post Button -->
+		<div class="px-2 pb-2">
+			<Button class="w-full justify-start gap-2" onclick={() => ui.openCompose()}>
+				<PlusIcon class="size-4" />
+				<span>New Post</span>
+			</Button>
+		</div>
+
+		<Sidebar.Separator />
 
 		<!-- Main Navigation -->
 		<Sidebar.Menu>
@@ -149,7 +190,54 @@
 		</Sidebar.Menu>
 	</Sidebar.Header>
 
-	<Sidebar.Content class="mt-auto">
+	<Sidebar.Content>
+		<Sidebar.Separator />
+		<!-- Calendar Section -->
+		<Sidebar.Group class="px-0 pt-4">
+			<Sidebar.GroupLabel
+				class="px-4 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
+				>Schedule</Sidebar.GroupLabel
+			>
+			<Sidebar.GroupContent>
+				<CalendarUi.Calendar
+					type="single"
+					bind:value={selectedDate}
+					onValueChange={(date) => {
+						if (date) {
+							ui.openCompose(date);
+						}
+					}}
+					day={dayMarker}
+					class="mx-auto select-none [--cell-size:--spacing(8)] [&_[data-bits-calendar-head-cell]]:w-[30px] [&_[role=gridcell]]:w-[30px] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground"
+				/>
+			</Sidebar.GroupContent>
+		</Sidebar.Group>
+
+		{#if overview && overview.days && overview.days.some((d) => d.count > 0)}
+			<Sidebar.Group>
+				<Sidebar.GroupLabel
+					class="text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
+					>Upcoming</Sidebar.GroupLabel
+				>
+				<Sidebar.GroupContent>
+					<Sidebar.Menu>
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton class="text-sidebar-foreground/80">
+								<CircleDotIcon class="size-3.5" />
+								<span
+									>{loadingSchedule
+										? 'Loading...'
+										: `${overview.days.reduce((s, d) => s + d.count, 0)} scheduled posts`}</span
+								>
+							</Sidebar.MenuButton>
+						</Sidebar.MenuItem>
+					</Sidebar.Menu>
+				</Sidebar.GroupContent>
+			</Sidebar.Group>
+		{/if}
+	</Sidebar.Content>
+
+	<Sidebar.Footer>
 		<Sidebar.Separator />
 		<!-- User Menu -->
 		<Sidebar.Menu>
@@ -239,6 +327,28 @@
 				</DropdownMenu.Root>
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
-	</Sidebar.Content>
+	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>
+
+<Drawer.Root bind:open={ui.isComposeOpen}>
+	<Drawer.Content class="max-h-[90vh]">
+		<div class="scrollbar-hide mx-auto w-full max-w-4xl overflow-auto p-6">
+			<Drawer.Header class="px-0">
+				<Drawer.Title class="text-2xl font-bold">Compose Post</Drawer.Title>
+				<Drawer.Description>Schedule your post across multiple platforms.</Drawer.Description>
+			</Drawer.Header>
+			<div class="mt-4">
+				<ComposePost
+					initialDate={ui.composeInitialDate}
+					onSuccess={() => {
+						ui.closeCompose();
+						ui.triggerRefresh();
+						loadOverview();
+					}}
+					onCancel={() => ui.closeCompose()}
+				/>
+			</div>
+		</div>
+	</Drawer.Content>
+</Drawer.Root>

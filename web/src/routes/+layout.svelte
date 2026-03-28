@@ -7,9 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { Separator } from '$lib/components/ui/separator';
 	import SidebarLeft from '$lib/components/sidebar-left.svelte';
-	import SidebarRight from '$lib/components/sidebar-right.svelte';
 	import Logo from '$lib/components/Logo.svelte';
 
 	let { children } = $props();
@@ -82,17 +80,16 @@
 	<Sidebar.Provider>
 		<SidebarLeft />
 		<Sidebar.Inset>
-			<header class="sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b bg-background">
-				<div class="flex flex-1 items-center gap-2 px-3">
-					<Sidebar.Trigger class="text-sidebar-foreground" />
-					<Separator orientation="vertical" class="me-2 h-4 bg-border" />
-					<span class="text-sm font-medium text-foreground">OpenPost</span>
+			<header
+				class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background"
+			>
+				<div class="flex items-center gap-2 px-4">
+					<Sidebar.Trigger class="-ml-1" />
 				</div>
 			</header>
-			<div class="flex flex-1 flex-col gap-4 p-4">
+			<div class="flex flex-1 flex-col overflow-auto">
 				{@render children()}
 			</div>
 		</Sidebar.Inset>
-		<SidebarRight />
 	</Sidebar.Provider>
 {/if}
