@@ -1,112 +1,129 @@
-# OpenPost - Self-hosted social media scheduler
-# Creates a single Go binary with embedded SvelteKit frontend
+# OpenPost NixOS Module
+# Self-hosted social media scheduler
 {
   config,
   lib,
+  pkgs,
   ...
 }:
+
 let
-  cfg = config.vps.openpost;
-  openpostPort = 8180;
+  cfg = config.services.openpost;
 in
 {
-  options.vps.openpost = {
+  options.services.openpost = {
     enable = lib.mkEnableOption "OpenPost social media scheduler";
 
-    domain = lib.mkOption {
-      type = lib.types.str;
-      default = "openpost.rgo.pt";
-      description = "Domain for OpenPost";
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.callPackage ../. { };
+      defaultText = lib.literalExpression "pkgs.callPackage ./. { }";
+      description = "The OpenPost package to use.";
     };
 
     dataDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/openpost";
-      description = "Directory for persistent data";
+      description = "Directory for OpenPost data (database and media).";
+    };
+
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 8080;
+      description = "Port to run OpenPost on.";
+    };
+
+    environment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      description = ''
+        Environment variables to pass to OpenPost.
+        Required: JWT_SECRET, ENCRYPTION_KEY
+        Optional: TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET, etc.
+      '';
+      example = lib.literalExpression ''
+        {
+          JWT_SECRET = "your-secret";
+          ENCRYPTION_KEY = "your-encryption-key";
+        }
+      '';
+    };
+
+    environmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Path to a file containing environment variables.
+        Useful for secrets that shouldn't be in the Nix store.
+        Format: KEY=value (one per line)
+      '';
+    };
+
+    openFirewall = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Open the firewall for OpenPost port.";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    # Create persistent directories
+    # Create data directory
     systemd.tmpfiles.rules = [
-      "d ${cfg.dataDir} 0750 root root -"
-      "d ${cfg.dataDir}/db 0700 1000 1000 -"
-      "d ${cfg.dataDir}/media 0700 1000 1000 -"
+      "d '${cfg.dataDir}' 0750 openpost openpost -"
+      "d '${cfg.dataDir}/db' 0750 openpost openpost -"
+      "d '${cfg.dataDir}/media' 0750 openpost openpost -"
     ];
 
-    # OpenPost container
-    virtualisation.oci-containers.containers.openpost = {
-      image = "ghcr.io/rodrgds/openpost:latest";
+    # Create openpost user
+    users.users.openpost = {
+      isSystemUser = true;
+      group = "openpost";
+      home = cfg.dataDir;
+      createHome = false;
+    };
+    users.groups.openpost = { };
 
-      environment = {
-        OPENPOST_PORT = "8080";
-        OPENPOST_DB_PATH = "/data/db/openpost.db";
-        OPENPOST_MEDIA_PATH = "/data/media";
+    # Systemd service
+    systemd.services.openpost = {
+      description = "OpenPost - Social Media Scheduler";
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+
+      serviceConfig = {
+        Type = "simple";
+        User = "openpost";
+        Group = "openpost";
+        WorkingDirectory = cfg.dataDir;
+        ExecStart = lib.getExe cfg.package;
+        Restart = "on-failure";
+        RestartSec = "5s";
+
+        # Security hardening
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ cfg.dataDir ];
+        CapabilityBoundingSet = "";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+        ];
       };
 
-      environmentFiles = [
-        config.sops.templates.openpost-env.path
-      ];
+      environment = cfg.environment // {
+        OPENPOST_PORT = toString cfg.port;
+        OPENPOST_DB_PATH = "${cfg.dataDir}/db/openpost.db";
+        OPENPOST_MEDIA_PATH = "${cfg.dataDir}/media";
+      };
 
-      volumes = [
-        "${cfg.dataDir}/db:/data/db"
-        "${cfg.dataDir}/media:/data/media"
-      ];
-
-      ports = [
-        "127.0.0.1:${toString openpostPort}:8080"
-      ];
-
-      extraOptions = [
-        "--network=podman"
-        "--health-cmd=wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health || exit 1"
-        "--health-interval=30s"
-        "--health-timeout=3s"
-        "--health-retries=3"
-      ];
+      environmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
     };
 
-    # Secrets template
-    sops.templates.openpost-env = {
-      content = ''
-        JWT_SECRET=${config.sops.placeholder.openpost_jwt_secret}
-        ENCRYPTION_KEY=${config.sops.placeholder.openpost_encryption_key}
-      ''
-      + lib.optionalString (config.sops.placeholder ? openpost_twitter_client_id) ''
-        TWITTER_CLIENT_ID=${config.sops.placeholder.openpost_twitter_client_id}
-        TWITTER_CLIENT_SECRET=${config.sops.placeholder.openpost_twitter_client_secret}
-      ''
-      + lib.optionalString (config.sops.placeholder ? openpost_linkedin_client_id) ''
-        LINKEDIN_CLIENT_ID=${config.sops.placeholder.openpost_linkedin_client_id}
-        LINKEDIN_CLIENT_SECRET=${config.sops.placeholder.openpost_linkedin_client_secret}
-      ''
-      + lib.optionalString (config.sops.placeholder ? openpost_threads_client_id) ''
-        THREADS_CLIENT_ID=${config.sops.placeholder.openpost_threads_client_id}
-        THREADS_CLIENT_SECRET=${config.sops.placeholder.openpost_threads_client_secret}
-      ''
-      + lib.optionalString (config.sops.placeholder ? openpost_mastodon_servers) ''
-        MASTODON_SERVERS=${config.sops.placeholder.openpost_mastodon_servers}
-      '';
-      mode = "0400";
-    };
+    # Firewall
+    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
 
-    # Caddy reverse proxy integration
-    vps.caddy.internalPorts.openpost = openpostPort;
-
-    # Caddy virtual host (handled by dynamicVirtualHosts in caddy module)
-    # Or can be customized:
-    services.caddy.virtualHosts."${cfg.domain}" = {
-      extraConfig = ''
-        reverse_proxy localhost:${toString openpostPort}
-
-        header {
-          Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-          X-Content-Type-Options "nosniff"
-          X-Frame-Options "SAMEORIGIN"
-          X-XSS-Protection "1; mode=block"
-          Referrer-Policy "strict-origin-when-cross-origin"
-        }
-      '';
-    };
+    # Package
+    environment.systemPackages = [ cfg.package ];
   };
 }

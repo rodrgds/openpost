@@ -145,53 +145,109 @@ docker run -d \
 
 ## ✨ Nix Flakes
 
-OpenPost can be built as a standalone binary using Nix flakes for reproducible deployment.
+OpenPost is available as a Nix flake. You can run it directly, build it, or import it into your own Nix configuration.
 
-### Build
+### Quick Start
+
+Run OpenPost directly without installing:
 
 ```bash
-# Build the binary
-nix build
-
-# Result: ./result/bin/openpost
+nix run github:rodrgds/openpost
 ```
 
-### Deploy
-
-Copy the binary anywhere and run:
+Build the binary locally:
 
 ```bash
+nix build github:rodrgds/openpost
 ./result/bin/openpost
 ```
 
-A `.env.template` is installed to `$out/share/openpost/.env.template` for reference.
+### Use in Your Flake
 
-### NixOS Module
-
-For declarative NixOS deployment with Podman and Caddy, use the provided module:
+Add OpenPost as an input to your `flake.nix`:
 
 ```nix
-# Import the module
-{ config, lib, ... }:
 {
-  imports = [ ./path/to/openpost/nix/module.nix ];
-
-  vps.openpost = {
-    enable = true;
-    domain = "openpost.example.com";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    openpost.url = "github:rodrgds/openpost";
   };
 
-  # Required secrets (using sops-nix)
-  sops.secrets.openpost_jwt_secret = { };
-  sops.secrets.openpost_encryption_key = { };
+  outputs = { self, nixpkgs, openpost }: {
+    # For NixOS system configuration
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        # Import the NixOS module
+        openpost.nixosModules.default
+        
+        # Your configuration
+        ({ config, pkgs, ... }: {
+          services.openpost = {
+            enable = true;
+            dataDir = "/var/lib/openpost";
+          };
+          
+          # Don't forget to set your secrets!
+          environment.systemPackages = [ openpost.packages.x86_64-linux.default ];
+        })
+      ];
+    };
+    
+    # For development shell
+    devShells.x86_64-linux.default = nixpkgs.legacyPackages.x86_64-linux.mkShell {
+      buildInputs = [ openpost.packages.x86_64-linux.default ];
+    };
+  };
 }
 ```
 
-The module integrates with Caddy reverse proxy and manages:
-- Persistent SQLite database storage
-- Secret injection via sops-nix
-- Health checks
-- Automatic HTTPS via Caddy
+### NixOS Module
+
+For declarative NixOS deployment, import the module from the flake:
+
+```nix
+{ inputs, ... }:
+{
+  imports = [ inputs.openpost.nixosModules.default ];
+
+  services.openpost = {
+    enable = true;
+    dataDir = "/var/lib/openpost";
+    environment = {
+      JWT_SECRET = "your-secret";
+      ENCRYPTION_KEY = "your-encryption-key";
+    };
+  };
+}
+```
+
+The module provides:
+- Systemd service for running OpenPost
+- Persistent data directory configuration
+- Environment variable management
+
+### Available Outputs
+
+```bash
+# Show all flake outputs
+nix flake show github:rodrgds/openpost
+
+# Build for specific platform
+nix build github:rodrgds/openpost#packages.x86_64-linux.default
+
+# Enter development shell
+nix develop github:rodrgds/openpost
+```
+
+### Template for Your Projects
+
+To use OpenPost as a template for your own project:
+
+```bash
+# Use as a template
+nix flake init -t github:rodrgds/openpost
+```
 
 ## 📦 Docker Registry
 

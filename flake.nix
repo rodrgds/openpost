@@ -99,5 +99,9 @@
 
         packages.default = self.packages.${system}.openpost;
       }
-    );
+    )
+    // {
+      nixosModules.default = import ./nix/module.nix;
+      nixosModules.openpost = import ./nix/module.nix;
+    };
 }
