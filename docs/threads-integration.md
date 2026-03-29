@@ -7,17 +7,19 @@ Threads uses Meta's Graph API with a two-step container model for publishing. It
 ## OAuth Flow
 
 1. **Authorization Request**: Redirect user to Threads OAuth page
-2. **User Authorization**: User approvesapp permissions
+2. **User Authorization**: User approves app permissions  
 3. **Callback**: Exchange authorization code for short-lived token
 4. **Token Exchange**: Exchange short-lived token for long-lived token
 5. **Profile Fetch**: Retrieve user profile
 
-## Required Scopes
+## Required Permissions
 
-| Scope | Description |
-|-------|-------------|
+| Permission | Description |
+|------------|-------------|
 | `threads_basic` | Required - Basic profile access |
 | `threads_content_publish` | Create and publish posts |
+
+Both permissions should be enabled in your Meta App settings. They work in "Ready for testing" mode for your own account.
 
 ## Token Management
 
@@ -69,15 +71,28 @@ THREADS_REDIRECT_URI=https://your-ngrok-url/api/v1/accounts/threads/callback
 
 ### Authorization URL
 ```
-GET https://threads.net/oauth/authorize
+GET https://www.threads.com/oauth/authorize
   ?client_id={app_id}
   &redirect_uri={redirect_uri}
   &scope=threads_basic,threads_content_publish
   &response_type=code
-  &state={workspace_id}
 ```
 
-### Token Exchange (Short-lived to Long-lived)
+Note: The library generates its own CSRF state parameter. We store a mapping from the generated state to the workspace_id for retrieval in the callback.
+
+### Token Exchange (Authorization Code → Short-lived Token)
+```
+POST https://graph.threads.net/oauth/access_token
+Content-Type: application/x-www-form-urlencoded
+
+client_id={app_id}
+&client_secret={app_secret}
+&redirect_uri={redirect_uri}
+&code={authorization_code}
+&grant_type=authorization_code
+```
+
+### Token Exchange (Short-lived → Long-lived Token)
 ```
 GET https://graph.threads.net/access_token
   ?grant_type=th_exchange_token
@@ -94,7 +109,9 @@ GET https://graph.threads.net/refresh_access_token
 
 ### Get Profile
 ```
-GET https://graph.threads.net/v1.0/{user_id}?fields=id,username,name&access_token={token}
+GET https://graph.threads.net/v1.0/{user_id}
+  ?fields=id,username,name
+  &access_token={token}
 ```
 
 ### Create Post (Two-StepProcess)
@@ -162,19 +179,24 @@ GET https://graph.threads.net/v1.0/{user_id}/threads_publishing_limit
 ### Common Errors
 
 1. **"Invalid OAuth 2.0 Access Token"**: Token expired or revoked
-2. **"Permission denied"**: App doesn't have `threads_content_publish` scope
-3. **"Application does not have permission"**: Requires app review
-4. **"Container not ready"**: Wait ~30 seconds between steps
+2. **"Permission denied"**: App doesn't have `threads_content_publish` permission
+3. **"Application does not have permission for this action"**: Permission error (code 10) - occurs during publishing. Appears as error but post may have been created. Check your Threads account to verify.
+4. **"Container not ready"**: Wait ~30 seconds between container creation and publishing
 
 ### Debug Tips
 
 1. Exchange short-lived token immediately after auth
 2. Refresh tokens every 50 days to prevent expiration
-3. Check container status before publishing:
-   ```
-   GET https://graph.threads.net/v1.0/{container_id}?fields=status
-   ```
-4. Use the `auto_publish_text` parameter for text-only posts (skips step 2)
+3. Use ngrok for local development (Meta requires HTTPS)
+4. If you see duplicate posts, check that retries aren't enabled
+
+### Implementation Notes
+
+The integration uses direct HTTP calls to the Threads API:
+- No external library dependency (removed threads-go due to retry issues)
+- Two-step publish: create container, then publish
+- OAuth state mapping stored in memory for workspace association
+- Token refresh handled automatically by the token manager
 
 ## Development Mode
 
