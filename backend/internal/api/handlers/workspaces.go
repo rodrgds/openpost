@@ -86,7 +86,6 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		resp.Body.WorkspaceName = workspace.Name
 		resp.Body.WorkspaceCreatedAt = workspace.CreatedAt.Format(time.RFC3339)
 		return resp, nil
-		return resp, nil
 	})
 }
 

@@ -1,6 +1,6 @@
 module github.com/openpost/backend
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.37.2
