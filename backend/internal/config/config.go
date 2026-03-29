@@ -31,6 +31,7 @@ type Config struct {
 
 	ThreadsClientID     string
 	ThreadsClientSecret string
+	ThreadsRedirectURI  string
 }
 
 func Load() *Config {
@@ -51,6 +52,7 @@ func Load() *Config {
 
 		ThreadsClientID:     getEnv("THREADS_CLIENT_ID", ""),
 		ThreadsClientSecret: getEnv("THREADS_CLIENT_SECRET", ""),
+		ThreadsRedirectURI:  getEnv("THREADS_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/threads/callback"),
 	}
 
 	if raw := getEnv("MASTODON_SERVERS", ""); raw != "" {

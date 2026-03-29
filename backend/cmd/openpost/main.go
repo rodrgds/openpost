@@ -88,7 +88,7 @@ func main() {
 		threadsAuth = oauth.NewThreadsOAuth(
 			cfg.ThreadsClientID,
 			cfg.ThreadsClientSecret,
-			"http://localhost:8080/api/v1/accounts/threads/callback",
+			cfg.ThreadsRedirectURI,
 		)
 	}
 

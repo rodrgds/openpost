@@ -34,17 +34,31 @@ Threads uses Meta's Graph API with a two-step container model for publishing. It
 2. Create a new app (Business type)
 3. Add Threads API product
 4. Configure OAuth settings
-5. Add redirect URL: `http://localhost:8080/api/v1/accounts/threads/callback`
-6. NoteApp ID and App Secret
+5. Add redirect URL (must be HTTPS - see Local Development below)
+6. Note App ID and App Secret
 
-### 2. Configure Environment
+### 2. Local Development with ngrok
+
+**Important**: Meta requires HTTPS for OAuth redirect URIs. For localdevelopment, use ngrok:
+
+1. Install ngrok: `brew install ngrok` (macOS) or download from [ngrok.com](https://ngrok.com)
+2. Run: `ngrok http 8080`
+3. Copy the HTTPS URL (e.g., `https://abc123.ngrok-free.app`)
+4. In your Meta app settings, add: `https://abc123.ngrok-free.app/api/v1/accounts/threads/callback`
+5. Set in your `.env`:
+   ```bash
+   THREADS_REDIRECT_URI=https://abc123.ngrok-free.app/api/v1/accounts/threads/callback
+   ```
+
+### 3. Configure Environment
 
 ```bash
 THREADS_CLIENT_ID=your_app_id
 THREADS_CLIENT_SECRET=your_app_secret
+THREADS_REDIRECT_URI=https://your-ngrok-url/api/v1/accounts/threads/callback
 ```
 
-### 3. Request Production Access
+### 4. Request Production Access
 
 1. Submit app for review
 2. Provide screencast of user flow
