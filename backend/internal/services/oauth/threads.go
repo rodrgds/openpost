@@ -46,7 +46,7 @@ func NewThreadsOAuth(clientID, clientSecret, redirectURI string) *ThreadsOAuth {
 			ClientSecret: clientSecret,
 			RedirectURL:  redirectURI,
 			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://threads.net/oauth/authorize",
+				AuthURL:  "https://www.threads.com/oauth/authorize",
 				TokenURL: "https://graph.threads.net/oauth/access_token",
 			},
 			Scopes: []string{"threads_basic", "threads_content_publish"},
