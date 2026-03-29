@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/openpost/backend/internal/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
-	"github.com/openpost/backend/internal/models"
 )
 
 func InitDB(dsn string) (*bun.DB, error) {
@@ -19,7 +19,7 @@ func InitDB(dsn string) (*bun.DB, error) {
 
 	// SQLite highly recommends max open conns to 1 when writing is involved
 	// though WAL mode helps with concurrent readers
-	sqldb.SetMaxOpenConns(1) 
+	sqldb.SetMaxOpenConns(1)
 
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 

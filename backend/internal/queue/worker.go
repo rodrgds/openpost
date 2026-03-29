@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/uptrace/bun"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/publisher"
+	"github.com/uptrace/bun"
 )
 
 // BackgroundWorker polls the SQLite database for pending jobs
@@ -47,7 +47,7 @@ func (w *BackgroundWorker) Start(ctx context.Context) {
 func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 	// Attempt to lock a pending job atomically
 	job := new(models.Job)
-	
+
 	err := w.db.NewRaw(`
 		UPDATE jobs
 		SET status = 'processing', locked_at = CURRENT_TIMESTAMP, locked_by = ?
@@ -79,7 +79,7 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 			job.RunAt = time.Now().Add(5 * time.Minute) // Basic backoff
 		}
 		job.LastError = processErr.Error()
-		
+
 		_, _ = w.db.NewUpdate().Model(job).
 			Column("status", "attempts", "last_error", "run_at").
 			Where("id = ?", job.ID).
@@ -92,7 +92,7 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 		Set("status = ?", "completed").
 		Where("id = ?", job.ID).
 		Exec(ctx)
-		
+
 	log.Printf("[Worker %s] job %s completed successfully\n", w.workerID, job.ID)
 }
 
