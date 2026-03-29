@@ -297,55 +297,13 @@ func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, conten
 }
 
 func (s *Service) publishToThreads(ctx context.Context, token, userID, content string) error {
-	// Step 1: Create media container
-	containerParams := url.Values{
-		"media_type":   {"TEXT"},
-		"text":         {content},
-		"access_token": {token},
+	if s.threads == nil {
+		return fmt.Errorf("threads oauth not configured")
 	}
 
-	containerURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads?%s", userID, containerParams.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, "POST", containerURL, nil)
+	_, err := s.threads.PublishTextPost(ctx, token, userID, content)
 	if err != nil {
-		return err
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("threads container creation failed: status %d", resp.StatusCode)
-	}
-
-	var containerResp struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&containerResp); err != nil {
-		return err
-	}
-
-	// Step 2: Publish the container
-	publishURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads_publish?creation_id=%s&access_token=%s",
-		userID, containerResp.ID, token)
-
-	req, err = http.NewRequestWithContext(ctx, "POST", publishURL, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("threads publish failed: status %d", resp.StatusCode)
+		return fmt.Errorf("failed to publish to threads: %w", err)
 	}
 
 	log.Printf("[Publisher] Successfully published to Threads")
