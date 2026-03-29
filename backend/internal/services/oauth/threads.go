@@ -101,22 +101,32 @@ func (t *ThreadsOAuth) ExchangeCode(ctx context.Context, code string) (*TokenRes
 	}
 
 	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		UserID      string `json:"user_id"`
-		TokenType   string `json:"token_type"`
+		AccessToken string      `json:"access_token"`
+		UserID      interface{} `json:"user_id"`
+		TokenType   string      `json:"token_type"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return nil, "", err
 	}
 
-	log.Printf("[ThreadsOAuth] Exchanged short-lived token for user: %s", tokenResp.UserID)
+	var userID string
+	switch v := tokenResp.UserID.(type) {
+	case float64:
+		userID = fmt.Sprintf("%.0f", v)
+	case string:
+		userID = v
+	default:
+		return nil, "", fmt.Errorf("unexpected user_id type: %T", tokenResp.UserID)
+	}
+
+	log.Printf("[ThreadsOAuth] Exchanged short-lived token for user: %s", userID)
 
 	longLivedToken, err := t.exchangeLongLivedToken(ctx, tokenResp.AccessToken)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get long-lived token: %w", err)
 	}
 
-	return longLivedToken, tokenResp.UserID, nil
+	return longLivedToken, userID, nil
 }
 
 func (t *ThreadsOAuth) exchangeLongLivedToken(ctx context.Context, shortLivedToken string) (*TokenResponse, error) {
