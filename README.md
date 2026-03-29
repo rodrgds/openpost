@@ -145,22 +145,33 @@ docker run -d \
 
 ## ✨ Nix Flakes
 
-OpenPost is available as a Nix flake. You can run it directly, build it, or import it into your own Nix configuration.
+OpenPost is available as a Nix flake for easy installation and deployment.
+
+### Prerequisites
+
+The Nix build requires network access for `bun install`. Enable it with:
+
+```bash
+# Add to ~/.config/nix/nix.conf
+experimental-features = nix-command flakes
+```
 
 ### Quick Start
 
-Run OpenPost directly without installing:
+**Run directly** (with impure flag for network access):
 
 ```bash
-nix run github:rodrgds/openpost
+nix run --impure github:rodrgds/openpost
 ```
 
-Build the binary locally:
+**Build locally**:
 
 ```bash
-nix build github:rodrgds/openpost
+nix build --impure github:rodrgds/openpost
 ./result/bin/openpost
 ```
+
+> **Note:** The `--impure` flag is required because `bun install` needs network access to download dependencies. This is a Nix sandbox limitation.
 
 ### Use in Your Flake
 

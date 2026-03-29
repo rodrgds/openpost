@@ -18,19 +18,20 @@
         pkgs = import nixpkgs { inherit system; };
       in
       {
-        packages.openpost = pkgs.stdenv.mkDerivation {
+        # Build from source - requires --impure flag due to bun network access
+        packages.openpost-from-source = pkgs.stdenv.mkDerivation {
           pname = "openpost";
           version = "0.1.0";
 
           src = self;
 
           nativeBuildInputs = with pkgs; [
-            pkgs.go_1_25
-            pkgs.bun
-            pkgs.cacert
+            go_1_25
+            bun
+            cacert
           ];
 
-          buildInputs = with pkgs; [ pkgs.sqlite ];
+          buildInputs = with pkgs; [ sqlite ];
 
           buildPhase = ''
             export CGO_ENABLED=1
@@ -58,46 +59,39 @@
                         mkdir -p $out/share/openpost
                         cat > $out/share/openpost/.env.template << 'ENVFILE'
             # OpenPost Environment Configuration
-            # Copy this to .env and fill in your values
-
-            # Required: Generate with: openssl rand -base64 32
-            JWT_SECRET=your-jwt-secret-min-32-chars
-            ENCRYPTION_KEY=your-encryption-key-32-chars
-
-            # Optional
+            JWT_SECRET=your-jwt-secret
+            ENCRYPTION_KEY=your-encryption-key
             OPENPOST_PORT=8080
-            OPENPOST_DB_PATH=file:openpost.db?cache=shared&mode=rwc
-            OPENPOST_FRONTEND_URL=http://localhost:8080
-
-            # Twitter/X OAuth
-            # TWITTER_CLIENT_ID=your-twitter-client-id
-            # TWITTER_CLIENT_SECRET=your-twitter-client-secret
-
-            # LinkedIn OAuth
-            # LINKEDIN_CLIENT_ID=your-linkedin-client-id
-            # LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
-
-            # Threads/Meta OAuth
-            # THREADS_CLIENT_ID=your-meta-app-id
-            # THREADS_CLIENT_SECRET=your-meta-app-secret
-
-            # Mastodon
-            # MASTODON_REDIRECT_URI=urn:ietf:wg:oauth:2.0:oob
-            # MASTODON_SERVERS='[{"name":"Instance","client_id":"","client_secret":"","instance_url":"https://mastodon.social"}]'
             ENVFILE
 
                         runHook postInstall
           '';
 
           meta = with pkgs.lib; {
-            description = "OpenPost - Self-hosted social media scheduler";
+            description = "OpenPost - Self-hosted social media scheduler (built from source)";
             homepage = "https://github.com/rodrgds/openpost";
             license = pkgs.lib.licenses.mit;
             platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
           };
         };
 
-        packages.default = self.packages.${system}.openpost;
+        # Development shell
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            go_1_25
+            bun
+            sqlite
+            git
+          ];
+
+          shellHook = ''
+            echo "OpenPost Development Shell"
+            echo "Build locally with: cd web && bun install && bun run build && cd ../backend && go build -o openpost ./cmd/openpost"
+          '';
+        };
+
+        # Default package - builds from source
+        packages.default = self.packages.${system}.openpost-from-source;
       }
     )
     // {
