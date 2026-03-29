@@ -2,13 +2,17 @@ package oauth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
-	threads "github.com/tirthpatell/threads-go"
+	"golang.org/x/oauth2"
 )
 
 type ThreadsProfile struct {
@@ -18,25 +22,28 @@ type ThreadsProfile struct {
 }
 
 type ThreadsOAuth struct {
-	config     *threads.Config
+	config     *oauth2.Config
 	stateStore sync.Map
 }
 
 func NewThreadsOAuth(clientID, clientSecret, redirectURI string) *ThreadsOAuth {
 	log.Printf("[ThreadsOAuth] Initializing with client_id=%s, redirect_uri=%s", clientID, redirectURI)
 	return &ThreadsOAuth{
-		config: &threads.Config{
+		config: &oauth2.Config{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
-			RedirectURI:  redirectURI,
-			Scopes:       []string{"threads_basic", "threads_content_publish"},
+			RedirectURL:  redirectURI,
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  "https://www.threads.com/oauth/authorize",
+				TokenURL: "https://graph.threads.net/oauth/access_token",
+			},
+			Scopes: []string{"threads_basic", "threads_content_publish"},
 		},
 	}
 }
 
 func (t *ThreadsOAuth) GenerateAuthURL(workspaceID string) string {
-	client, _ := threads.NewClient(t.config)
-	authURL := client.GetAuthURL(t.config.Scopes)
+	authURL := t.config.AuthCodeURL(workspaceID)
 
 	parsedURL, err := url.Parse(authURL)
 	if err != nil {
@@ -66,150 +73,235 @@ func (t *ThreadsOAuth) GetWorkspaceID(state string) (string, bool) {
 
 func (t *ThreadsOAuth) ExchangeCode(ctx context.Context, code string) (*TokenResponse, string, error) {
 	log.Printf("[ThreadsOAuth] ExchangeCode called with code length: %d", len(code))
-	log.Printf("[ThreadsOAuth] Config - ClientID: %s, RedirectURI: %s", t.config.ClientID, t.config.RedirectURI)
 
-	client, err := threads.NewClient(t.config)
+	data := url.Values{
+		"client_id":     {t.config.ClientID},
+		"client_secret": {t.config.ClientSecret},
+		"redirect_uri":  {t.config.RedirectURL},
+		"code":          {code},
+		"grant_type":    {"authorization_code"},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", t.config.Endpoint.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		log.Printf("[ThreadsOAuth] Failed to create client: %v", err)
-		return nil, "", fmt.Errorf("failed to create threads client: %w", err)
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("threads token exchange failed: %s", string(body))
 	}
 
-	log.Printf("[ThreadsOAuth] Calling ExchangeCodeForToken...")
-	if err := client.ExchangeCodeForToken(ctx, code); err != nil {
-		log.Printf("[ThreadsOAuth] ExchangeCodeForToken error: %v", err)
-		log.Printf("[ThreadsOAuth] Error type: %T", err)
-		return nil, "", fmt.Errorf("failed to exchange code: %w", err)
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		UserID      string `json:"user_id"`
+		TokenType   string `json:"token_type"`
 	}
-	log.Printf("[ThreadsOAuth] ExchangeCodeForToken succeeded")
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, "", err
+	}
 
-	log.Printf("[ThreadsOAuth] Calling GetLongLivedToken...")
-	if err := client.GetLongLivedToken(ctx); err != nil {
-		log.Printf("[ThreadsOAuth] GetLongLivedToken error: %v", err)
+	log.Printf("[ThreadsOAuth] Exchanged short-lived token for user: %s", tokenResp.UserID)
+
+	longLivedToken, err := t.exchangeLongLivedToken(ctx, tokenResp.AccessToken)
+	if err != nil {
 		return nil, "", fmt.Errorf("failed to get long-lived token: %w", err)
 	}
-	log.Printf("[ThreadsOAuth] GetLongLivedToken succeeded")
 
-	tokenInfo := client.GetTokenInfo()
-	if tokenInfo == nil {
-		log.Printf("[ThreadsOAuth] GetTokenInfo returned nil")
-		return nil, "", fmt.Errorf("failed to get token info")
+	return longLivedToken, tokenResp.UserID, nil
+}
+
+func (t *ThreadsOAuth) exchangeLongLivedToken(ctx context.Context, shortLivedToken string) (*TokenResponse, error) {
+	params := url.Values{
+		"grant_type":    {"th_exchange_token"},
+		"client_secret": {t.config.ClientSecret},
+		"access_token":  {shortLivedToken},
 	}
 
-	log.Printf("[ThreadsOAuth] Got token info - UserID: %s, AccessToken length: %d", tokenInfo.UserID, len(tokenInfo.AccessToken))
-
-	var expiresIn int
-	if !tokenInfo.ExpiresAt.IsZero() {
-		expiresIn = int(tokenInfo.ExpiresAt.Sub(tokenInfo.CreatedAt).Seconds())
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://graph.threads.net/access_token?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
 	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to exchange long-lived token: %s", string(body))
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, err
+	}
+
+	log.Printf("[ThreadsOAuth] Got long-lived token, expires in %d seconds", tokenResp.ExpiresIn)
 
 	return &TokenResponse{
-		AccessToken: tokenInfo.AccessToken,
-		ExpiresIn:   expiresIn,
-		TokenType:   "bearer",
-	}, tokenInfo.UserID, nil
+		AccessToken: tokenResp.AccessToken,
+		ExpiresIn:   tokenResp.ExpiresIn,
+		TokenType:   tokenResp.TokenType,
+	}, nil
 }
 
 func (t *ThreadsOAuth) RefreshToken(ctx context.Context, accessToken string) (*TokenResponse, error) {
-	client, err := threads.NewClientWithToken(accessToken, t.config)
+	params := url.Values{
+		"grant_type":   {"th_refresh_token"},
+		"access_token": {accessToken},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://graph.threads.net/refresh_access_token?"+params.Encode(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create threads client: %w", err)
+		return nil, err
 	}
 
-	if err := client.RefreshToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh thread token: %w", err)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to refresh threads token: %s", string(body))
 	}
 
-	tokenInfo := client.GetTokenInfo()
-	if tokenInfo == nil {
-		return nil, fmt.Errorf("failed to get token info after refresh")
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
-
-	var expiresIn int
-	if !tokenInfo.ExpiresAt.IsZero() {
-		expiresIn = int(tokenInfo.ExpiresAt.Sub(tokenInfo.CreatedAt).Seconds())
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, err
 	}
 
 	return &TokenResponse{
-		AccessToken: tokenInfo.AccessToken,
-		ExpiresIn:   expiresIn,
-		TokenType:   "bearer",
+		AccessToken: tokenResp.AccessToken,
+		ExpiresIn:   tokenResp.ExpiresIn,
+		TokenType:   tokenResp.TokenType,
 	}, nil
 }
 
 func (t *ThreadsOAuth) GetProfile(ctx context.Context, accessToken, userID string) (*ThreadsProfile, error) {
 	log.Printf("[ThreadsOAuth] GetProfile called for userID: %s", userID)
 
-	client, err := threads.NewClientWithToken(accessToken, t.config)
+	endpoint := fmt.Sprintf("https://graph.threads.net/v1.0/%s?fields=id,username,name&access_token=%s", userID, accessToken)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		log.Printf("[ThreadsOAuth] GetProfile failed to create client: %v", err)
-		return nil, fmt.Errorf("failed to create threads client: %w", err)
+		return nil, err
 	}
 
-	log.Printf("[ThreadsOAuth] Calling GetMe...")
-	user, err := client.GetMe(ctx)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[ThreadsOAuth] GetMe error: %v", err)
-		return nil, fmt.Errorf("failed to get threads profile: %w", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get profile: %s", string(body))
 	}
 
-	log.Printf("[ThreadsOAuth] GetMe succeeded - ID: %s, Username: %s, Name: %s", user.ID, user.Username, user.Name)
+	var profile ThreadsProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
 
-	return &ThreadsProfile{
-		ID:       user.ID,
-		Username: user.Username,
-		Name:     user.Name,
-	}, nil
+	log.Printf("[ThreadsOAuth] GetProfile succeeded - ID: %s, Username: %s", profile.ID, profile.Username)
+	return &profile, nil
 }
 
 func (t *ThreadsOAuth) PublishTextPost(ctx context.Context, accessToken, userID, content string) (string, error) {
-	cfg := &threads.Config{
-		ClientID:     t.config.ClientID,
-		ClientSecret: t.config.ClientSecret,
-		RedirectURI:  t.config.RedirectURI,
-		Scopes:       t.config.Scopes,
-		RetryConfig: &threads.RetryConfig{
-			MaxRetries:   0,
-			InitialDelay: 0,
-			MaxDelay:     0,
-		},
+	log.Printf("[ThreadsOAuth] PublishTextPost called for userID: %s", userID)
+
+	params := url.Values{
+		"media_type":   {"TEXT"},
+		"text":         {content},
+		"access_token": {accessToken},
 	}
 
-	client, err := threads.NewClientWithToken(accessToken, cfg)
+	containerURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads?%s", userID, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, "POST", containerURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create threads client: %w", err)
+		return "", err
 	}
 
-	post, err := client.CreateTextPost(ctx, &threads.TextPostContent{
-		Text:            content,
-		AutoPublishText: true,
-	})
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
-		if strings.Contains(err.Error(), "does not have permission") {
-			log.Printf("[ThreadsOAuth] Post likely created but GetPost failed (this is OK - missing optional permission): %v", err)
-			return "", nil
-		}
-		log.Printf("[ThreadsOAuth] CreateTextPost error: %v", err)
-		return "", fmt.Errorf("failed to publish thread: %w", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("threads container creation failed (%d): %s", resp.StatusCode, string(body))
 	}
 
-	log.Printf("[ThreadsOAuth] Successfully published thread with ID: %s", post.ID)
-	return string(post.ID), nil
+	var containerResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&containerResp); err != nil {
+		return "", err
+	}
+
+	log.Printf("[ThreadsOAuth] Created container: %s", containerResp.ID)
+
+	publishURL := fmt.Sprintf("https://graph.threads.net/v1.0/%s/threads_publish?creation_id=%s&access_token=%s",
+		userID, containerResp.ID, accessToken)
+
+	req, err = http.NewRequestWithContext(ctx, "POST", publishURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("threads publish failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var publishResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&publishResp); err != nil {
+		return "", err
+	}
+
+	log.Printf("[ThreadsOAuth] Successfully published thread with ID: %s", publishResp.ID)
+	return publishResp.ID, nil
 }
 
 func (t *ThreadsOAuth) CreateMediaContainer(ctx context.Context, accessToken, userID, mediaType, content, mediaURL string) (string, error) {
-	client, err := threads.NewClientWithToken(accessToken, t.config)
-	if err != nil {
-		return "", fmt.Errorf("failed to create threads client: %w", err)
-	}
-
-	containerID, err := client.CreateMediaContainer(ctx, mediaType, mediaURL, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to create media container: %w", err)
-	}
-
-	return string(containerID), nil
+	return "", fmt.Errorf("CreateMediaContainer not implemented - use PublishTextPost")
 }
 
 func (t *ThreadsOAuth) PublishContainer(ctx context.Context, accessToken, userID, creationID string) (string, error) {
-	return "", fmt.Errorf("use PublishTextPost or appropriate CreateXPost method instead")
+	return "", fmt.Errorf("PublishContainer not implemented - use PublishTextPost")
 }
