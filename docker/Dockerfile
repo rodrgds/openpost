@@ -3,14 +3,14 @@ FROM oven/bun:1 AS frontend-builder
 
 WORKDIR /app/web
 
-COPY web/package.json web/bun.lock ./
+COPY web/package.json web/bun.lock* ./
 RUN bun install --frozen-lockfile
 
 COPY web/ ./
 RUN bun run build
 
 # Build stage for backend
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.25-alpine AS backend-builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 

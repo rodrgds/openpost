@@ -143,6 +143,89 @@ docker run -d \
   openpost
 ```
 
+## ✨ Nix Flakes
+
+OpenPost can be built as a standalone binary using Nix flakes for reproducible deployment.
+
+### Build
+
+```bash
+# Build the binary
+nix build
+
+# Result: ./result/bin/openpost
+```
+
+### Deploy
+
+Copy the binary anywhere and run:
+
+```bash
+./result/bin/openpost
+```
+
+A `.env.template` is installed to `$out/share/openpost/.env.template` for reference.
+
+### NixOS Module
+
+For declarative NixOS deployment with Podman and Caddy, use the provided module:
+
+```nix
+# Import the module
+{ config, lib, ... }:
+{
+  imports = [ ./path/to/openpost/nix/module.nix ];
+
+  vps.openpost = {
+    enable = true;
+    domain = "openpost.example.com";
+  };
+
+  # Required secrets (using sops-nix)
+  sops.secrets.openpost_jwt_secret = { };
+  sops.secrets.openpost_encryption_key = { };
+}
+```
+
+The module integrates with Caddy reverse proxy and manages:
+- Persistent SQLite database storage
+- Secret injection via sops-nix
+- Health checks
+- Automatic HTTPS via Caddy
+
+## 📦 Docker Registry
+
+### Building and Pushing
+
+```bash
+# Build the image
+docker build -t ghcr.io/rodrgds/openpost:latest -f docker/Dockerfile .
+
+# Tag for version
+docker tag ghcr.io/rodrgds/openpost:latest ghcr.io/rodrgds/openpost:v0.1.0
+
+# Push to registry
+docker push ghcr.io/rodrgds/openpost:latest
+docker push ghcr.io/rodrgds/openpost:v0.1.0
+```
+
+### Using Pre-built Image
+
+```yaml
+# docker-compose.yml
+services:
+  openpost:
+    image: ghcr.io/rodrgds/openpost:latest
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=your-secret
+      - ENCRYPTION_KEY=your-encryption-key
+    volumes:
+      - openpost_data:/data
+    ports:
+      - "8080:8080"
+```
+
 ## ⚙️ Configuration
 
 All configuration is done via environment variables or a `.env` file:
