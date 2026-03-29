@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -266,17 +267,31 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			if h.threads == nil {
 				return nil, huma.Error400BadRequest("threads not configured")
 			}
+			log.Printf("[Callback] Threads callback - code received, state: %s", input.State)
+
+			workspaceID, ok := h.threads.GetWorkspaceID(input.State)
+			if !ok {
+				log.Printf("[Callback] Threads state not found in store")
+				return nil, huma.Error400BadRequest("invalid or expired state")
+			}
+			log.Printf("[Callback] Threads retrieved workspace_id: %s", workspaceID)
+
 			var userID string
 			tokenResp, userID, err = h.threads.ExchangeCode(ctx, input.Code)
 			if err != nil {
+				log.Printf("[Callback] Threads ExchangeCode error: %v", err)
 				return nil, huma.Error500InternalServerError("token exchange failed")
 			}
+			log.Printf("[Callback] Threads token exchanged successfully, userID: %s", userID)
 			profile, err := h.threads.GetProfile(ctx, tokenResp.AccessToken, userID)
 			if err != nil {
+				log.Printf("[Callback] Threads GetProfile error: %v", err)
 				return nil, huma.Error500InternalServerError("failed to get profile")
 			}
+			log.Printf("[Callback] Threads profile retrieved: ID=%s, Username=%s", profile.ID, profile.Username)
 			accountID = profile.ID
 			accountUsername = profile.Username
+			input.State = workspaceID
 
 		default:
 			return nil, huma.Error400BadRequest("unsupported platform")
@@ -314,9 +329,15 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			CreatedAt:       time.Now(),
 		}
 
+		log.Printf("[Callback] Saving %s account: ID=%s, PlatformAccountID=%s, Username=%s",
+			input.Platform, account.ID, accountID, accountUsername)
+
 		if _, err := h.db.NewInsert().Model(account).Exec(ctx); err != nil {
+			log.Printf("[Callback] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError("failed to save account")
 		}
+
+		log.Printf("[Callback] Account saved successfully, redirecting to /")
 
 		return &huma.StreamResponse{
 			Body: func(ctx huma.Context) {
