@@ -213,7 +213,8 @@ func (t *ThreadsOAuth) RefreshToken(ctx context.Context, accessToken string) (*T
 func (t *ThreadsOAuth) GetProfile(ctx context.Context, accessToken, userID string) (*ThreadsProfile, error) {
 	log.Printf("[ThreadsOAuth] GetProfile called for userID: %s", userID)
 
-	endpoint := fmt.Sprintf("https://graph.threads.net/v1.0/%s?fields=id,username,name&access_token=%s", userID, accessToken)
+	// Threads API only allows fetching the authenticated user's profile via /me endpoint
+	endpoint := fmt.Sprintf("https://graph.threads.net/v1.0/me?fields=id,username,name&access_token=%s", accessToken)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
@@ -229,7 +230,7 @@ func (t *ThreadsOAuth) GetProfile(ctx context.Context, accessToken, userID strin
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get profile: %s", string(body))
+		return nil, fmt.Errorf("failed to get profile (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var profile ThreadsProfile
