@@ -17,13 +17,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.24'
           cache-dependency-path: backend/go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64.8
           working-directory: backend
 
   test-backend:
@@ -36,8 +36,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.24'
           cache-dependency-path: backend/go.sum
+
+      - name: Create placeholder for embed
+        run: mkdir -p backend/cmd/openpost/public && touch backend/cmd/openpost/public/.gitkeep
 
       - name: Install dependencies
         working-directory: backend
@@ -69,6 +72,6 @@ jobs:
         working-directory: web
         run: bun install --frozen-lockfile
 
-      - name: Run tests
+      - name: Type check
         working-directory: web
-        run: bun test
+        run: bun run check

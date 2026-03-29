@@ -1,16 +1,17 @@
 # Build stage for frontend
 FROM oven/bun:1 AS frontend-builder
 
-WORKDIR /app/web
+WORKDIR /app
 
-COPY web/package.json web/bun.lock* ./
-RUN bun install --frozen-lockfile
+# Copy the entire project to get correct relative paths for svelte.config.js
+COPY web/package.json web/bun.lock* ./web/
+RUN cd web && bun install --frozen-lockfile
 
-COPY web/ ./
-RUN bun run build
+COPY web/ ./web/
+RUN cd web && bun run build
 
 # Build stage for backend
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:1.24-alpine AS backend-builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
@@ -20,7 +21,8 @@ COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
 COPY backend/ ./
-COPY --from=frontend-builder /app/web/build ./cmd/openpost/public
+# Copy frontend build output from the correct location
+COPY --from=frontend-builder /app/backend/cmd/openpost/public ./cmd/openpost/public
 
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o openpost ./cmd/openpost
 

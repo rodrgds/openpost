@@ -23,7 +23,6 @@ LICENSE
 # Frontend build artifacts (rebuilt in container)
 web/node_modules/
 web/.svelte-kit/
-web/build/
 
 # Backend binary (rebuilt in container)
 backend/openpost
@@ -53,3 +52,6 @@ Dockerfile
 **/__tests__/
 **/*.test.*
 **/*.spec.*
+
+# Vitest examples (already removed but in case)
+web/src/lib/vitest-examples/
