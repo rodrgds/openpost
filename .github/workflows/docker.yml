@@ -171,9 +171,8 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_B64" | tr -d '\n\r ' > /tmp/keystore.b64
-          base64 -d /tmp/keystore.b64 > web/android/app/release-keystore.jks
-          rm /tmp/keystore.b64
+          CLEAN_B64=$(printf '%s' "$KEYSTORE_B64" | sed -e 's/^"//;s/"$//' -e "s/^'//;s/'$//" -e 's/^data:[^,]*,//' -e 's/\\n//g' -e 's/\\r//g' | tr -d '\n\r\t ')
+          printf '%s' "$CLEAN_B64" | base64 -d > web/android/app/release-keystore.jks
 
       - name: Build release APK (signed)
         if: steps.signing.outputs.has_keystore == 'true'
