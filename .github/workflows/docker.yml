@@ -170,7 +170,7 @@ jobs:
         if: steps.signing.outputs.has_keystore == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: printf '%s' "$KEYSTORE_B64" | base64 -d > web/android/app/release-keystore.jks
+        run: printf '%s' "$KEYSTORE_B64" | tr -d '\n\r ' | base64 -d > web/android/app/release-keystore.jks
 
       - name: Build release APK (signed)
         if: steps.signing.outputs.has_keystore == 'true'
