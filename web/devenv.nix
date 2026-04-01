@@ -14,15 +14,6 @@ let
       bun run format
     '';
   };
-  eslint-wrapper = pkgs.writeShellApplication {
-    name = "eslint-wrapper";
-    runtimeInputs = [ pkgs.bun ];
-    text = ''
-      cd "${config.git.root}/web"
-      bun install --frozen-lockfile
-      bunx eslint .
-    '';
-  };
 in
 {
   # Bun language support
@@ -58,14 +49,8 @@ in
     '';
   };
 
-  # Git hooks
+  # Git hooks - prettier only (eslint run separately in CI)
   git-hooks.hooks = {
-    eslint = {
-      enable = true;
-      entry = "${lib.getExe eslint-wrapper}";
-      files = "\\.(js|ts|svelte)$";
-      pass_filenames = false;
-    };
     npm-format = {
       enable = true;
       name = "prettier-npm";
