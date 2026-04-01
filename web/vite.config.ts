@@ -5,6 +5,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	define: {
+		'import.meta.env.VITE_APP_MODE': JSON.stringify(process.env.VITE_APP_MODE || 'web')
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit(),

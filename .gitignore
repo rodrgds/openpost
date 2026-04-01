@@ -50,6 +50,11 @@ web/bun.lock
 *.log
 logs/
 
+# Android signing
+*.jks
+*.keystore
+openpost-release.jks
+
 # Data directories
 data/
 media/

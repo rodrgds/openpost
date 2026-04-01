@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strings"
 )
 
 type MastodonServerConfig struct {
@@ -19,19 +20,25 @@ type Config struct {
 	JWTSecret     string
 	EncryptionKey string
 	FrontendURL   string
+	CORSOrigins   []string
 
 	TwitterClientID     string
 	TwitterClientSecret string
+	TwitterRedirectURI  string
 
 	MastodonRedirectURI string
 	MastodonServers     []MastodonServerConfig
 
 	LinkedInClientID     string
 	LinkedInClientSecret string
+	LinkedInRedirectURI  string
 
 	ThreadsClientID     string
 	ThreadsClientSecret string
 	ThreadsRedirectURI  string
+
+	MediaPath string
+	MediaURL  string
 }
 
 func Load() *Config {
@@ -44,15 +51,20 @@ func Load() *Config {
 
 		TwitterClientID:     getEnv("TWITTER_CLIENT_ID", ""),
 		TwitterClientSecret: getEnv("TWITTER_CLIENT_SECRET", ""),
+		TwitterRedirectURI:  getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/x/callback"),
 
 		MastodonRedirectURI: getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
 
 		LinkedInClientID:     getEnv("LINKEDIN_CLIENT_ID", ""),
 		LinkedInClientSecret: getEnv("LINKEDIN_CLIENT_SECRET", ""),
+		LinkedInRedirectURI:  getEnv("LINKEDIN_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/linkedin/callback"),
 
 		ThreadsClientID:     getEnv("THREADS_CLIENT_ID", ""),
 		ThreadsClientSecret: getEnv("THREADS_CLIENT_SECRET", ""),
 		ThreadsRedirectURI:  getEnv("THREADS_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/threads/callback"),
+
+		MediaPath: getEnv("OPENPOST_MEDIA_PATH", "./media"),
+		MediaURL:  getEnv("OPENPOST_MEDIA_URL", "/media"),
 	}
 
 	if raw := getEnv("MASTODON_SERVERS", ""); raw != "" {
@@ -63,6 +75,20 @@ func Load() *Config {
 			cfg.MastodonServers = servers
 		}
 	}
+
+	// Build CORS origins list
+	corsOrigins := []string{cfg.FrontendURL, "http://localhost:5173", "http://localhost:8080"}
+	if extra := getEnv("OPENPOST_CORS_EXTRA_ORIGINS", ""); extra != "" {
+		for _, origin := range strings.Split(extra, ",") {
+			trimmed := strings.TrimSpace(origin)
+			if trimmed != "" {
+				corsOrigins = append(corsOrigins, trimmed)
+			}
+		}
+	}
+	// Always allow Capacitor origins
+	corsOrigins = append(corsOrigins, "capacitor://localhost", "http://localhost")
+	cfg.CORSOrigins = corsOrigins
 
 	return cfg
 }

@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
-import { client, setToken, type User } from '$lib/api/client';
+import { client, setToken, recreateClient, type User } from '$lib/api/client';
 
 interface AuthState {
 	user: User | null;
@@ -19,6 +19,9 @@ function createAuthStore() {
 		subscribe,
 		async initialize() {
 			if (!browser) return;
+
+			// Recreate client in case instance URL was just set
+			recreateClient();
 
 			const storedToken = localStorage.getItem('token');
 			if (!storedToken) {

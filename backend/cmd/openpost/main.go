@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -16,10 +18,11 @@ import (
 	"github.com/openpost/backend/internal/api/handlers"
 	"github.com/openpost/backend/internal/config"
 	"github.com/openpost/backend/internal/database"
+	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/queue"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
-	"github.com/openpost/backend/internal/services/oauth"
+	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/publisher"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 )
@@ -35,7 +38,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins:     []string{cfg.FrontendURL, "http://localhost:5173", "http://localhost:8080"},
+		AllowOrigins:     cfg.CORSOrigins,
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
 		AllowCredentials: true,
@@ -52,72 +55,74 @@ func main() {
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
+	publishSvc := publisher.NewService(db, tokenManager)
 
-	twAuth := oauth.NewTwitterOAuth(
-		cfg.TwitterClientID,
-		cfg.TwitterClientSecret,
-		"http://localhost:8080/api/v1/accounts/x/callback",
-	)
+	providers := make(map[string]platform.PlatformAdapter)
 
-	mastodonServers := make(map[string]*oauth.MastodonOAuth)
+	if cfg.TwitterClientID != "" {
+		xAdapter := platform.NewXAdapter(
+			cfg.TwitterClientID,
+			cfg.TwitterClientSecret,
+			cfg.TwitterRedirectURI,
+		)
+		providers["x"] = xAdapter
+		log.Println("Registered X/Twitter adapter")
+	}
+
 	for _, server := range cfg.MastodonServers {
-		mastodonServers[server.Name] = oauth.NewMastodonOAuth(
+		mastodonAdapter := platform.NewMastodonAdapter(
 			server.ClientID,
 			server.ClientSecret,
 			cfg.MastodonRedirectURI,
 			server.InstanceURL,
 		)
-		log.Printf("Registered Mastodon server: %s (%s)", server.Name, server.InstanceURL)
+		providers["mastodon:"+server.Name] = mastodonAdapter
+		log.Printf("Registered Mastodon adapter: %s (%s)", server.Name, server.InstanceURL)
 	}
 
-	var blueskyAuth *oauth.BlueskyOAuth
-	// Bluesky uses app passwords, no OAuth setup needed
-	blueskyAuth = oauth.NewBlueskyOAuth("") // uses https://bsky.social by default
+	blueskyAdapter := platform.NewBlueskyAdapter("")
+	providers["bluesky"] = blueskyAdapter
+	log.Println("Registered Bluesky adapter")
 
-	var linkedinAuth *oauth.LinkedInOAuth
 	if cfg.LinkedInClientID != "" {
-		linkedinAuth = oauth.NewLinkedInOAuth(
+		linkedinAdapter := platform.NewLinkedInAdapter(
 			cfg.LinkedInClientID,
 			cfg.LinkedInClientSecret,
-			"http://localhost:8080/api/v1/accounts/linkedin/callback",
+			cfg.LinkedInRedirectURI,
 		)
+		providers["linkedin"] = linkedinAdapter
+		log.Println("Registered LinkedIn adapter")
 	}
 
-	var threadsAuth *oauth.ThreadsOAuth
 	if cfg.ThreadsClientID != "" {
-		threadsAuth = oauth.NewThreadsOAuth(
+		threadsAdapter := platform.NewThreadsAdapter(
 			cfg.ThreadsClientID,
 			cfg.ThreadsClientSecret,
 			cfg.ThreadsRedirectURI,
 		)
+		providers["threads"] = threadsAdapter
+		log.Println("Registered Threads adapter")
 	}
 
-	publishSvc := publisher.NewService(db, tokenManager)
-	if blueskyAuth != nil {
-		publishSvc.SetBlueskyOAuth(blueskyAuth)
+	for name, adapter := range providers {
+		tokenManager.SetProvider(name, adapter)
+		publishSvc.SetProvider(name, adapter)
 	}
-	if linkedinAuth != nil {
-		publishSvc.SetLinkedInOAuth(linkedinAuth)
-		tokenManager.SetLinkedInOAuth(linkedinAuth)
-	}
-	if threadsAuth != nil {
-		publishSvc.SetThreadsOAuth(threadsAuth)
-		tokenManager.SetThreadsOAuth(threadsAuth)
-	}
-	if twAuth != nil {
-		tokenManager.SetTwitterOAuth(twAuth)
-	}
-	tokenManager.SetMastodonOAuth(mastodonServers)
 
 	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc)
 	go worker.Start(context.Background())
 
-	// --- Huma setup ---
+	storage := mediastore.NewLocalStorage(cfg.MediaPath, cfg.MediaURL)
+	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
+		log.Printf("Warning: could not create media directory %s: %v", cfg.MediaPath, err)
+	}
+	mediaHandler := handlers.NewMediaHandler(db, storage, authService)
+	mediaHandler.RegisterRoutes(e)
+
 	apiGroup := e.Group("/api/v1")
 	humaConfig := huma.DefaultConfig("OpenPost API", "1.0.0")
 	api := humaecho.NewWithGroup(e, apiGroup, humaConfig)
 
-	// Serve OpenAPI spec
 	e.GET("/openapi.json", func(c echo.Context) error {
 		spec := api.OpenAPI()
 		data, err := json.Marshal(spec)
@@ -127,7 +132,6 @@ func main() {
 		return c.Blob(http.StatusOK, "application/json", data)
 	})
 
-	// Register handlers
 	authHandler := handlers.NewAuthHandler(db, authService)
 	authHandler.Register(api)
 	authHandler.Login(api)
@@ -139,10 +143,11 @@ func main() {
 
 	postHandler := handlers.NewPostHandler(db, authService)
 	postHandler.CreatePost(api)
+	postHandler.CreateThread(api)
 	postHandler.ListPosts(api)
 	postHandler.GetScheduleOverview(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, twAuth, mastodonServers, blueskyAuth, linkedinAuth, threadsAuth, authService)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)
@@ -151,7 +156,6 @@ func main() {
 	oauthHandler.ListAccounts(api)
 	oauthHandler.DisconnectAccount(api)
 
-	// Health check (Huma-registered for OpenAPI docs)
 	huma.Register(api, huma.Operation{
 		OperationID: "health-check",
 		Method:      http.MethodGet,
@@ -172,7 +176,6 @@ func main() {
 		return resp, nil
 	})
 
-	// SPA routes (must be last - catches all unmatched routes)
 	RegisterSpaRoutes(e)
 
 	log.Println("Starting OpenPost on :" + cfg.Port)

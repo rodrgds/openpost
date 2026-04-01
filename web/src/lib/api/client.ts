@@ -1,8 +1,7 @@
 import { browser } from '$app/environment';
 import createClient from 'openapi-fetch';
 import type { paths, components } from './types';
-
-const API_BASE = '/api/v1';
+import { getApiBase } from '$lib/stores/instance.svelte';
 
 // Re-export schema types for convenience
 export type User = components['schemas']['UserProfile'];
@@ -33,17 +32,31 @@ export function getToken(): string | null {
 	return token;
 }
 
-// Create the typed fetch client
-const rawClient = createClient<paths>({ baseUrl: API_BASE });
-
-// Auth middleware that adds Bearer token to every request
-rawClient.use({
-	async onRequest({ request }) {
-		if (token) {
-			request.headers.set('Authorization', `Bearer ${token}`);
+function createApiClient() {
+	const c = createClient<paths>({ baseUrl: getApiBase() });
+	c.use({
+		async onRequest({ request }) {
+			if (token) {
+				request.headers.set('Authorization', `Bearer ${token}`);
+			}
+			return request;
 		}
-		return request;
+	});
+	return c;
+}
+
+let rawClient = createApiClient();
+
+export function recreateClient() {
+	rawClient = createApiClient();
+}
+
+export const client = new Proxy(rawClient, {
+	get(_target, prop, receiver) {
+		const val = Reflect.get(rawClient, prop, rawClient);
+		if (typeof val === 'function') {
+			return val.bind(rawClient);
+		}
+		return val;
 	}
 });
-
-export const client = rawClient;

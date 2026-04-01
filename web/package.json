@@ -6,6 +6,8 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"build:web": "vite build",
+		"build:capacitor": "VITE_APP_MODE=capacitor vite build && npx cap sync android",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -53,6 +55,12 @@
 		"vitest-browser-svelte": "^2.0.2"
 	},
 	"dependencies": {
+		"@capacitor/android": "^8.3.0",
+		"@capacitor/app": "^8.1.0",
+		"@capacitor/cli": "^8.3.0",
+		"@capacitor/core": "^8.3.0",
+		"@capacitor/splash-screen": "^8.0.1",
+		"@capacitor/status-bar": "^8.0.2",
 		"bits-ui": "^2.16.3",
 		"clsx": "^2.1.1",
 		"lucide-svelte": "^0.577.0",

@@ -13,9 +13,6 @@
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import PlusIcon from 'lucide-svelte/icons/plus';
-	import BadgeCheckIcon from 'lucide-svelte/icons/badge-check';
-	import CreditCardIcon from 'lucide-svelte/icons/credit-card';
-	import BellIcon from 'lucide-svelte/icons/bell';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
 	import CircleDotIcon from 'lucide-svelte/icons/circle-dot';
@@ -24,7 +21,11 @@
 	import { toggleMode } from 'mode-watcher';
 	import SunIcon from 'lucide-svelte/icons/sun';
 	import MoonIcon from 'lucide-svelte/icons/moon';
+	import ServerIcon from 'lucide-svelte/icons/server';
 	import type { DateValue } from '@internationalized/date';
+	import { IS_CAPACITOR } from '$lib/env';
+	import { instanceStore } from '$lib/stores/instance.svelte';
+	import { recreateClient } from '$lib/api/client';
 	import { getLocalTimeZone, today, isEqualDay } from '@internationalized/date';
 	import { ui } from '$lib/stores/ui.svelte';
 
@@ -141,6 +142,13 @@
 	function handleLogout() {
 		auth.logout();
 		goto('/login');
+	}
+
+	function handleSwitchServer() {
+		auth.logout();
+		instanceStore().clearInstanceUrl();
+		recreateClient();
+		goto('/connect');
 	}
 
 	type DayMarkerArgs = {
@@ -312,21 +320,13 @@
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>
 						<DropdownMenu.Separator />
-						<DropdownMenu.Group>
-							<DropdownMenu.Item>
-								<BadgeCheckIcon class="mr-2 text-muted-foreground" />
-								<span>Account</span>
+						{#if IS_CAPACITOR}
+							<DropdownMenu.Item onclick={handleSwitchServer}>
+								<ServerIcon class="mr-2 text-muted-foreground" />
+								<span>Change server</span>
 							</DropdownMenu.Item>
-							<DropdownMenu.Item>
-								<CreditCardIcon class="mr-2 text-muted-foreground" />
-								<span>Billing</span>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item>
-								<BellIcon class="mr-2 text-muted-foreground" />
-								<span>Notifications</span>
-							</DropdownMenu.Item>
-						</DropdownMenu.Group>
-						<DropdownMenu.Separator />
+							<DropdownMenu.Separator />
+						{/if}
 						<DropdownMenu.Item onclick={handleLogout}>
 							<LogOutIcon class="mr-2 text-muted-foreground" />
 							<span>Log out</span>

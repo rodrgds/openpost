@@ -9,24 +9,38 @@
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import SidebarLeft from '$lib/components/sidebar-left.svelte';
 	import Logo from '$lib/components/Logo.svelte';
+	import { IS_CAPACITOR } from '$lib/env';
+	import { instanceStore, isInstanceConfigured } from '$lib/stores/instance.svelte';
 
 	let { children } = $props();
+
+	const instance = instanceStore();
 
 	let authState = $derived($auth);
 	let currentPath = $derived($page.url.pathname);
 	const publicRoutes = [
 		'/login',
 		'/register',
+		'/connect',
 		'/demo',
 		'/demo/paraglide',
 		'/accounts/mastodon/callback'
 	];
 
 	onMount(() => {
+		instance.initialize();
 		auth.initialize();
 	});
 
 	$effect(() => {
+		if (instance.isLoading) return;
+
+		// Capacitor-only: redirect to connect if no instance configured
+		if (IS_CAPACITOR && !isInstanceConfigured() && currentPath !== '/connect') {
+			goto('/connect');
+			return;
+		}
+
 		if (authState.isLoading) return;
 
 		const isPublicRoute = publicRoutes.some((route) => currentPath.startsWith(route));
@@ -47,7 +61,7 @@
 </svelte:head>
 
 <ModeWatcher />
-{#if authState.isLoading}
+{#if instance.isLoading || authState.isLoading}
 	<div class="flex min-h-screen items-center justify-center">
 		<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
 	</div>
