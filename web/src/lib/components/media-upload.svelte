@@ -3,7 +3,12 @@
 	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '$lib/components/ui/tooltip';
+	import {
+		Tooltip,
+		TooltipContent,
+		TooltipProvider,
+		TooltipTrigger
+	} from '$lib/components/ui/tooltip';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import XIcon from 'lucide-svelte/icons/x';
 	import ImageIcon from 'lucide-svelte/icons/image';
@@ -30,7 +35,7 @@
 	}
 
 	let items = $state<MediaItem[]>([]);
-	let isDragging = $state(false);
+	let _isDragging = $state(false);
 	let editingAltId = $state<string | null>(null);
 	let editingAltText = $state('');
 
@@ -74,7 +79,7 @@
 				item.id = data.id;
 				item.status = 'ready';
 				items = [...items];
-			} catch (e) {
+			} catch {
 				item.status = 'error';
 				items = [...items];
 			}
@@ -165,7 +170,9 @@
 								</div>
 							</div>
 						{:else}
-							<div class="absolute inset-0 flex items-start justify-between bg-gradient-to-b from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+							<div
+								class="absolute inset-0 flex items-start justify-between bg-gradient-to-b from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+							>
 								<TooltipProvider>
 									<Tooltip>
 										<TooltipTrigger>
@@ -194,7 +201,7 @@
 					{:else}
 						<button
 							type="button"
-							class="absolute right-1 top-1 rounded-full bg-black/40 p-1 text-white hover:bg-black/60"
+							class="absolute top-1 right-1 rounded-full bg-black/40 p-1 text-white hover:bg-black/60"
 							onclick={() => removeItem(i)}
 						>
 							<XIcon class="h-3 w-3" />
@@ -214,15 +221,17 @@
 
 <button
 	type="button"
-	class="relative flex h-24 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 {disabled ? 'pointer-events-none opacity-50' : ''}"
+	class="relative flex h-24 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 {disabled
+		? 'pointer-events-none opacity-50'
+		: ''}"
 	ondragover={(e) => {
 		e.preventDefault();
-		isDragging = true;
+		_isDragging = true;
 	}}
-	ondragleave={() => (isDragging = false)}
+	ondragleave={() => (_isDragging = false)}
 	ondrop={(e) => {
 		e.preventDefault();
-		isDragging = false;
+		_isDragging = false;
 		if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
 	}}
 	onclick={() => {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { client, type Workspace, type ScheduleOverview } from '$lib/api/client';
+	import { client, type ScheduleOverview } from '$lib/api/client';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
@@ -26,7 +26,7 @@
 	import { IS_CAPACITOR } from '$lib/env';
 	import { instanceStore } from '$lib/stores/instance.svelte';
 	import { recreateClient } from '$lib/api/client';
-	import { getLocalTimeZone, today, isEqualDay } from '@internationalized/date';
+	import { getLocalTimeZone, today } from '@internationalized/date';
 	import { ui } from '$lib/stores/ui.svelte';
 
 	let authState = $derived($auth);

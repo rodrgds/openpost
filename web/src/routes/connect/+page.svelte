@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { instanceStore, isInstanceConfigured } from '$lib/stores/instance.svelte';
+	import { instanceStore } from '$lib/stores/instance.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		Card,

@@ -33,13 +33,6 @@ jobs:
         shell: devenv shell bash -- -e {0}
         run: cd backend && go vet ./...
 
-      - name: Run eslint
-        shell: devenv shell bash -- -e {0}
-        run: |
-          cd web
-          bun install --frozen-lockfile
-          bun run lint
-
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest

@@ -74,34 +74,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
         with:
-          go-version: '1.25'
-          cache-dependency-path: backend/go.sum
+          name: devenv
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc musl-dev sqlite3 libsqlite3-dev
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
 
       - name: Build frontend
-        working-directory: web
+        shell: devenv shell bash -- -e {0}
         run: |
+          cd web
           bun install --frozen-lockfile
           bun run build
 
       - name: Build binary
-        working-directory: backend
+        shell: devenv shell bash -- -e {0}
         env:
           CGO_ENABLED: 1
         run: |
+          cd backend
           go build -ldflags="-s -w" -o ../openpost-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/openpost
 
       - name: Upload binary to release
@@ -163,7 +160,7 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_B64" ] && echo "$KEYSTORE_B64" | base64 -d > /dev/null 2>&1; then
+          if [ -n "$KEYSTORE_B64" ]; then
             echo "has_keystore=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_keystore=false" >> "$GITHUB_OUTPUT"
@@ -173,7 +170,7 @@ jobs:
         if: steps.signing.outputs.has_keystore == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_B64" | base64 -d > web/android/app/release-keystore.jks
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > web/android/app/release-keystore.jks
 
       - name: Build release APK (signed)
         if: steps.signing.outputs.has_keystore == 'true'

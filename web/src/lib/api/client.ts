@@ -52,7 +52,7 @@ export function recreateClient() {
 }
 
 export const client = new Proxy(rawClient, {
-	get(_target, prop, receiver) {
+	get(_target, prop) {
 		const val = Reflect.get(rawClient, prop, rawClient);
 		if (typeof val === 'function') {
 			return val.bind(rawClient);
