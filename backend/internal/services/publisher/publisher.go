@@ -5,50 +5,34 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
+	"os"
+	"path/filepath"
 
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/oauth"
+	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
 
 type Service struct {
-	db       *bun.DB
-	tm       *tokenmanager.TokenManager
-	bluesky  *oauth.BlueskyOAuth
-	linkedin *oauth.LinkedInOAuth
-	threads  *oauth.ThreadsOAuth
+	db        *bun.DB
+	tm        *tokenmanager.TokenManager
+	providers map[string]platform.PlatformAdapter
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 	return &Service{
-		db: db,
-		tm: tm,
+		db:        db,
+		tm:        tm,
+		providers: make(map[string]platform.PlatformAdapter),
 	}
 }
 
-// SetBlueskyOAuth sets the Bluesky OAuth provider
-func (s *Service) SetBlueskyOAuth(bs *oauth.BlueskyOAuth) {
-	s.bluesky = bs
+func (s *Service) SetProvider(platformName string, adapter platform.PlatformAdapter) {
+	s.providers[platformName] = adapter
 }
 
-// SetLinkedInOAuth sets the LinkedIn OAuth provider
-func (s *Service) SetLinkedInOAuth(li *oauth.LinkedInOAuth) {
-	s.linkedin = li
-}
-
-// SetThreadsOAuth sets the Threads OAuth provider
-func (s *Service) SetThreadsOAuth(th *oauth.ThreadsOAuth) {
-	s.threads = th
-}
-
-// HandlePublishJob is called by the queue worker
 func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error {
 	var payload struct {
 		PostID string `json:"post_id"`
@@ -64,76 +48,180 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 		return err
 	}
 
+	var threadPosts []*models.Post
+	if post.ThreadSequence == 0 {
+		threadPosts = append(threadPosts, post)
+		currentParentID := post.ID
+
+		for {
+			var child models.Post
+			err := s.db.NewSelect().Model(&child).
+				Where("parent_post_id = ?", currentParentID).
+				Order("thread_sequence ASC").
+				Limit(1).
+				Scan(ctx)
+
+			if err != nil {
+				break
+			}
+			threadPosts = append(threadPosts, &child)
+			currentParentID = child.ID
+		}
+
+		if len(threadPosts) > 1 {
+			log.Printf("[Publisher] Thread detected: %d posts starting from %s", len(threadPosts), post.ID)
+		}
+	}
+
+	if len(threadPosts) > 1 {
+		return s.publishThread(ctx, threadPosts)
+	}
+
+	return s.publishSinglePost(ctx, post)
+}
+
+func (s *Service) publishSinglePost(ctx context.Context, post *models.Post) error {
 	var dests []models.PostDestination
-	if err := s.db.NewSelect().Model(&dests).Where("post_id = ? AND status IN ('pending', 'failed')", post.ID).Scan(ctx); err != nil {
+	if err := s.db.NewSelect().Model(&dests).
+		Where("post_id = ? AND status IN ('pending', 'failed')", post.ID).
+		Scan(ctx); err != nil {
 		return err
 	}
 
 	log.Printf("[Publisher] Found %d destinations for post %s", len(dests), post.ID)
 
 	if len(dests) == 0 {
-		// Check if all destinations are already successful
-		var totalDests int
-		totalDests, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
-			Where("post_id = ?", post.ID).
-			Count(ctx)
-
-		if totalDests == 0 {
-			log.Printf("[Publisher] No destinations for post %s - marking as published", post.ID)
-			_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "published").Where("id = ?", post.ID).Exec(ctx)
-		} else {
-			// All destinations are either success or failed - check for failures
-			var failedCount int
-			failedCount, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
-				Where("post_id = ? AND status = 'failed'", post.ID).
-				Count(ctx)
-			if failedCount > 0 {
-				log.Printf("[Publisher] Post %s has %d failed destinations", post.ID, failedCount)
-				_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "failed").Where("id = ?", post.ID).Exec(ctx)
-			} else {
-				_, _ = s.db.NewUpdate().Model(post).
-					Set("status = ?", "published").
-					Set("published_at = CURRENT_TIMESTAMP").
-					Where("id = ?", post.ID).
-					Exec(ctx)
-			}
-		}
+		s.finalizePost(ctx, post)
 		return nil
 	}
 
 	var firstError error
-
 	for _, dest := range dests {
 		log.Printf("[Publisher] Publishing to destination %s (account: %s)", dest.ID, dest.SocialAccountID)
 		if err := s.publishToDestination(ctx, post, &dest); err != nil {
 			firstError = err
 			log.Printf("[Publisher] Failed to publish to %s: %v", dest.ID, err)
-
-			_, _ = s.db.NewUpdate().Model(&dest).
+			if _, dbErr := s.db.NewUpdate().Model(&dest).
 				Set("status = ?", "failed").
 				Set("error_message = ?", err.Error()).
 				Where("id = ?", dest.ID).
-				Exec(ctx)
+				Exec(ctx); dbErr != nil {
+				log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+			}
 		} else {
 			log.Printf("[Publisher] Successfully published to destination %s", dest.ID)
-			_, _ = s.db.NewUpdate().Model(&dest).
+			if _, dbErr := s.db.NewUpdate().Model(&dest).
 				Set("status = ?", "success").
 				Where("id = ?", dest.ID).
-				Exec(ctx)
+				Exec(ctx); dbErr != nil {
+				log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+			}
 		}
 	}
 
-	if firstError != nil {
-		_, _ = s.db.NewUpdate().Model(post).Set("status = ?", "failed").Where("id = ?", post.ID).Exec(ctx)
+	s.finalizePost(ctx, post)
+	return firstError
+}
+
+func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error {
+	log.Printf("[Publisher] Publishing thread with %d posts", len(posts))
+
+	successfulAccounts := make(map[string]bool)
+
+	for i, post := range posts {
+		log.Printf("[Publisher] Publishing thread post %d/%d: %s", i+1, len(posts), post.ID)
+
+		var dests []models.PostDestination
+		if err := s.db.NewSelect().Model(&dests).
+			Where("post_id = ? AND status IN ('pending', 'failed')", post.ID).
+			Scan(ctx); err != nil {
+			log.Printf("[Publisher] Failed to fetch destinations for post %s: %v", post.ID, err)
+			s.finalizePost(ctx, post)
+			continue
+		}
+
+		if i > 0 {
+			var filteredDests []models.PostDestination
+			for _, dest := range dests {
+				if successfulAccounts[dest.SocialAccountID] {
+					filteredDests = append(filteredDests, dest)
+				} else {
+					if _, dbErr := s.db.NewUpdate().Model(&dest).
+						Set("status = ?", "failed").
+						Set("error_message = ?", "previous post in thread failed for this account").
+						Where("id = ?", dest.ID).
+						Exec(ctx); dbErr != nil {
+						log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+					}
+				}
+			}
+			dests = filteredDests
+		}
+
+		var successfulInThisPost []string
+		for _, dest := range dests {
+			if err := s.publishToDestination(ctx, post, &dest); err != nil {
+				log.Printf("[Publisher] Thread post %s failed at destination %s: %v", post.ID, dest.ID, err)
+				if _, dbErr := s.db.NewUpdate().Model(&dest).
+					Set("status = ?", "failed").
+					Set("error_message = ?", err.Error()).
+					Where("id = ?", dest.ID).
+					Exec(ctx); dbErr != nil {
+					log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+				}
+			} else {
+				if _, dbErr := s.db.NewUpdate().Model(&dest).
+					Set("status = ?", "success").
+					Where("id = ?", dest.ID).
+					Exec(ctx); dbErr != nil {
+					log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+				}
+				successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
+			}
+		}
+
+		successfulAccounts = make(map[string]bool)
+		for _, accountID := range successfulInThisPost {
+			successfulAccounts[accountID] = true
+		}
+
+		s.finalizePost(ctx, post)
+	}
+
+	return nil
+}
+
+func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
+	var totalDests int
+	totalDests, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
+		Where("post_id = ?", post.ID).
+		Count(ctx)
+
+	if totalDests == 0 {
+		if _, err := s.db.NewUpdate().Model(post).Set("status = ?", "published").Where("id = ?", post.ID).Exec(ctx); err != nil {
+			log.Printf("[Publisher] Failed to update post %s status: %v", post.ID, err)
+		}
+		return
+	}
+
+	var failedCount int
+	failedCount, _ = s.db.NewSelect().Model((*models.PostDestination)(nil)).
+		Where("post_id = ? AND status = 'failed'", post.ID).
+		Count(ctx)
+
+	if failedCount > 0 {
+		if _, err := s.db.NewUpdate().Model(post).Set("status = ?", "failed").Where("id = ?", post.ID).Exec(ctx); err != nil {
+			log.Printf("[Publisher] Failed to update post %s status: %v", post.ID, err)
+		}
 	} else {
-		_, _ = s.db.NewUpdate().Model(post).
+		if _, err := s.db.NewUpdate().Model(post).
 			Set("status = ?", "published").
 			Set("published_at = CURRENT_TIMESTAMP").
 			Where("id = ?", post.ID).
-			Exec(ctx)
+			Exec(ctx); err != nil {
+			log.Printf("[Publisher] Failed to update post %s status: %v", post.ID, err)
+		}
 	}
-
-	return firstError
 }
 
 func (s *Service) publishToDestination(ctx context.Context, post *models.Post, dest *models.PostDestination) error {
@@ -142,170 +230,102 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		return fmt.Errorf("account not found: %v", err)
 	}
 
-	log.Printf("[Publisher] Publishing to %s (platform: %s)", account.AccountID, account.Platform)
+	providerKey := account.Platform
+	if account.Platform == "mastodon" {
+		providerKey = "mastodon:" + account.InstanceURL
+	}
+
+	provider, ok := s.providers[providerKey]
+	if !ok {
+		return fmt.Errorf("unsupported platform: %s (instance: %s)", account.Platform, account.InstanceURL)
+	}
 
 	token, err := s.tm.GetValidAccessToken(ctx, account.ID)
 	if err != nil {
 		return fmt.Errorf("auth error: %v", err)
 	}
 
-	switch account.Platform {
-	case "x":
-		return s.publishToX(ctx, token, post.Content)
-	case "mastodon":
-		if account.InstanceURL == "" {
-			return fmt.Errorf("mastodon instance URL is missing")
+	var mediaAttachments []models.MediaAttachment
+	if err := s.db.NewSelect().
+		TableExpr("post_media AS pm").
+		ColumnExpr("ma.*").
+		Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
+		Where("pm.post_id = ?", post.ID).
+		Order("pm.display_order ASC").
+		Scan(ctx, &mediaAttachments); err != nil {
+		return fmt.Errorf("fetching media: %v", err)
+	}
+
+	var platformMediaIDs []string
+	for _, media := range mediaAttachments {
+		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media)
+		if err != nil {
+			log.Printf("[Publisher] Failed to upload media %s to %s: %v", media.ID, account.Platform, err)
+			return fmt.Errorf("media upload failed for %s: %w", media.ID, err)
 		}
-		return s.publishToMastodon(ctx, token, account.InstanceURL, post.Content)
-	case "bluesky":
-		pdsURL := account.InstanceURL
-		if pdsURL == "" {
-			pdsURL = "https://bsky.social"
+		platformMediaIDs = append(platformMediaIDs, mediaID)
+	}
+
+	replyToID := ""
+	if post.ThreadSequence > 0 && post.ParentPostID != "" {
+		replyToID, _ = s.getPreviousPostExternalID(ctx, post.ID, dest.SocialAccountID)
+	}
+
+	req := &platform.PublishRequest{
+		Content:          post.Content,
+		PlatformMediaIDs: platformMediaIDs,
+		ReplyToID:        replyToID,
+	}
+
+	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
+	if err != nil {
+		return err
+	}
+
+	if externalID != "" {
+		if _, dbErr := s.db.NewUpdate().Model(dest).
+			Set("external_id = ?", externalID).
+			Where("id = ?", dest.ID).
+			Exec(ctx); dbErr != nil {
+			log.Printf("[Publisher] Failed to update external_id for destination %s: %v", dest.ID, dbErr)
 		}
-		return s.publishToBluesky(ctx, token, pdsURL, account.AccountID, post.Content)
-	case "linkedin":
-		return s.publishToLinkedIn(ctx, token, account.AccountID, post.Content)
-	case "threads":
-		return s.publishToThreads(ctx, token, account.AccountID, post.Content)
-	default:
-		return fmt.Errorf("unsupported platform: %s", account.Platform)
 	}
-}
 
-func (s *Service) publishToX(ctx context.Context, token, content string) error {
-	payload := fmt.Sprintf(`{"text":"%s"}`, strings.ReplaceAll(content, `"`, `\"`))
-	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.twitter.com/2/tweets", strings.NewReader(payload))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("X API returned status: %d", resp.StatusCode)
-	}
 	return nil
 }
 
-func (s *Service) publishToMastodon(ctx context.Context, token, instanceURL, content string) error {
-	data := fmt.Sprintf("status=%s", url.QueryEscape(content))
-	req, _ := http.NewRequestWithContext(ctx, "POST", instanceURL+"/api/v1/statuses", strings.NewReader(data))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.PlatformAdapter, token string, media models.MediaAttachment) (string, error) {
+	if account.Platform == "threads" {
+		return s.getPublicMediaURL(media), nil
+	}
 
-	resp, err := http.DefaultClient.Do(req)
+	data, err := os.ReadFile(media.FilePath)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("reading media file %s: %w", media.FilePath, err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("mastodon API returned status: %d", resp.StatusCode)
-	}
-	return nil
+	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, bytes.NewReader(data))
 }
 
-func (s *Service) publishToBluesky(ctx context.Context, token, pdsURL, did, content string) error {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-
-	payload := map[string]interface{}{
-		"repo":       did,
-		"collection": "app.bsky.feed.post",
-		"record": map[string]interface{}{
-			"$type":     "app.bsky.feed.post",
-			"text":      content,
-			"createdAt": now,
-		},
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", pdsURL+"/xrpc/com.atproto.repo.createRecord", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("bluesky API returned status: %d", resp.StatusCode)
-	}
-
-	log.Printf("[Publisher] Successfully published to Bluesky")
-	return nil
+func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
+	fileName := filepath.Base(media.FilePath)
+	return "/media/" + fileName
 }
 
-func (s *Service) publishToLinkedIn(ctx context.Context, token, personID, content string) error {
-	payload := map[string]interface{}{
-		"author":     fmt.Sprintf("urn:li:person:%s", personID),
-		"commentary": content,
-		"visibility": "PUBLIC",
-		"distribution": map[string]interface{}{
-			"feedDistribution":               "MAIN_FEED",
-			"targetEntities":                 []interface{}{},
-			"thirdPartyDistributionChannels": []interface{}{},
-		},
-		"lifecycleState":            "PUBLISHED",
-		"isReshareDisabledByAuthor": false,
+func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {
+	var parentPost models.Post
+	if err := s.db.NewSelect().Model(&parentPost).
+		Where("id = (SELECT parent_post_id FROM posts WHERE id = ?)", currentPostID).
+		Scan(ctx); err != nil {
+		return "", fmt.Errorf("finding parent post: %w", err)
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
+	var parentDest models.PostDestination
+	if err := s.db.NewSelect().Model(&parentDest).
+		Where("post_id = ? AND social_account_id = ?", parentPost.ID, socialAccountID).
+		Scan(ctx); err != nil {
+		return "", fmt.Errorf("finding parent destination: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.linkedin.com/rest/posts", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	// Use current month as API version (LinkedIn requires YYYYMM format)
-	apiVersion := time.Now().UTC().Format("200601")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
-	req.Header.Set("Linkedin-Version", apiVersion)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("linkedin API returned status: %d, body: %s", resp.StatusCode, string(respBody))
-	}
-
-	log.Printf("[Publisher] Successfully published to LinkedIn")
-	return nil
-}
-
-func (s *Service) publishToThreads(ctx context.Context, token, userID, content string) error {
-	if s.threads == nil {
-		return fmt.Errorf("threads oauth not configured")
-	}
-
-	_, err := s.threads.PublishTextPost(ctx, token, userID, content)
-	if err != nil {
-		return fmt.Errorf("failed to publish to threads: %w", err)
-	}
-
-	log.Printf("[Publisher] Successfully published to Threads")
-	return nil
+	return parentDest.ExternalID, nil
 }

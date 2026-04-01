@@ -11,6 +11,7 @@ type BlobStorage interface {
 	Save(id string, reader io.Reader) (string, error)
 	Delete(id string) error
 	GetURL(id string) string
+	Open(id string) (io.ReadCloser, error)
 }
 
 type LocalStorage struct {
@@ -50,4 +51,9 @@ func (s *LocalStorage) Delete(id string) error {
 // Example: baseURL could be "/media" mapping to a static Echo route
 func (s *LocalStorage) GetURL(id string) string {
 	return s.baseURL + "/" + id
+}
+
+func (s *LocalStorage) Open(id string) (io.ReadCloser, error) {
+	path := filepath.Join(s.baseDir, id)
+	return os.Open(path)
 }

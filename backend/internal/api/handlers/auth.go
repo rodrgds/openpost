@@ -79,7 +79,7 @@ func (h *AuthHandler) Register(api huma.API) {
 			ID:           uuid.New().String(),
 			Email:        input.Body.Email,
 			PasswordHash: passwordHash,
-			CreatedAt:    time.Now(),
+			CreatedAt:    time.Now().UTC(),
 		}
 
 		if _, err := h.db.NewInsert().Model(user).Exec(ctx); err != nil {

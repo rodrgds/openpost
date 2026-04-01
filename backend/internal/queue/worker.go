@@ -61,7 +61,10 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 	`, w.workerID).Scan(ctx, job)
 
 	if err != nil {
-		// Normal condition when queue is empty, or error scanning.
+		// Check if it's just no jobs available vs a real error
+		if err.Error() != "sql: no rows in result set" {
+			log.Printf("[Worker %s] database error polling for jobs: %v\n", w.workerID, err)
+		}
 		return
 	}
 
@@ -76,22 +79,28 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 			job.Status = "failed"
 		} else {
 			job.Status = "pending"
-			job.RunAt = time.Now().Add(5 * time.Minute) // Basic backoff
+			// Exponential backoff: 1 min, 2 min, 4 min, 8 min...
+			backoff := time.Duration(1<<(job.Attempts-1)) * time.Minute
+			job.RunAt = time.Now().Add(backoff)
 		}
 		job.LastError = processErr.Error()
 
-		_, _ = w.db.NewUpdate().Model(job).
+		if _, dbErr := w.db.NewUpdate().Model(job).
 			Column("status", "attempts", "last_error", "run_at").
 			Where("id = ?", job.ID).
-			Exec(ctx)
+			Exec(ctx); dbErr != nil {
+			log.Printf("[Worker %s] failed to update job %s status: %v\n", w.workerID, job.ID, dbErr)
+		}
 		return
 	}
 
 	// Mark as completed
-	_, _ = w.db.NewUpdate().Model(job).
+	if _, dbErr := w.db.NewUpdate().Model(job).
 		Set("status = ?", "completed").
 		Where("id = ?", job.ID).
-		Exec(ctx)
+		Exec(ctx); dbErr != nil {
+		log.Printf("[Worker %s] failed to mark job %s as completed: %v\n", w.workerID, job.ID, dbErr)
+	}
 
 	log.Printf("[Worker %s] job %s completed successfully\n", w.workerID, job.ID)
 }

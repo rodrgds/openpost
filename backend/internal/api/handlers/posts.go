@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -31,6 +32,7 @@ type CreatePostInput struct {
 		Content          string     `json:"content" minLength:"1" doc:"Post content"`
 		ScheduledAt      *time.Time `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
 		SocialAccountIDs []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
+		MediaIDs         []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
 	}
 }
 
@@ -128,7 +130,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			CreatedByID: userID,
 			Content:     input.Body.Content,
 			Status:      status,
-			CreatedAt:   time.Now(),
+			CreatedAt:   time.Now().UTC(),
 		}
 		if input.Body.ScheduledAt != nil {
 			post.ScheduledAt = *input.Body.ScheduledAt
@@ -144,6 +146,15 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			})
 		}
 
+		postMedia := make([]models.PostMedia, 0, len(input.Body.MediaIDs))
+		for i, mediaID := range input.Body.MediaIDs {
+			postMedia = append(postMedia, models.PostMedia{
+				PostID:       post.ID,
+				MediaID:      mediaID,
+				DisplayOrder: i,
+			})
+		}
+
 		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewInsert().Model(post).Exec(txCtx); err != nil {
 				return err
@@ -153,8 +164,16 @@ func (h *PostHandler) CreatePost(api huma.API) {
 					return err
 				}
 			}
+			if len(postMedia) > 0 {
+				if _, err := tx.NewInsert().Model(&postMedia).Exec(txCtx); err != nil {
+					return err
+				}
+			}
 			if post.Status == "scheduled" {
-				payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+				payload, err := json.Marshal(map[string]string{"post_id": post.ID})
+				if err != nil {
+					return fmt.Errorf("failed to marshal job payload: %w", err)
+				}
 				job := &models.Job{
 					ID:      uuid.New().String(),
 					Type:    "publish_post",
@@ -511,6 +530,132 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		}
 		resp.Body.Platforms = platforms
 		resp.Body.Days = days
+		return resp, nil
+	})
+}
+
+type ThreadPostInput struct {
+	Content  string   `json:"content" minLength:"1" doc:"Post content"`
+	MediaIDs []string `json:"media_ids,omitempty" doc:"Media attachment IDs"`
+}
+
+type CreateThreadInput struct {
+	Body struct {
+		WorkspaceID      string            `json:"workspace_id" doc:"Target workspace ID"`
+		ScheduledAt      *time.Time        `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
+		SocialAccountIDs []string          `json:"social_account_ids" doc:"Social account IDs to publish to"`
+		Posts            []ThreadPostInput `json:"posts" minItems:"2" doc:"Thread posts in order"`
+	}
+}
+
+type CreateThreadOutput struct {
+	Body struct {
+		PostIDs []string `json:"post_ids" doc:"Created post IDs in order"`
+	}
+}
+
+func (h *PostHandler) CreateThread(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "create-thread",
+		Method:      http.MethodPost,
+		Path:        "/posts/thread",
+		Summary:     "Create a thread of posts",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400},
+	}, func(ctx context.Context, input *CreateThreadInput) (*CreateThreadOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		if len(input.Body.Posts) < 2 {
+			return nil, huma.Error400BadRequest("a thread must have at least 2 posts")
+		}
+
+		status := "draft"
+		if input.Body.ScheduledAt != nil {
+			status = "scheduled"
+		}
+
+		posts := make([]*models.Post, 0, len(input.Body.Posts))
+		var allDestinations []models.PostDestination
+		var allPostMedia []models.PostMedia
+
+		for i, threadPost := range input.Body.Posts {
+			post := &models.Post{
+				ID:             uuid.New().String(),
+				WorkspaceID:    input.Body.WorkspaceID,
+				CreatedByID:    userID,
+				Content:        threadPost.Content,
+				Status:         status,
+				ThreadSequence: i,
+				CreatedAt:      time.Now().UTC(),
+			}
+			if input.Body.ScheduledAt != nil {
+				post.ScheduledAt = *input.Body.ScheduledAt
+			}
+			if i > 0 {
+				post.ParentPostID = posts[i-1].ID
+			}
+			posts = append(posts, post)
+
+			for _, accID := range input.Body.SocialAccountIDs {
+				allDestinations = append(allDestinations, models.PostDestination{
+					ID:              uuid.New().String(),
+					PostID:          post.ID,
+					SocialAccountID: accID,
+					Status:          "pending",
+				})
+			}
+
+			for j, mediaID := range threadPost.MediaIDs {
+				allPostMedia = append(allPostMedia, models.PostMedia{
+					PostID:       post.ID,
+					MediaID:      mediaID,
+					DisplayOrder: j,
+				})
+			}
+		}
+
+		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			for _, post := range posts {
+				if _, err := tx.NewInsert().Model(post).Exec(txCtx); err != nil {
+					return err
+				}
+			}
+			if len(allDestinations) > 0 {
+				if _, err := tx.NewInsert().Model(&allDestinations).Exec(txCtx); err != nil {
+					return err
+				}
+			}
+			if len(allPostMedia) > 0 {
+				if _, err := tx.NewInsert().Model(&allPostMedia).Exec(txCtx); err != nil {
+					return err
+				}
+			}
+			if status == "scheduled" {
+				payload, _ := json.Marshal(map[string]string{"post_id": posts[0].ID})
+				job := &models.Job{
+					ID:      uuid.New().String(),
+					Type:    "publish_post",
+					Payload: string(payload),
+					RunAt:   *input.Body.ScheduledAt,
+				}
+				if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to create thread")
+		}
+
+		postIDs := make([]string, len(posts))
+		for i, post := range posts {
+			postIDs[i] = post.ID
+		}
+
+		resp := &CreateThreadOutput{}
+		resp.Body.PostIDs = postIDs
 		return resp, nil
 	})
 }

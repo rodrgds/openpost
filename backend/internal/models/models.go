@@ -88,6 +88,8 @@ type MediaAttachment struct {
 	StorageType      string `bun:",default:'local'" json:"storage_type"` // 'local', 's3'
 	MimeType         string `json:"mime_type"`
 	ProcessingStatus string `bun:",default:'ready'" json:"processing_status"` // 'processing', 'ready', 'failed'
+	Size             int64  `json:"size"`
+	AltText          string `json:"alt_text"`
 }
 
 type PostMedia struct {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/services/auth"
 )
 
@@ -48,4 +49,30 @@ func GetUserID(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing authorization header"})
+			}
+
+			tokenParts := strings.Split(authHeader, " ")
+			if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid authorization header format"})
+			}
+
+			claims, err := authService.ValidateToken(tokenParts[1])
+			if err != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+			}
+
+			c.Set(string(UserIDKey), claims.UserID)
+			c.Set(string(EmailKey), claims.Email)
+
+			return next(c)
+		}
+	}
 }

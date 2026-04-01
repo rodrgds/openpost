@@ -53,6 +53,7 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		Summary:       "Create a new workspace",
 		Tags:          []string{"Workspaces"},
 		DefaultStatus: http.StatusOK,
+		Middlewares:   huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *CreateWorkspaceInput) (*CreateWorkspaceOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
