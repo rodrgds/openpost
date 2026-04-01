@@ -7,11 +7,20 @@
 let
   npm-format = pkgs.writeShellApplication {
     name = "npm-format";
-    runtimeInputs = [ pkgs.nodejs_latest ];
+    runtimeInputs = [ pkgs.bun ];
     text = ''
       cd "${config.git.root}/web"
-      npm install --frozen-lockfile
-      npm run format
+      bun install --frozen-lockfile
+      bun run format
+    '';
+  };
+  eslint-wrapper = pkgs.writeShellApplication {
+    name = "eslint-wrapper";
+    runtimeInputs = [ pkgs.bun ];
+    text = ''
+      cd "${config.git.root}/web"
+      bun install --frozen-lockfile
+      bunx eslint .
     '';
   };
 in
@@ -51,16 +60,18 @@ in
 
   # Git hooks
   git-hooks.hooks = {
+    eslint = {
+      enable = true;
+      entry = "${lib.getExe eslint-wrapper}";
+      files = "\\.(js|ts|svelte)$";
+      pass_filenames = false;
+    };
     npm-format = {
       enable = true;
       name = "prettier-npm";
       entry = "${lib.getExe npm-format}";
       files = "\\.(js|ts|svelte|css|html)$";
       pass_filenames = false;
-    };
-    eslint = {
-      enable = true;
-      run = "cd ${config.git.root}/web && bun install --frozen-lockfile";
     };
   };
 }
