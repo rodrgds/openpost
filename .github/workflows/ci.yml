@@ -14,28 +14,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache-dependency-path: backend/go.sum
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
 
-      - name: Install dependencies
-        working-directory: backend
-        run: go mod download
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
+
+      - name: Run devenv test (hooks + environment)
+        run: devenv test
 
       - name: Run go vet
-        working-directory: backend
-        run: go vet ./...
-
-      - name: Check formatting
-        working-directory: backend
-        run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "The following files need formatting:"
-            gofmt -l .
-            exit 1
-          fi
+        shell: devenv shell bash -- -e {0}
+        run: cd backend && go vet ./...
 
   test-backend:
     name: Test Backend
@@ -44,22 +40,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
         with:
-          go-version: '1.25'
-          cache-dependency-path: backend/go.sum
+          name: devenv
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
 
       - name: Create placeholder for embed
+        shell: bash
         run: mkdir -p backend/cmd/openpost/public && touch backend/cmd/openpost/public/.gitkeep
 
-      - name: Install dependencies
-        working-directory: backend
-        run: go mod download
-
-      - name: Run tests
-        working-directory: backend
-        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Run backend tests
+        shell: devenv shell bash -- -e {0}
+        run: |
+          cd backend
+          go mod download
+          go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -74,15 +76,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
 
-      - name: Install dependencies
-        working-directory: web
-        run: bun install --frozen-lockfile
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
 
       - name: Build frontend
-        working-directory: web
-        run: bun run build
+        shell: devenv shell bash -- -e {0}
+        run: |
+          cd web
+          bun install --frozen-lockfile
+          bun run build
