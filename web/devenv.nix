@@ -10,6 +10,7 @@ let
     runtimeInputs = [ pkgs.nodejs_latest ];
     text = ''
       cd "${config.git.root}/web"
+      npm install --frozen-lockfile
       npm run format
     '';
   };
@@ -57,6 +58,9 @@ in
       files = "\\.(js|ts|svelte|css|html)$";
       pass_filenames = false;
     };
-    eslint.enable = true;
+    eslint = {
+      enable = true;
+      run = "cd ${config.git.root}/web && bun install --frozen-lockfile";
+    };
   };
 }
