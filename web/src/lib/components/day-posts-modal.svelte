@@ -10,6 +10,8 @@
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import CalendarIcon from 'lucide-svelte/icons/calendar';
+	import { getStatusColor } from '$lib/utils';
+	import PlatformIcon from '$lib/components/platform-icon.svelte';
 
 	const isMobile = new IsMobile();
 
@@ -73,38 +75,6 @@
 		return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 	}
 
-	function getStatusColor(status: string): string {
-		switch (status) {
-			case 'scheduled':
-				return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
-			case 'publishing':
-				return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400';
-			case 'published':
-				return 'bg-green-500/10 text-green-600 dark:text-green-400';
-			case 'failed':
-				return 'bg-red-500/10 text-red-600 dark:text-red-400';
-			default:
-				return 'bg-muted text-muted-foreground';
-		}
-	}
-
-	function getPlatformIcon(platform: string): string {
-		switch (platform) {
-			case 'x':
-				return '\u{1D54F}';
-			case 'mastodon':
-				return '\u{1F418}';
-			case 'threads':
-				return '\u{1F4F8}';
-			case 'bluesky':
-				return '\u{1F98B}';
-			case 'linkedin':
-				return '\u{1F4BC}';
-			default:
-				return '?';
-		}
-	}
-
 	function handleNewPost() {
 		if (currentDate) {
 			ui.openComposeForDay(currentDate);
@@ -164,7 +134,7 @@
 													class="flex size-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
 													title={dest.platform}
 												>
-													{getPlatformIcon(dest.platform)}
+													<PlatformIcon platform={dest.platform} class="size-4" />
 												</span>
 											{/each}
 										</div>
@@ -240,7 +210,7 @@
 														class="flex size-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground"
 														title={dest.platform}
 													>
-														{getPlatformIcon(dest.platform)}
+														<PlatformIcon platform={dest.platform} class="size-4" />
 													</span>
 												{/each}
 											</div>

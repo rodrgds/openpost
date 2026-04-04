@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { client, type Workspace, type SocialAccount } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
@@ -17,6 +17,8 @@
 	import { goto } from '$app/navigation';
 	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
+	import { getPlatformName, getPlatformColor } from '$lib/utils';
+	import PlatformIcon from '$lib/components/platform-icon.svelte';
 
 	interface MastodonServer {
 		name: string;
@@ -82,7 +84,7 @@
 	}
 
 	onMount(() => {
-		auth.subscribe(async (state) => {
+		const unsubscribe = auth.subscribe(async (state) => {
 			if (!state.isLoading && !state.isAuthenticated) {
 				goto('/login');
 			} else if (!state.isLoading && state.isAuthenticated) {
@@ -101,6 +103,7 @@
 				}
 			}
 		});
+		return unsubscribe;
 	});
 
 	$effect(() => {
@@ -225,40 +228,6 @@
 			error = (e as Error).message;
 		}
 	}
-
-	function getPlatformIcon(platform: string): string {
-		switch (platform) {
-			case 'x':
-				return '𝕏';
-			case 'mastodon':
-				return '🐘';
-			case 'threads':
-				return '📸';
-			case 'bluesky':
-				return '🦋';
-			case 'linkedin':
-				return '💼';
-			default:
-				return '?';
-		}
-	}
-
-	function getPlatformColor(platform: string): string {
-		switch (platform) {
-			case 'x':
-				return 'bg-black';
-			case 'mastodon':
-				return 'bg-indigo-500';
-			case 'threads':
-				return 'bg-orange-500';
-			case 'bluesky':
-				return 'bg-sky-500';
-			case 'linkedin':
-				return 'bg-blue-600';
-			default:
-				return 'bg-gray-500';
-		}
-	}
 </script>
 
 <svelte:head>
@@ -352,9 +321,7 @@
 											account.platform
 										)} flex items-center justify-center rounded-full"
 									>
-										<span class="text-lg font-bold text-white"
-											>{getPlatformIcon(account.platform)}</span
-										>
+										<PlatformIcon platform={account.platform} class="h-4 w-4 text-white" />
 									</div>
 									<div>
 										<h3 class="font-medium capitalize">{account.platform}</h3>
@@ -386,7 +353,7 @@
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-black">
-							<span class="font-bold text-white">X</span>
+							<PlatformIcon platform="x" class="h-4 w-4 text-white" />
 						</div>
 						<div>
 							<h3 class="font-medium">X (Twitter)</h3>
@@ -403,7 +370,7 @@
 						<CardContent class="flex items-center justify-between p-4">
 							<div class="flex items-center gap-3">
 								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-									<span class="text-lg font-bold text-white">🐘</span>
+									<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
 								</div>
 								<div>
 									<h3 class="font-medium">{server.name}</h3>
@@ -424,7 +391,7 @@
 					<CardContent class="flex items-center justify-between p-4">
 						<div class="flex items-center gap-3">
 							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-								<span class="text-lg font-bold text-white">🐘</span>
+								<PlatformIcon platform="mastodon" class="h-5 w-5 text-white" />
 							</div>
 							<div>
 								<h3 class="font-medium">Mastodon</h3>
@@ -441,7 +408,7 @@
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
-							<span class="text-lg font-bold text-white">📸</span>
+							<PlatformIcon platform="threads" class="h-5 w-5 text-white" />
 						</div>
 						<div>
 							<h3 class="font-medium">Threads</h3>
@@ -456,7 +423,7 @@
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500">
-							<span class="text-lg font-bold text-white">🦋</span>
+							<PlatformIcon platform="bluesky" class="h-5 w-5 text-white" />
 						</div>
 						<div>
 							<h3 class="font-medium">Bluesky</h3>
@@ -471,7 +438,7 @@
 				<CardContent class="flex items-center justify-between p-4">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600">
-							<span class="text-lg font-bold text-white">💼</span>
+							<PlatformIcon platform="linkedin" class="h-5 w-5 text-white" />
 						</div>
 						<div>
 							<h3 class="font-medium">LinkedIn</h3>

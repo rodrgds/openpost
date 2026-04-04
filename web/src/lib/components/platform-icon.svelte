@@ -1,0 +1,24 @@
+<script lang="ts">
+	import x from '../../../../assets/logos/x.svg?raw';
+	import mastodon from '../../../../assets/logos/mastodon.svg?raw';
+	import threads from '../../../../assets/logos/threads.svg?raw';
+	import bluesky from '../../../../assets/logos/bluesky.svg?raw';
+	import linkedin from '../../../../assets/logos/linkedin.svg?raw';
+
+	interface Props {
+		platform: string;
+		class?: string;
+	}
+
+	let { platform, class: className = '' }: Props = $props();
+
+	const svgs: Record<string, string> = { x, mastodon, threads, bluesky, linkedin };
+
+	const svg = $derived(
+		svgs[platform] ? svgs[platform].replace('<svg ', `<svg class="${className}" `) : ''
+	);
+</script>
+
+{#if svg}
+	{@html svg}
+{/if}

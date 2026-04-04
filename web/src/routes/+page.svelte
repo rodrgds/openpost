@@ -13,6 +13,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { ui } from '$lib/stores/ui.svelte';
+	import { getStatusColor } from '$lib/utils';
 
 	let workspaces = $state<Workspace[] | null>(null);
 	let posts = $state<Post[]>([]);
@@ -90,17 +91,6 @@
 			console.error('Failed to create workspace:', e);
 			error = (e as Error).message;
 		}
-	}
-
-	function getStatusColor(status: string): string {
-		const colors: Record<string, string> = {
-			draft: 'bg-muted text-muted-foreground',
-			scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-			publishing: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-			published: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
-			failed: 'bg-destructive/10 text-destructive'
-		};
-		return colors[status] || 'bg-muted text-muted-foreground';
 	}
 
 	function getWorkspaceName(workspaceId: string): string {

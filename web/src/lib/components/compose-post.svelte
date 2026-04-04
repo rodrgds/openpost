@@ -16,6 +16,12 @@
 		type DateValue
 	} from '@internationalized/date';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import LayersIcon from 'lucide-svelte/icons/layers';
+	import PlusIcon from 'lucide-svelte/icons/plus';
+	import MediaUpload from './media-upload.svelte';
+	import ThreadItem from './thread-item.svelte';
+	import { getPlatformName } from '$lib/utils';
+	import PlatformIcon from '$lib/components/platform-icon.svelte';
 
 	interface Props {
 		initialDate?: DateValue;
@@ -26,6 +32,11 @@
 	let { initialDate, onSuccess, onCancel }: Props = $props();
 
 	let content = $state('');
+	let mediaIds = $state<string[]>([]);
+	let isThreadMode = $state(false);
+	let threadPosts = $state<Array<{ content: string; mediaIds: string[] }>>([
+		{ content: '', mediaIds: [] }
+	]);
 	let isSubmitting = $state(false);
 	let error = $state('');
 	let workspaces = $state<Workspace[]>([]);
@@ -128,6 +139,13 @@
 		return date.toISOString();
 	}
 
+	function hasValidContent(): boolean {
+		if (isThreadMode) {
+			return threadPosts.some((p) => p.content.trim().length > 0);
+		}
+		return content.trim().length > 0;
+	}
+
 	async function createPost(publishNow: boolean = false) {
 		error = '';
 
@@ -136,7 +154,7 @@
 			return;
 		}
 
-		if (!content.trim()) {
+		if (!hasValidContent()) {
 			error = 'Please enter some content';
 			return;
 		}
@@ -156,15 +174,38 @@
 		isSubmitting = true;
 
 		try {
-			const { error: err } = await client.POST('/posts', {
-				body: {
-					workspace_id: selectedWorkspaceId,
-					content,
-					social_account_ids: selectedAccountIds,
-					scheduled_at: scheduledAt
+			if (isThreadMode) {
+				const validPosts = threadPosts.filter((p) => p.content.trim().length > 0);
+				if (validPosts.length < 2) {
+					error = 'A thread must have at least 2 posts with content';
+					isSubmitting = false;
+					return;
 				}
-			});
-			if (err) throw new Error(err.detail || 'Failed to create post');
+
+				const { error: err } = await client.POST('/posts/thread' as any, {
+					body: {
+						workspace_id: selectedWorkspaceId,
+						social_account_ids: selectedAccountIds,
+						scheduled_at: scheduledAt,
+						posts: validPosts.map((p) => ({
+							content: p.content,
+							media_ids: p.mediaIds
+						}))
+					}
+				});
+				if (err) throw new Error((err as any).detail || 'Failed to create thread');
+			} else {
+				const { error: err } = await client.POST('/posts', {
+					body: {
+						workspace_id: selectedWorkspaceId,
+						content,
+						social_account_ids: selectedAccountIds,
+						scheduled_at: scheduledAt,
+						media_ids: mediaIds
+					}
+				});
+				if (err) throw new Error(err.detail || 'Failed to create post');
+			}
 			if (onSuccess) onSuccess();
 		} catch (e) {
 			error = (e as Error).message || 'Failed to create post';
@@ -182,21 +223,26 @@
 		await createPost(true);
 	}
 
-	function getPlatformIcon(platform: string): string {
-		switch (platform) {
-			case 'x':
-				return '\u{1D54F}';
-			case 'mastodon':
-				return '\u{1F418}';
-			case 'threads':
-				return '\u{1F4F8}';
-			case 'bluesky':
-				return '\u{1F98B}';
-			case 'linkedin':
-				return '\u{1F4BC}';
-			default:
-				return '?';
+	function toggleThreadMode() {
+		if (!isThreadMode) {
+			threadPosts = [
+				{ content, mediaIds },
+				{ content: '', mediaIds: [] }
+			];
+		} else {
+			content = threadPosts[0]?.content ?? '';
+			mediaIds = threadPosts[0]?.mediaIds ?? [];
+			threadPosts = [{ content, mediaIds }];
 		}
+		isThreadMode = !isThreadMode;
+	}
+
+	function addThreadPost() {
+		threadPosts = [...threadPosts, { content: '', mediaIds: [] }];
+	}
+
+	function removeThreadPost(index: number) {
+		threadPosts = threadPosts.filter((_, i) => i !== index);
 	}
 </script>
 
@@ -231,20 +277,64 @@
 					</Select.Root>
 				</div>
 
-				<div class="space-y-2">
-					<Label for="content">Post Content</Label>
-					<Textarea
-						id="content"
-						bind:value={content}
-						rows={6}
-						placeholder="What's on your mind?"
-						required
-						class="resize-none"
-					/>
-					<div class="flex justify-end">
-						<span class="text-xs text-muted-foreground">{content.length} characters</span>
+				{#if isThreadMode}
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<Label>Thread Posts</Label>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onclick={addThreadPost}
+								class="gap-1 text-xs"
+							>
+								<PlusIcon class="h-3.5 w-3.5" />
+								Add Post
+							</Button>
+						</div>
+						<div class="space-y-1">
+							{#each threadPosts as post, i (i)}
+								<ThreadItem
+									index={i}
+									total={threadPosts.length}
+									bind:content={post.content}
+									bind:mediaIds={post.mediaIds}
+									workspaceId={selectedWorkspaceId}
+									disabled={isSubmitting}
+									onRemove={threadPosts.length > 2 ? () => removeThreadPost(i) : undefined}
+								/>
+							{/each}
+						</div>
 					</div>
-				</div>
+				{:else}
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<Label for="content">Post Content</Label>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onclick={toggleThreadMode}
+								class="gap-1 text-xs text-muted-foreground"
+							>
+								<LayersIcon class="h-3.5 w-3.5" />
+								Thread
+							</Button>
+						</div>
+						<Textarea
+							id="content"
+							bind:value={content}
+							rows={6}
+							placeholder="What's on your mind?"
+							required
+							class="resize-none"
+						/>
+						<div class="flex justify-end">
+							<span class="text-xs text-muted-foreground">{content.length} characters</span>
+						</div>
+						<MediaUpload workspaceId={selectedWorkspaceId} bind:mediaIds disabled={isSubmitting} />
+					</div>
+				{/if}
 
 				<div class="space-y-2">
 					<Label>Publish to</Label>
@@ -281,7 +371,7 @@
 									<div
 										class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
 									>
-										<span class="text-sm font-bold">{getPlatformIcon(account.platform)}</span>
+										<PlatformIcon platform={account.platform} class="h-4 w-4" />
 									</div>
 									<div class="min-w-0">
 										<div class="truncate font-medium capitalize">{account.platform}</div>
@@ -358,7 +448,7 @@
 				type="button"
 				variant="secondary"
 				onclick={handlePostNow}
-				disabled={isSubmitting || !content.trim() || selectedAccountIds.length === 0}
+				disabled={isSubmitting || !hasValidContent() || selectedAccountIds.length === 0}
 			>
 				{isSubmitting ? 'Posting...' : 'Post Now'}
 			</Button>
