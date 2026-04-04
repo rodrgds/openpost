@@ -26,15 +26,15 @@
 
 <div align="center">
   <br />
-  <img alt="X (Twitter)" src="https://upload.wikimedia.org/wikipedia/commons/5/57/X_logo_2023_%28white%29.png" width="24" style="background: black; border-radius: 4px;">
+  <img alt="X (Twitter)" src="./assets/logos/x.svg" width="24">
   &nbsp;
-  <img alt="Mastodon" src="https://upload.wikimedia.org/wikipedia/commons/4/48/Mastodon_logo_%28simple%29.svg" width="24">
+  <img alt="Mastodon" src="./assets/logos/mastodon.svg" width="24">
   &nbsp;
-  <img alt="Bluesky" src="https://upload.wikimedia.org/wikipedia/commons/e/e1/Bluesky_app_logo.png" width="24" style="border-radius: 4px;">
+  <img alt="Bluesky" src="./assets/logos/bluesky.svg" width="24">
   &nbsp;
-  <img alt="Threads" src="https://upload.wikimedia.org/wikipedia/commons/9/95/Threads_logo.svg" width="24">
+  <img alt="Threads" src="./assets/logos/threads.svg" width="24">
   &nbsp;
-  <img alt="LinkedIn" src="https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png" width="24">
+  <img alt="LinkedIn" src="./assets/logos/linkedin.svg" width="24">
 </div>
 
 <p align="center">
@@ -56,6 +56,8 @@
 
 - **Single Binary Deployment** - Everything compiled into one executable. No Docker required (but supported).
 - **Multi-Platform Posting** - Schedule posts to X (Twitter), Mastodon, Bluesky, Threads, and LinkedIn.
+- **Media Uploads** - Attach images and videos to posts. Platform-specific media requirements handled automatically.
+- **Post Threading** - Create multi-post threads that publish sequentially across all platforms.
 - **Custom Mastodon Instances** - Connect accounts from any number of Mastodon servers (configured via JSON env var).
 - **Workspaces & Teams** - Multi-tenant architecture with role-based access control.
 - **Background Scheduling** - SQLite-backed job queue survives server restarts.
@@ -184,6 +186,8 @@ All configuration is done via environment variables or a `.env` file:
 |----------|----------|-------------|
 | `JWT_SECRET` | ✅ Yes | Secret key for JWT tokens (32+ chars) |
 | `ENCRYPTION_KEY` | ✅ Yes | AES-256 key for token encryption |
+| `OPENPOST_MEDIA_PATH` | No | Local media storage path (default: `./media`) |
+| `OPENPOST_MEDIA_URL` | No | URL path for serving media (default: `/media`) |
 | `TWITTER_CLIENT_ID` | For X | Twitter OAuth client ID |
 | `TWITTER_CLIENT_SECRET` | For X | Twitter OAuth secret |
 | `MASTODON_SERVERS` | For Mastodon | JSON array of Mastodon server configs |
@@ -289,27 +293,40 @@ See [docs/threads-integration.md](docs/threads-integration.md) for detailed setu
 openpost/
 ├── web/                    # SvelteKit frontend
 │   ├── src/
-│   │   ├── lib/           # Shared utilities, API client
-│   │   └── routes/       # SvelteKit routes
+│   │   ├── lib/
+│   │   │   ├── api/       # API client (openapi-fetch)
+│   │   │   ├── components/# UI components
+│   │   │   └── stores/    # Auth, UI state
+│   │   └── routes/        # SvelteKit routes
 │   └── package.json
 │
 ├── backend/
-│   ├── cmd/openpost/      # Main entry point
+│   ├── cmd/openpost/       # Main entry point
 │   └── internal/
-│       ├── api/           # HTTP handlers & middleware
-│       ├── config/       # Configuration loading
-│       ├── database/      # SQLite setup
-│       ├── models/        # Bun ORM models
-│       ├── queue/         # Background job worker
-│       └── services/      # Business logic
-│           ├── auth/      # JWT & password handling
-│           ├── crypto/    # Token encryption
-│           ├── oauth/     # Platform OAuth implementations
-│           ├── publisher/ # Post publishing logic
+│       ├── api/            # HTTP handlers & middleware
+│       │   └── handlers/  # Posts, Auth, Media, OAuth handlers
+│       ├── config/         # Configuration loading
+│       ├── database/       # SQLite setup
+│       ├── models/         # Bun ORM models
+│       ├── platform/       # Platform adapter interface + implementations
+│       │   ├── adapter.go # PlatformAdapter interface
+│       │   ├── http.go    # Shared HTTP helpers
+│       │   ├── x.go       # Twitter/X adapter
+│       │   ├── mastodon.go# Mastodon adapter
+│       │   ├── bluesky.go # Bluesky adapter
+│       │   ├── linkedin.go# LinkedIn adapter
+│       │   └── threads.go # Threads adapter
+│       ├── queue/          # Background job worker
+│       └── services/       # Business logic
+│           ├── auth/       # JWT & password handling
+│           ├── crypto/     # Token encryption
+│           ├── mediastore/ # Local/S3 media storage
+│           ├── publisher/  # Post publishing logic
 │           └── tokenmanager/ # Token refresh management
 │
-├── AGENTS.md              # AI agent guidelines
-├── PLAN.md                # Implementation roadmap
+├── docs/                   # Platform integration docs
+├── AGENTS.md               # AI agent guidelines
+├── PLAN.md                 # Implementation roadmap
 └── README.md
 ```
 
@@ -335,12 +352,14 @@ See [PLAN.md](PLAN.md) for the complete implementation status and roadmap.
 - [x] LinkedIn OAuth
 - [x] Threads OAuth (Meta Graph API)
 - [x] Post scheduling with background worker
+- [x] Media upload support
+- [x] Post threading (multi-post threads)
 - [x] Single binary deployment
 - [x] Token refresh for all platforms
+- [x] Platform adapter architecture
 
 ### Coming Soon
 
-- [ ] Media upload support
 - [ ] Post analytics
 - [ ] Email notifications
 - [ ] Webhook support
