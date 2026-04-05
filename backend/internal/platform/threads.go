@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -28,7 +30,7 @@ func NewThreadsAdapter(clientID, clientSecret, redirectURI string) *ThreadsAdapt
 				AuthURL:  "https://www.threads.com/oauth/authorize",
 				TokenURL: "https://graph.threads.net/oauth/access_token",
 			},
-			Scopes: []string{"threads_basic", "threads_content_publish"},
+			Scopes: []string{"threads_basic", "threads_content_publish", "threads_manage_replies"},
 		},
 	}
 }
@@ -198,12 +200,61 @@ func (t *ThreadsAdapter) Publish(ctx context.Context, accessToken, userID string
 		return "", err
 	}
 
+	if err := t.waitForContainerReady(ctx, accessToken, containerID); err != nil {
+		return "", err
+	}
+
 	return t.publishContainer(ctx, accessToken, userID, containerID)
 }
 
+func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken, containerID string) error {
+	const (
+		maxAttempts = 10
+		pollDelay   = 3 * time.Second
+	)
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		statusURL := "https://graph.threads.net/v1.0/" + containerID + "?fields=status,error_message&access_token=" + url.QueryEscape(accessToken)
+
+		respBody, err := DoRequest(ctx, "GET", statusURL, nil, nil)
+		if err != nil {
+			if attempt == maxAttempts {
+				return fmt.Errorf("threads container status check: %w", err)
+			}
+		} else {
+			var statusResp struct {
+				Status       string `json:"status"`
+				ErrorMessage string `json:"error_message"`
+			}
+			if err := json.Unmarshal(respBody, &statusResp); err == nil {
+				switch statusResp.Status {
+				case "FINISHED", "PUBLISHED":
+					return nil
+				case "ERROR", "EXPIRED", "FAILED":
+					if statusResp.ErrorMessage != "" {
+						return fmt.Errorf("threads container not publishable: %s", statusResp.ErrorMessage)
+					}
+					return fmt.Errorf("threads container not publishable: status=%s", statusResp.Status)
+				}
+			}
+		}
+
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(pollDelay):
+			}
+		}
+	}
+
+	return fmt.Errorf("threads container not ready after %d attempts", maxAttempts)
+}
+
 func (t *ThreadsAdapter) createContainer(ctx context.Context, accessToken, userID, content, mediaURL string, isVideo bool, replyToID string) (string, error) {
-	payload := map[string]interface{}{
-		"text": content,
+	payload := map[string]string{
+		"text":         content,
+		"access_token": accessToken,
 	}
 
 	if mediaURL != "" {
@@ -222,12 +273,13 @@ func (t *ThreadsAdapter) createContainer(ctx context.Context, accessToken, userI
 		payload["reply_to_id"] = replyToID
 	}
 
-	containerURL := "https://graph.threads.net/v1.0/me/threads"
+	containerURL := "https://graph.threads.net/v1.0/" + userID + "/threads"
 
-	respBody, err := DoJSON(ctx, "POST", containerURL, payload, map[string]string{
-		"Authorization": "Bearer " + accessToken,
-	})
+	respBody, err := DoFormURLEncoded(ctx, "POST", containerURL, payload, nil)
 	if err != nil {
+		if replyToID != "" && strings.Contains(err.Error(), `"code":10`) {
+			return "", fmt.Errorf("threads container creation (reply permission/check root ownership): %w", err)
+		}
 		return "", fmt.Errorf("threads container creation: %w", err)
 	}
 
@@ -242,15 +294,36 @@ func (t *ThreadsAdapter) createContainer(ctx context.Context, accessToken, userI
 }
 
 func (t *ThreadsAdapter) publishContainer(ctx context.Context, accessToken, userID, creationID string) (string, error) {
-	publishURL := "https://graph.threads.net/v1.0/me/threads_publish"
+	publishURL := "https://graph.threads.net/v1.0/" + userID + "/threads_publish"
 
 	payload := map[string]string{
-		"creation_id": creationID,
+		"creation_id":  creationID,
+		"access_token": accessToken,
 	}
 
-	respBody, err := DoJSON(ctx, "POST", publishURL, payload, map[string]string{
-		"Authorization": "Bearer " + accessToken,
-	})
+	var respBody []byte
+	var err error
+	const maxPublishAttempts = 5
+	for attempt := 1; attempt <= maxPublishAttempts; attempt++ {
+		respBody, err = DoFormURLEncoded(ctx, "POST", publishURL, payload, nil)
+		if err == nil {
+			break
+		}
+
+		// Threads may return code 24 briefly right after container creation/status=FINISHED.
+		// Retry a few times with short backoff to handle propagation lag.
+		if strings.Contains(err.Error(), `"code":24`) && attempt < maxPublishAttempts {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt) * 2 * time.Second):
+			}
+			continue
+		}
+
+		return "", fmt.Errorf("threads publish: %w", err)
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("threads publish: %w", err)
 	}

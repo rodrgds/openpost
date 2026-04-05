@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -29,9 +30,10 @@ type Config struct {
 	MastodonRedirectURI string
 	MastodonServers     []MastodonServerConfig
 
-	LinkedInClientID     string
-	LinkedInClientSecret string
-	LinkedInRedirectURI  string
+	LinkedInClientID             string
+	LinkedInClientSecret         string
+	LinkedInRedirectURI          string
+	DisableLinkedInThreadReplies bool
 
 	ThreadsClientID     string
 	ThreadsClientSecret string
@@ -55,9 +57,10 @@ func Load() *Config {
 
 		MastodonRedirectURI: getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
 
-		LinkedInClientID:     getEnv("LINKEDIN_CLIENT_ID", ""),
-		LinkedInClientSecret: getEnv("LINKEDIN_CLIENT_SECRET", ""),
-		LinkedInRedirectURI:  getEnv("LINKEDIN_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/linkedin/callback"),
+		LinkedInClientID:             getEnv("LINKEDIN_CLIENT_ID", ""),
+		LinkedInClientSecret:         getEnv("LINKEDIN_CLIENT_SECRET", ""),
+		LinkedInRedirectURI:          getEnv("LINKEDIN_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/linkedin/callback"),
+		DisableLinkedInThreadReplies: getEnvBool("OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES", false),
 
 		ThreadsClientID:     getEnv("THREADS_CLIENT_ID", ""),
 		ThreadsClientSecret: getEnv("THREADS_CLIENT_SECRET", ""),
@@ -98,4 +101,19 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		log.Printf("WARNING: invalid boolean for %s=%q, using default %t", key, value, fallback)
+		return fallback
+	}
+
+	return parsed
 }

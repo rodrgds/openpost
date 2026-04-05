@@ -209,6 +209,7 @@ All configuration is done via environment variables or a `.env` file:
 | `MASTODON_REDIRECT_URI` | No | OAuth callback URI (default: OOB) |
 | `LINKEDIN_CLIENT_ID` | For LinkedIn | LinkedIn OAuth client ID |
 | `LINKEDIN_CLIENT_SECRET` | For LinkedIn | LinkedIn OAuth secret |
+| `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES` | No | Disable LinkedIn thread child replies when app lacks `w_member_social_feed` |
 | `THREADS_CLIENT_ID` | For Threads | Meta App ID |
 | `THREADS_CLIENT_SECRET` | For Threads | Meta App Secret |
 | `OPENPOST_PORT` | No | Server port (default: 8080) |
@@ -270,8 +271,11 @@ See [docs/bluesky-integration.md](docs/bluesky-integration.md) for more details.
 
 1. Go to [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)
 2. Create a new app and request "Share on LinkedIn" product
-3. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
-4. Copy Client ID and Secret to your `.env`
+3. Request approval for `w_member_social_feed` (Social Actions create) in your app products/permissions
+4. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
+5. Copy Client ID and Secret to your `.env`
+
+**Important:** LinkedIn thread replies (posting comments on the first post) require `w_member_social_feed` approval. If your app only has `w_member_social`, first posts may succeed but replies/comments will fail with `ACCESS_DENIED: partnerApiSocialActions.CREATE`.
 
 See [docs/linkedin-integration.md](docs/linkedin-integration.md) for detailed setup instructions.
 

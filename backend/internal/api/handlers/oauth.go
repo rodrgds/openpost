@@ -19,10 +19,11 @@ import (
 )
 
 type OAuthHandler struct {
-	db        *bun.DB
-	crypto    *crypto.TokenEncryptor
-	providers map[string]platform.PlatformAdapter
-	auth      *auth.Service
+	db                           *bun.DB
+	crypto                       *crypto.TokenEncryptor
+	providers                    map[string]platform.PlatformAdapter
+	auth                         *auth.Service
+	disableLinkedInThreadReplies bool
 }
 
 func NewOAuthHandler(
@@ -30,12 +31,14 @@ func NewOAuthHandler(
 	encryptor *crypto.TokenEncryptor,
 	providers map[string]platform.PlatformAdapter,
 	authService *auth.Service,
+	disableLinkedInThreadReplies bool,
 ) *OAuthHandler {
 	return &OAuthHandler{
-		db:        db,
-		crypto:    encryptor,
-		providers: providers,
-		auth:      authService,
+		db:                           db,
+		crypto:                       encryptor,
+		providers:                    providers,
+		auth:                         authService,
+		disableLinkedInThreadReplies: disableLinkedInThreadReplies,
 	}
 }
 
@@ -80,12 +83,13 @@ type ListAccountsInput struct {
 }
 
 type AccountResponse struct {
-	ID              string `json:"id" doc:"Account ID"`
-	Platform        string `json:"platform" doc:"Platform name"`
-	AccountID       string `json:"account_id" doc:"Platform-specific account ID"`
-	AccountUsername string `json:"account_username" doc:"Account username"`
-	InstanceURL     string `json:"instance_url" doc:"Instance URL (Mastodon/Bluesky)"`
-	IsActive        bool   `json:"is_active" doc:"Whether the account is active"`
+	ID                     string `json:"id" doc:"Account ID"`
+	Platform               string `json:"platform" doc:"Platform name"`
+	AccountID              string `json:"account_id" doc:"Platform-specific account ID"`
+	AccountUsername        string `json:"account_username" doc:"Account username"`
+	InstanceURL            string `json:"instance_url" doc:"Instance URL (Mastodon/Bluesky)"`
+	IsActive               bool   `json:"is_active" doc:"Whether the account is active"`
+	ThreadRepliesSupported bool   `json:"thread_replies_supported" doc:"Whether this account supports thread replies in current server config"`
 }
 
 type ListAccountsOutput struct {
@@ -447,13 +451,19 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 
 		response := make([]AccountResponse, len(accounts))
 		for i, acc := range accounts {
+			threadRepliesSupported := true
+			if h.disableLinkedInThreadReplies && acc.Platform == "linkedin" {
+				threadRepliesSupported = false
+			}
+
 			response[i] = AccountResponse{
-				ID:              acc.ID,
-				Platform:        acc.Platform,
-				AccountID:       acc.AccountID,
-				AccountUsername: acc.AccountUsername,
-				InstanceURL:     acc.InstanceURL,
-				IsActive:        acc.IsActive,
+				ID:                     acc.ID,
+				Platform:               acc.Platform,
+				AccountID:              acc.AccountID,
+				AccountUsername:        acc.AccountUsername,
+				InstanceURL:            acc.InstanceURL,
+				IsActive:               acc.IsActive,
+				ThreadRepliesSupported: threadRepliesSupported,
 			}
 		}
 

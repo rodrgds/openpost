@@ -56,6 +56,7 @@ func main() {
 	authService := auth.NewService(cfg.JWTSecret)
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	publishSvc := publisher.NewService(db, tokenManager)
+	publishSvc.SetDisableLinkedInThreadReplies(cfg.DisableLinkedInThreadReplies)
 
 	providers := make(map[string]platform.PlatformAdapter)
 
@@ -147,7 +148,7 @@ func main() {
 	postHandler.ListPosts(api)
 	postHandler.GetScheduleOverview(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)

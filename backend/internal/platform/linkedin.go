@@ -8,9 +8,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
+
+const defaultLinkedInVersionLagMonths = 1
+
+func linkedInAPIVersion() string {
+	if version := os.Getenv("LINKEDIN_API_VERSION"); version != "" {
+		return version
+	}
+
+	// LinkedIn monthly versions are sometimes not active at the start of a month.
+	// Default to previous month to avoid NONEXISTENT_VERSION failures.
+	return time.Now().UTC().AddDate(0, -defaultLinkedInVersionLagMonths, 0).Format("200601")
+}
 
 type LinkedInAdapter struct {
 	clientID     string
@@ -31,7 +44,7 @@ func (l *LinkedInAdapter) GenerateAuthURL(state string) (string, map[string]stri
 		"response_type": "code",
 		"client_id":     l.clientID,
 		"redirect_uri":  l.redirectURI,
-		"scope":         "openid profile w_member_social",
+		"scope":         "openid profile w_member_social w_member_social_feed",
 		"state":         state,
 	}
 	return "https://www.linkedin.com/oauth/v2/authorization?" + encodeQueryString(params), nil
@@ -139,7 +152,7 @@ func (l *LinkedInAdapter) UploadMedia(ctx context.Context, accessToken, personID
 }
 
 func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID, mimeType string, data []byte) (string, error) {
-	apiVersion := time.Now().UTC().Format("200601")
+	apiVersion := linkedInAPIVersion()
 
 	registerPayload := map[string]interface{}{
 		"initializeUploadRequest": map[string]interface{}{
@@ -156,7 +169,7 @@ func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID
 }
 
 func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID, mimeType string, data []byte) (string, error) {
-	apiVersion := time.Now().UTC().Format("200601")
+	apiVersion := linkedInAPIVersion()
 
 	registerPayload := map[string]interface{}{
 		"initializeUploadRequest": map[string]interface{}{
@@ -225,7 +238,7 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 }
 
 func (l *LinkedInAdapter) Publish(ctx context.Context, accessToken, personID string, req *PublishRequest) (string, error) {
-	apiVersion := time.Now().UTC().Format("200601")
+	apiVersion := linkedInAPIVersion()
 	authorURN := "urn:li:person:" + personID
 
 	if req.ReplyToID != "" {
@@ -276,7 +289,8 @@ func (l *LinkedInAdapter) createPost(ctx context.Context, accessToken, authorURN
 }
 
 func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN, activityURN, content string) (string, error) {
-	apiVersion := time.Now().UTC().Format("200601")
+	apiVersion := linkedInAPIVersion()
+	encodedActivityURN := url.QueryEscape(activityURN)
 
 	payload := map[string]interface{}{
 		"actor":  actorURN,
@@ -286,7 +300,7 @@ func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN
 		},
 	}
 
-	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/socialActions/"+activityURN+"/comments", payload, linkedinHeaders(accessToken, apiVersion))
+	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/socialActions/"+encodedActivityURN+"/comments", payload, linkedinHeaders(accessToken, apiVersion))
 	if err != nil {
 		return "", fmt.Errorf("posting linkedin comment: %w", err)
 	}

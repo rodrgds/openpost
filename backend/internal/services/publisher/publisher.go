@@ -16,9 +16,10 @@ import (
 )
 
 type Service struct {
-	db        *bun.DB
-	tm        *tokenmanager.TokenManager
-	providers map[string]platform.PlatformAdapter
+	db                           *bun.DB
+	tm                           *tokenmanager.TokenManager
+	providers                    map[string]platform.PlatformAdapter
+	disableLinkedInThreadReplies bool
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -27,6 +28,10 @@ func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 		tm:        tm,
 		providers: make(map[string]platform.PlatformAdapter),
 	}
+}
+
+func (s *Service) SetDisableLinkedInThreadReplies(disable bool) {
+	s.disableLinkedInThreadReplies = disable
 }
 
 func (s *Service) SetProvider(platformName string, adapter platform.PlatformAdapter) {
@@ -268,6 +273,9 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 
 	replyToID := ""
 	if post.ThreadSequence > 0 && post.ParentPostID != "" {
+		if s.disableLinkedInThreadReplies && account.Platform == "linkedin" {
+			return fmt.Errorf("linkedin thread replies are disabled by OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES")
+		}
 		replyToID, _ = s.getPreviousPostExternalID(ctx, post.ID, dest.SocialAccountID)
 	}
 

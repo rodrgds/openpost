@@ -23,6 +23,10 @@
 	import { getPlatformName } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 
+	type SocialAccountWithThreadSupport = SocialAccount & {
+		thread_replies_supported?: boolean;
+	};
+
 	interface Props {
 		initialDate?: DateValue;
 		onSuccess?: () => void;
@@ -41,7 +45,7 @@
 	let error = $state('');
 	let workspaces = $state<Workspace[]>([]);
 	let selectedWorkspaceId = $state<string>('');
-	let accounts = $state<SocialAccount[]>([]);
+	let accounts = $state<SocialAccountWithThreadSupport[]>([]);
 	let selectedAccountIds = $state<string[]>([]);
 	let loadingWorkspaces = $state(true);
 	let loadingAccounts = $state(false);
@@ -124,11 +128,20 @@
 	}
 
 	function toggleAccount(id: string) {
+		const account = accounts.find((a) => a.id === id);
+		if (account && isThreadMode && account.thread_replies_supported === false) {
+			return;
+		}
+
 		if (selectedAccountIds.includes(id)) {
 			selectedAccountIds = selectedAccountIds.filter((a) => a !== id);
 		} else {
 			selectedAccountIds = [...selectedAccountIds, id];
 		}
+	}
+
+	function isThreadDisabledAccount(account: SocialAccountWithThreadSupport): boolean {
+		return isThreadMode && account.thread_replies_supported === false;
 	}
 
 	function getScheduledAt(): string | undefined {
@@ -229,6 +242,10 @@
 				{ content, mediaIds },
 				{ content: '', mediaIds: [] }
 			];
+			selectedAccountIds = selectedAccountIds.filter((id) => {
+				const account = accounts.find((a) => a.id === id);
+				return account?.thread_replies_supported !== false;
+			});
 		} else {
 			content = threadPosts[0]?.content ?? '';
 			mediaIds = threadPosts[0]?.mediaIds ?? [];
@@ -236,6 +253,14 @@
 		}
 		isThreadMode = !isThreadMode;
 	}
+
+	$effect(() => {
+		if (!isThreadMode) return;
+		selectedAccountIds = selectedAccountIds.filter((id) => {
+			const account = accounts.find((a) => a.id === id);
+			return account?.thread_replies_supported !== false;
+		});
+	});
 
 	function addThreadPost() {
 		threadPosts = [...threadPosts, { content: '', mediaIds: [] }];
@@ -357,15 +382,17 @@
 					{:else}
 						<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 							{#each accounts as account}
+								{@const threadDisabled = isThreadDisabledAccount(account)}
 								<label
-									class="flex cursor-pointer items-center gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50 {selectedAccountIds.includes(
-										account.id
-									)
+									class="flex items-center gap-3 rounded-md border p-3 transition-colors {threadDisabled
+										? 'cursor-not-allowed border-muted-foreground/20 bg-muted/40 opacity-60'
+										: 'cursor-pointer hover:bg-muted/50'} {selectedAccountIds.includes(account.id)
 										? 'border-primary bg-primary/5'
 										: 'border-border'}"
 								>
 									<Checkbox
 										checked={selectedAccountIds.includes(account.id)}
+										disabled={threadDisabled}
 										onCheckedChange={() => toggleAccount(account.id)}
 									/>
 									<div
@@ -384,6 +411,11 @@
 												Connected
 											{/if}
 										</div>
+										{#if threadDisabled}
+											<div class="truncate text-[11px] text-muted-foreground">
+												Thread replies disabled by server config
+											</div>
+										{/if}
 									</div>
 								</label>
 							{/each}

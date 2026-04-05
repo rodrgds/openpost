@@ -49,6 +49,7 @@ BLUESKY_CLIENT_SECRET=your_client_secret
 # LinkedIn
 LINKEDIN_CLIENT_ID=your_client_id
 LINKEDIN_CLIENT_SECRET=your_client_secret
+# Requires LinkedIn approval for w_member_social_feed to support thread replies/comments
 
 # Threads
 THREADS_CLIENT_ID=your_app_id

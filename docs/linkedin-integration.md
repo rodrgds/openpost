@@ -18,6 +18,7 @@ LinkedIn uses OAuth 2.0 with the Posts API for publishing content. The API requi
 | `openid` | OpenID Connect |
 | `profile` | Basic profile access |
 | `w_member_social` | Post on behalf of member |
+| `w_member_social_feed` | Create comments/replies via Social Actions API (required for OpenPost thread replies) |
 
 ## Token Management
 
@@ -33,20 +34,25 @@ LinkedIn uses OAuth 2.0 with the Posts API for publishing content. The API requi
 1. Go to [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)
 2. Create a new app
 3. Request "Sign In with LinkedIn" and "Share on LinkedIn" products
-4. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
-5. Note the Client ID and Client Secret
+4. Request access/approval for `w_member_social_feed` (Social Actions create permission)
+5. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
+6. Note the Client ID and Client Secret
 
 ### 2. Configure Environment
 
 ```bash
 LINKEDIN_CLIENT_ID=your_client_id
 LINKEDIN_CLIENT_SECRET=your_client_secret
+# Optional: disable LinkedIn thread child replies if your app cannot get
+# w_member_social_feed approval yet.
+OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES=false
 ```
 
 ### 3. Request API Access
 
 For production use, submit your app for review to get:
 - `w_member_social` scope (posting capability)
+- `w_member_social_feed` scope (comment/reply capability used for OpenPost thread replies)
 - Access to the Posts API
 
 ## API Endpoints
@@ -57,7 +63,7 @@ GET https://www.linkedin.com/oauth/v2/authorization
   ?response_type=code
   &client_id={client_id}
   &redirect_uri={redirect_uri}
-  &scope=openid%20profile%20w_member_social
+  &scope=openid%20profile%20w_member_social%20w_member_social_feed
   &state={workspace_id}
 ```
 
@@ -136,7 +142,7 @@ Member-level limits may apply.
 
 1. **"invalid_grant"**: Authorization code expired or already used
 2. **"insufficient_scope"**: App doesn't have required permissions
-3. **403 Forbidden**: Token lacks `w_member_social` scope
+3. **403 Forbidden**: Token lacks `w_member_social` or `w_member_social_feed` scope
 4. **429 Too Many Requests**: Rate limit exceeded
 
 ### Debug Tips
@@ -145,6 +151,7 @@ Member-level limits may apply.
 2. Verify the `Linkedin-Version` header is current
 3. Use `/v2/userinfo` to validate token
 4. Test with Postman before implementing
+5. If replies fail with `partnerApiSocialActions.CREATE`, your app is missing `w_member_social_feed` approval
 
 ## Access Levels
 
