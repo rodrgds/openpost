@@ -26,15 +26,30 @@
 
 <div align="center">
   <br />
-  <img alt="X (Twitter)" src="./assets/logos/x.svg" width="24">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/x-white.svg">
+    <img alt="X (Twitter)" src="./assets/logos/x.svg" width="24">
+  </picture>
   &nbsp;
-  <img alt="Mastodon" src="./assets/logos/mastodon.svg" width="24">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/mastodon-white.svg">
+    <img alt="Mastodon" src="./assets/logos/mastodon.svg" width="24">
+  </picture>
   &nbsp;
-  <img alt="Bluesky" src="./assets/logos/bluesky.svg" width="24">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/bluesky-white.svg">
+    <img alt="Bluesky" src="./assets/logos/bluesky.svg" width="24">
+  </picture>
   &nbsp;
-  <img alt="Threads" src="./assets/logos/threads.svg" width="24">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/threads-white.svg">
+    <img alt="Threads" src="./assets/logos/threads.svg" width="24">
+  </picture>
   &nbsp;
-  <img alt="LinkedIn" src="./assets/logos/linkedin.svg" width="24">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/linkedin-white.svg">
+    <img alt="LinkedIn" src="./assets/logos/linkedin.svg" width="24">
+  </picture>
 </div>
 
 <p align="center">
