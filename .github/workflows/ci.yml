@@ -31,7 +31,9 @@ jobs:
 
       - name: Run go vet
         shell: devenv shell bash -- -e {0}
-        run: cd backend && go vet ./...
+        run: |
+          mkdir -p backend/cmd/openpost/public
+          cd backend && go vet ./...
 
   test-backend:
     name: Test Backend

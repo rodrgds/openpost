@@ -8,6 +8,7 @@ COPY web/package.json web/bun.lock* ./web/
 RUN cd web && bun install --frozen-lockfile
 
 COPY web/ ./web/
+COPY assets/ ./assets/
 RUN cd web && bun run build
 
 # Build stage for backend
