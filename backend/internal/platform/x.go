@@ -3,130 +3,128 @@ package platform
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/oauth2"
+	"github.com/dghubble/oauth1"
 )
 
 type XAdapter struct {
-	config        *oauth2.Config
-	verifierStore sync.Map
+	consumerKey    string
+	consumerSecret string
+	redirectURI    string
+	requestMeta    sync.Map
+}
+
+type xRequestMeta struct {
+	Secret      string
+	WorkspaceID string
 }
 
 func NewXAdapter(clientID, clientSecret, redirectURI string) *XAdapter {
 	return &XAdapter{
-		config: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RedirectURL:  redirectURI,
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://twitter.com/i/oauth2/authorize",
-				TokenURL: "https://api.twitter.com/2/oauth2/token",
-			},
-			Scopes: []string{"tweet.read", "tweet.write", "users.read", "offline.access"},
-		},
+		consumerKey:    clientID,
+		consumerSecret: clientSecret,
+		redirectURI:    redirectURI,
 	}
 }
 
 func (x *XAdapter) GenerateAuthURL(state string) (string, map[string]string) {
-	codeVerifier := oauth2.GenerateVerifier()
-	authURL := x.config.AuthCodeURL(
-		state,
-		oauth2.SetAuthURLParam("code_challenge", oauth2.S256ChallengeFromVerifier(codeVerifier)),
-		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-	)
-	return authURL, map[string]string{
-		"code_verifier": codeVerifier,
+	authURL, err := x.GenerateAuthURLWithError(state)
+	if err != nil {
+		return "", nil
 	}
+	return authURL, nil
+}
+
+func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) {
+	callback := x.redirectURI
+
+	config := oauth1.Config{
+		ConsumerKey:    x.consumerKey,
+		ConsumerSecret: x.consumerSecret,
+		CallbackURL:    callback,
+		Endpoint: oauth1.Endpoint{
+			RequestTokenURL: "https://api.twitter.com/oauth/request_token",
+			AuthorizeURL:    "https://api.twitter.com/oauth/authorize",
+			AccessTokenURL:  "https://api.twitter.com/oauth/access_token",
+		},
+	}
+
+	requestToken, requestSecret, err := config.RequestToken()
+	if err != nil {
+		return "", fmt.Errorf("x oauth1 request token failed: %w", err)
+	}
+	x.requestMeta.Store(requestToken, xRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID})
+
+	authURL, err := config.AuthorizationURL(requestToken)
+	if err != nil {
+		return "", fmt.Errorf("x oauth1 authorization url failed: %w", err)
+	}
+
+	return authURL.String(), nil
+}
+
+func (x *XAdapter) GetWorkspaceIDForRequestToken(requestToken string) (string, bool) {
+	metaRaw, ok := x.requestMeta.Load(requestToken)
+	if !ok {
+		return "", false
+	}
+	meta := metaRaw.(xRequestMeta)
+	return meta.WorkspaceID, true
 }
 
 func (x *XAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error) {
-	codeVerifier := extra["code_verifier"]
-	if codeVerifier == "" {
-		return nil, fmt.Errorf("missing code_verifier for X token exchange")
+	oauthToken := extra["oauth_token"]
+	oauthVerifier := extra["oauth_verifier"]
+	if oauthToken == "" || oauthVerifier == "" {
+		return nil, fmt.Errorf("missing oauth_token or oauth_verifier for X token exchange")
 	}
 
-	values := map[string]string{
-		"grant_type":    "authorization_code",
-		"code":          code,
-		"redirect_uri":  x.config.RedirectURL,
-		"code_verifier": codeVerifier,
-		"client_id":     x.config.ClientID,
+	metaRaw, ok := x.requestMeta.Load(oauthToken)
+	if !ok {
+		return nil, fmt.Errorf("missing request token secret for oauth_token")
+	}
+	meta := metaRaw.(xRequestMeta)
+	x.requestMeta.Delete(oauthToken)
+	requestSecret := meta.Secret
+
+	config := oauth1.Config{
+		ConsumerKey:    x.consumerKey,
+		ConsumerSecret: x.consumerSecret,
+		Endpoint: oauth1.Endpoint{
+			RequestTokenURL: "https://api.twitter.com/oauth/request_token",
+			AuthorizeURL:    "https://api.twitter.com/oauth/authorize",
+			AccessTokenURL:  "https://api.twitter.com/oauth/access_token",
+		},
 	}
 
-	headers := map[string]string{
-		"Content-Type":  "application/x-www-form-urlencoded",
-		"Authorization": basicAuthHeader(x.config.ClientID, x.config.ClientSecret),
-	}
-
-	respBody, err := DoFormURLEncoded(ctx, "POST", x.config.Endpoint.TokenURL, values, headers)
+	accessToken, accessSecret, err := config.AccessToken(oauthToken, requestSecret, oauthVerifier)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("x oauth1 access token exchange failed: %w", err)
 	}
 
-	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-		TokenType    string `json:"token_type"`
-	}
-	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return nil, fmt.Errorf("decoding X token response: %w", err)
-	}
-
+	combined := accessToken + "|" + accessSecret
 	return &TokenResult{
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		ExpiresIn:    tokenResp.ExpiresIn,
-		TokenType:    tokenResp.TokenType,
+		AccessToken: combined,
+		TokenType:   "OAuth1",
 	}, nil
 }
 
 func (x *XAdapter) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
-	values := map[string]string{
-		"grant_type":    "refresh_token",
-		"refresh_token": refreshToken,
-		"client_id":     x.config.ClientID,
-	}
-
-	headers := map[string]string{
-		"Content-Type":  "application/x-www-form-urlencoded",
-		"Authorization": basicAuthHeader(x.config.ClientID, x.config.ClientSecret),
-	}
-
-	respBody, err := DoFormURLEncoded(ctx, "POST", x.config.Endpoint.TokenURL, values, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-		TokenType    string `json:"token_type"`
-	}
-	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return nil, fmt.Errorf("decoding X refresh response: %w", err)
-	}
-
-	return &TokenResult{
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		ExpiresIn:    tokenResp.ExpiresIn,
-		TokenType:    tokenResp.TokenType,
-	}, nil
+	return nil, fmt.Errorf("x oauth1 tokens do not support refresh")
 }
 
 func (x *XAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {
-	respBody, err := DoJSON(ctx, "GET", "https://api.twitter.com/2/users/me?user.fields=id,name,username", nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
-	})
+	respBody, err := x.doSignedRequest(ctx, accessToken, "GET", "https://api.twitter.com/2/users/me?user.fields=id,name,username", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,67 +157,81 @@ func (x *XAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mime
 	isVideo := strings.Contains(mimeType, "video")
 	isGIF := strings.Contains(mimeType, "gif")
 
-	if totalBytes <= 5*1024*1024 && !isVideo && !isGIF {
-		return x.uploadMediaSimple(ctx, accessToken, data)
-	}
-
 	mediaCategory := "tweet_image"
 	if isVideo {
 		mediaCategory = "tweet_video"
 	} else if isGIF {
 		mediaCategory = "tweet_gif"
 	}
+
+	if totalBytes <= 5*1024*1024 && !isVideo && !isGIF {
+		return x.uploadMediaSimple(ctx, accessToken, data, mediaCategory)
+	}
+
 	return x.uploadMediaChunked(ctx, accessToken, mimeType, mediaCategory, data, totalBytes)
 }
 
-func (x *XAdapter) uploadMediaSimple(ctx context.Context, accessToken string, data []byte) (string, error) {
-	respBody, err := DoMultipart(
-		ctx,
-		"https://api.twitter.com/2/media/upload",
-		"media",
-		bytes.NewReader(data),
-		"upload.bin",
-		map[string]string{"media_category": "tweet_image"},
-		map[string]string{"Authorization": "Bearer " + accessToken},
-	)
+func (x *XAdapter) uploadMediaSimple(ctx context.Context, accessToken string, data []byte, mediaCategory string) (string, error) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("media_category", mediaCategory); err != nil {
+		return "", fmt.Errorf("writing media_category: %w", err)
+	}
+	part, err := writer.CreateFormFile("media", "upload.bin")
+	if err != nil {
+		return "", fmt.Errorf("creating media form file: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", fmt.Errorf("writing media content: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("closing multipart writer: %w", err)
+	}
+
+	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
+		"Content-Type": writer.FormDataContentType(),
+	})
 	if err != nil {
 		return "", err
 	}
 
 	var result struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		MediaIDString string `json:"media_id_string"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return "", fmt.Errorf("decoding X media response: %w", err)
 	}
-	return result.Data.ID, nil
+	if result.MediaIDString == "" {
+		return "", fmt.Errorf("missing media_id_string in X response")
+	}
+	return result.MediaIDString, nil
 }
 
 func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType, mediaCategory string, data []byte, totalBytes int) (string, error) {
-	initURL := fmt.Sprintf(
-		"https://api.twitter.com/2/media/upload?command=INIT&total_bytes=%d&media_type=%s&media_category=%s",
-		totalBytes, mimeType, mediaCategory,
-	)
+	initValues := url.Values{}
+	initValues.Set("command", "INIT")
+	initValues.Set("total_bytes", strconv.Itoa(totalBytes))
+	initValues.Set("media_type", mimeType)
+	initValues.Set("media_category", mediaCategory)
 
-	respBody, err := DoJSON(ctx, "POST", initURL, nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", strings.NewReader(initValues.Encode()), map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
 	})
 	if err != nil {
 		return "", fmt.Errorf("X INIT failed: %w", err)
 	}
 
 	var initResp struct {
-		Data struct {
-			ID             string                `json:"id"`
-			ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
-		} `json:"data"`
+		MediaIDString  string                `json:"media_id_string"`
+		ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
 	}
 	if err := json.Unmarshal(respBody, &initResp); err != nil {
 		return "", fmt.Errorf("decoding X INIT: %w", err)
 	}
-	mediaID := initResp.Data.ID
+	if initResp.MediaIDString == "" {
+		return "", fmt.Errorf("missing media_id_string in X INIT")
+	}
+	mediaID := initResp.MediaIDString
 
 	chunkSize := 5 * 1024 * 1024
 	segmentIndex := 0
@@ -229,45 +241,51 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 			end = totalBytes
 		}
 
-		appendURL := fmt.Sprintf(
-			"https://api.twitter.com/2/media/upload?command=APPEND&media_id=%s&segment_index=%d",
-			mediaID, segmentIndex,
-		)
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		_ = writer.WriteField("command", "APPEND")
+		_ = writer.WriteField("media_id", mediaID)
+		_ = writer.WriteField("segment_index", strconv.Itoa(segmentIndex))
+		part, err := writer.CreateFormFile("media", "chunk.bin")
+		if err != nil {
+			return "", fmt.Errorf("X APPEND create form file: %w", err)
+		}
+		if _, err := part.Write(data[offset:end]); err != nil {
+			return "", fmt.Errorf("X APPEND write segment %d: %w", segmentIndex, err)
+		}
+		if err := writer.Close(); err != nil {
+			return "", fmt.Errorf("X APPEND close writer: %w", err)
+		}
 
-		_, err := DoMultipart(
-			ctx,
-			appendURL,
-			"media",
-			bytes.NewReader(data[offset:end]),
-			"chunk.bin",
-			nil,
-			map[string]string{"Authorization": "Bearer " + accessToken},
-		)
+		_, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
+			"Content-Type": writer.FormDataContentType(),
+		})
 		if err != nil {
 			return "", fmt.Errorf("X APPEND segment %d: %w", segmentIndex, err)
 		}
 		segmentIndex++
 	}
 
-	finalizeURL := fmt.Sprintf("https://api.twitter.com/2/media/upload?command=FINALIZE&media_id=%s", mediaID)
-	respBody, err = DoJSON(ctx, "POST", finalizeURL, nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+	finalizeValues := url.Values{}
+	finalizeValues.Set("command", "FINALIZE")
+	finalizeValues.Set("media_id", mediaID)
+
+	respBody, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", strings.NewReader(finalizeValues.Encode()), map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
 	})
 	if err != nil {
 		return "", fmt.Errorf("X FINALIZE: %w", err)
 	}
 
 	var finalizeResp struct {
-		Data struct {
-			ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
-		} `json:"data"`
+		ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
 	}
 	if err := json.Unmarshal(respBody, &finalizeResp); err != nil {
 		return "", fmt.Errorf("decoding X FINALIZE: %w", err)
 	}
 
-	if finalizeResp.Data.ProcessingInfo != nil {
-		if err := x.waitForMediaProcessing(ctx, accessToken, mediaID, finalizeResp.Data.ProcessingInfo); err != nil {
+	if finalizeResp.ProcessingInfo != nil {
+		if err := x.waitForMediaProcessing(ctx, accessToken, mediaID, finalizeResp.ProcessingInfo); err != nil {
 			return "", err
 		}
 	}
@@ -291,27 +309,23 @@ func (x *XAdapter) waitForMediaProcessing(ctx context.Context, accessToken, medi
 			}
 		}
 
-		statusURL := fmt.Sprintf("https://api.twitter.com/2/media/upload?command=STATUS&media_id=%s", mediaID)
-		respBody, err := DoJSON(ctx, "GET", statusURL, nil, map[string]string{
-			"Authorization": "Bearer " + accessToken,
-		})
+		statusURL := "https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=" + url.QueryEscape(mediaID)
+		respBody, err := x.doSignedRequest(ctx, accessToken, "GET", statusURL, nil, nil)
 		if err != nil {
 			return fmt.Errorf("X STATUS check: %w", err)
 		}
 
 		var statusResp struct {
-			Data struct {
-				ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
-			} `json:"data"`
+			ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
 		}
 		if err := json.Unmarshal(respBody, &statusResp); err != nil {
 			return fmt.Errorf("decoding X STATUS: %w", err)
 		}
 
-		if statusResp.Data.ProcessingInfo == nil {
+		if statusResp.ProcessingInfo == nil {
 			return nil
 		}
-		*info = *statusResp.Data.ProcessingInfo
+		*info = *statusResp.ProcessingInfo
 
 		if info.State == "failed" {
 			return fmt.Errorf("X media processing failed")
@@ -341,8 +355,13 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, accountID string, r
 		}
 	}
 
-	respBody, err := DoJSON(ctx, "POST", "https://api.twitter.com/2/tweets", payload, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+	body, err := jsonMarshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshaling X tweet payload: %w", err)
+	}
+
+	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://api.twitter.com/2/tweets", bytes.NewReader(body), map[string]string{
+		"Content-Type": "application/json",
 	})
 	if err != nil {
 		return "", fmt.Errorf("posting to X: %w", err)
@@ -360,18 +379,46 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, accountID string, r
 	return result.Data.ID, nil
 }
 
-func basicAuthHeader(username, password string) string {
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
-}
-
-func (x *XAdapter) GetVerifier(state string) (string, bool) {
-	if v, ok := x.verifierStore.Load(state); ok {
-		x.verifierStore.Delete(state)
-		return v.(string), true
+func (x *XAdapter) doSignedRequest(ctx context.Context, combinedAccessToken, method, requestURL string, body io.Reader, headers map[string]string) ([]byte, error) {
+	accessToken, accessSecret, err := splitXCombinedToken(combinedAccessToken)
+	if err != nil {
+		return nil, err
 	}
-	return "", false
+
+	config := oauth1.NewConfig(x.consumerKey, x.consumerSecret)
+	token := oauth1.NewToken(accessToken, accessSecret)
+	client := config.Client(ctx, token)
+
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%s %s returned %d: %s", method, requestURL, resp.StatusCode, string(respBody))
+	}
+
+	return respBody, nil
 }
 
-func (x *XAdapter) StoreVerifier(state, verifier string) {
-	x.verifierStore.Store(state, verifier)
+func splitXCombinedToken(combined string) (string, string, error) {
+	parts := strings.SplitN(combined, "|", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("x account requires OAuth 1.0a reconnect for media support")
+	}
+	return parts[0], parts[1], nil
 }
