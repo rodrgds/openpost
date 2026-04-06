@@ -33,6 +33,7 @@ jobs:
         shell: devenv shell bash -- -e {0}
         run: |
           mkdir -p backend/cmd/openpost/public
+          touch backend/cmd/openpost/public/.gitkeep
           cd backend && go vet ./...
 
   test-backend:
