@@ -26,25 +26,32 @@ func linkedInAPIVersion() string {
 }
 
 type LinkedInAdapter struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
+	clientID             string
+	clientSecret         string
+	redirectURI          string
+	disableThreadReplies bool
 }
 
-func NewLinkedInAdapter(clientID, clientSecret, redirectURI string) *LinkedInAdapter {
+func NewLinkedInAdapter(clientID, clientSecret, redirectURI string, disableThreadReplies bool) *LinkedInAdapter {
 	return &LinkedInAdapter{
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		redirectURI:  redirectURI,
+		clientID:             clientID,
+		clientSecret:         clientSecret,
+		redirectURI:          redirectURI,
+		disableThreadReplies: disableThreadReplies,
 	}
 }
 
 func (l *LinkedInAdapter) GenerateAuthURL(state string) (string, map[string]string) {
+	scope := "openid profile w_member_social w_member_social_feed"
+	if l.disableThreadReplies {
+		scope = "openid profile w_member_social"
+	}
+
 	params := map[string]string{
 		"response_type": "code",
 		"client_id":     l.clientID,
 		"redirect_uri":  l.redirectURI,
-		"scope":         "openid profile w_member_social w_member_social_feed",
+		"scope":         scope,
 		"state":         state,
 	}
 	return "https://www.linkedin.com/oauth/v2/authorization?" + encodeQueryString(params), nil
@@ -160,7 +167,7 @@ func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID
 		},
 	}
 
-	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/images", registerPayload, linkedinHeaders(accessToken, apiVersion))
+	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/images?action=initializeUpload", registerPayload, linkedinHeaders(accessToken, apiVersion))
 	if err != nil {
 		return "", fmt.Errorf("linkedin image register: %w", err)
 	}
@@ -179,7 +186,7 @@ func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID
 		},
 	}
 
-	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/videos", registerPayload, linkedinHeaders(accessToken, apiVersion))
+	respBody, err := DoJSON(ctx, "POST", "https://api.linkedin.com/rest/videos?action=initializeUpload", registerPayload, linkedinHeaders(accessToken, apiVersion))
 	if err != nil {
 		return "", fmt.Errorf("linkedin video register: %w", err)
 	}
@@ -192,6 +199,7 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 		Value struct {
 			Image              string `json:"image"`
 			DigitalmediaAsset  string `json:"digitalmediaAsset"`
+			UploadURL          string `json:"uploadUrl"`
 			UploadInstructions struct {
 				UploadURL       string `json:"uploadUrl"`
 				UploadMechanism struct {
@@ -206,9 +214,12 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 		return "", fmt.Errorf("decoding linkedin register: %w", err)
 	}
 
-	uploadURL := registerResult.Value.UploadInstructions.UploadURL
+	uploadURL := registerResult.Value.UploadURL
 	if uploadURL == "" {
-		return "", fmt.Errorf("no upload URL in linkedin response")
+		uploadURL = registerResult.Value.UploadInstructions.UploadURL
+	}
+	if uploadURL == "" {
+		return "", fmt.Errorf("no upload URL in linkedin response: %s", string(registerResp))
 	}
 
 	headers := map[string]string{
@@ -220,7 +231,7 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 		headers["Authorization"] = auth
 	}
 
-	_, err := DoRequest(ctx, "PUT", uploadURL, strings.NewReader(string(data)), headers)
+	_, err := DoRequest(ctx, "PUT", uploadURL, bytes.NewReader(data), headers)
 	if err != nil {
 		return "", fmt.Errorf("linkedin media PUT upload: %w", err)
 	}
@@ -263,15 +274,11 @@ func (l *LinkedInAdapter) createPost(ctx context.Context, accessToken, authorURN
 	}
 
 	if len(req.PlatformMediaIDs) > 0 {
-		mediaItems := make([]map[string]interface{}, 0, len(req.PlatformMediaIDs))
-		for _, assetURN := range req.PlatformMediaIDs {
-			mediaItems = append(mediaItems, map[string]interface{}{
-				"status": "READY",
-				"id":     assetURN,
-			})
+		mediaItem := map[string]interface{}{
+			"id": req.PlatformMediaIDs[0],
 		}
 		payload["content"] = map[string]interface{}{
-			"media": mediaItems,
+			"media": mediaItem,
 		}
 	}
 

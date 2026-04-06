@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/url"
 	"time"
 )
@@ -89,12 +90,17 @@ func (m *MastodonAdapter) GetProfile(ctx context.Context, accessToken string) (*
 }
 
 func (m *MastodonAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error) {
+	ext := ".bin"
+	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+		ext = exts[0]
+	}
+
 	respBody, err := DoMultipart(
 		ctx,
 		m.instanceURL+"/api/v2/media",
 		"file",
 		reader,
-		"upload.bin",
+		"upload"+ext,
 		nil,
 		map[string]string{
 			"Authorization": "Bearer " + accessToken,
