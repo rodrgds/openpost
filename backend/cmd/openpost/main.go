@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -57,6 +58,9 @@ func main() {
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	publishSvc := publisher.NewService(db, tokenManager)
 	publishSvc.SetDisableLinkedInThreadReplies(cfg.DisableLinkedInThreadReplies)
+	if cfg.MediaURL != "" && !strings.HasPrefix(cfg.MediaURL, "/") {
+		publishSvc.SetPublicMediaURL(cfg.MediaURL)
+	}
 
 	providers := make(map[string]platform.PlatformAdapter)
 
@@ -90,6 +94,7 @@ func main() {
 			cfg.LinkedInClientID,
 			cfg.LinkedInClientSecret,
 			cfg.LinkedInRedirectURI,
+			cfg.DisableLinkedInThreadReplies,
 		)
 		providers["linkedin"] = linkedinAdapter
 		log.Println("Registered LinkedIn adapter")

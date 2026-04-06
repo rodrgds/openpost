@@ -57,6 +57,27 @@ func (tm *TokenManager) GetValidAccessToken(ctx context.Context, accountID strin
 	return tm.crypto.Decrypt(account.AccessTokenEnc)
 }
 
+func (tm *TokenManager) ForceRefreshAccessToken(ctx context.Context, accountID string) (string, error) {
+	account := new(models.SocialAccount)
+	err := tm.db.NewSelect().
+		Model(account).
+		Where("id = ?", accountID).
+		Scan(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if !account.IsActive {
+		return "", fmt.Errorf("account is disconnected: %s", account.ErrorMessage)
+	}
+
+	if len(account.RefreshTokenEnc) == 0 {
+		return "", fmt.Errorf("no refresh token available for account %s", account.ID)
+	}
+
+	return tm.refreshToken(ctx, account)
+}
+
 func (tm *TokenManager) refreshToken(ctx context.Context, account *models.SocialAccount) (string, error) {
 	providerKey := account.Platform
 	if account.Platform == "mastodon" {

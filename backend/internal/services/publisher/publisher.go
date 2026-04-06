@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -20,6 +21,7 @@ type Service struct {
 	tm                           *tokenmanager.TokenManager
 	providers                    map[string]platform.PlatformAdapter
 	disableLinkedInThreadReplies bool
+	publicMediaURL               string
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -32,6 +34,10 @@ func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 
 func (s *Service) SetDisableLinkedInThreadReplies(disable bool) {
 	s.disableLinkedInThreadReplies = disable
+}
+
+func (s *Service) SetPublicMediaURL(url string) {
+	s.publicMediaURL = url
 }
 
 func (s *Service) SetProvider(platformName string, adapter platform.PlatformAdapter) {
@@ -287,7 +293,19 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 
 	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
 	if err != nil {
-		return err
+		if account.Platform == "bluesky" && isExpiredTokenError(err) {
+			log.Printf("[Publisher] Bluesky token expired for account %s, forcing refresh and retry", account.ID)
+			refreshedToken, refreshErr := s.tm.ForceRefreshAccessToken(ctx, account.ID)
+			if refreshErr != nil {
+				return fmt.Errorf("bluesky token refresh failed after expiry: %w", refreshErr)
+			}
+			externalID, err = provider.Publish(ctx, refreshedToken, account.AccountID, req)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 
 	if externalID != "" {
@@ -300,6 +318,16 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	}
 
 	return nil
+}
+
+func isExpiredTokenError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "expiredtoken") ||
+		strings.Contains(msg, "token has expired") ||
+		(strings.Contains(msg, "expired") && strings.Contains(msg, "token"))
 }
 
 func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.PlatformAdapter, token string, media models.MediaAttachment) (string, error) {
@@ -317,6 +345,9 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
 	fileName := filepath.Base(media.FilePath)
+	if s.publicMediaURL != "" {
+		return s.publicMediaURL + "/" + fileName
+	}
 	return "/media/" + fileName
 }
 
