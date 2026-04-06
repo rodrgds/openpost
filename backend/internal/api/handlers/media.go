@@ -30,14 +30,31 @@ func (h *MediaHandler) RegisterRoutes(e *echo.Echo) {
 }
 
 func (h *MediaHandler) uploadMedia(c echo.Context) error {
+	userID := c.Get(string(middleware.UserIDKey)).(string)
+
 	workspaceID := c.FormValue("workspace_id")
 	if workspaceID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "workspace_id is required"})
 	}
 
+	var memberCount int
+	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+	}
+	if memberCount == 0 {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+	}
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "file is required"})
+	}
+
+	if fileHeader.Size > 50*1024*1024 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "file size exceeds 50MB limit"})
 	}
 
 	file, err := fileHeader.Open()
@@ -62,6 +79,8 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to save media"})
 	}
 
+	altText := c.FormValue("alt_text")
+
 	media := &models.MediaAttachment{
 		ID:               mediaID,
 		WorkspaceID:      workspaceID,
@@ -70,6 +89,7 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 		MimeType:         mimeType,
 		ProcessingStatus: "ready",
 		Size:             fileHeader.Size,
+		AltText:          altText,
 	}
 
 	if _, err := h.db.NewInsert().Model(media).Exec(c.Request().Context()); err != nil {

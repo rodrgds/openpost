@@ -67,6 +67,8 @@ type OAuthCallbackInput struct {
 	Platform   string `path:"platform" doc:"Social platform"`
 	Code       string `query:"code" doc:"OAuth authorization code"`
 	State      string `query:"state" doc:"OAuth state (workspace ID)"`
+	OAuthToken string `query:"oauth_token" doc:"OAuth 1.0a request token (X)"`
+	Verifier   string `query:"oauth_verifier" doc:"OAuth 1.0a verifier (X)"`
 	ServerName string `query:"server_name" doc:"Mastodon server name (required for mastodon)"`
 }
 
@@ -161,17 +163,24 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
 
-		authURL, extra := adapter.GenerateAuthURL(input.WorkspaceID)
-		if authURL == "" {
-			return nil, huma.Error400BadRequest(fmt.Sprintf("%s does not support OAuth redirect", input.Platform))
+		if input.Platform == "x" {
+			xAdapter, ok := adapter.(*platform.XAdapter)
+			if !ok {
+				return nil, huma.Error500InternalServerError("x adapter type mismatch")
+			}
+			authURL, err := xAdapter.GenerateAuthURLWithError(input.WorkspaceID)
+			if err != nil {
+				log.Printf("[X OAuth] auth url generation failed: %v", err)
+				return nil, huma.Error400BadRequest(fmt.Sprintf("x auth url generation failed: %s", err.Error()))
+			}
+			resp := &GetAuthURLOutput{}
+			resp.Body.URL = authURL
+			return resp, nil
 		}
 
-		if input.Platform == "x" {
-			if verifier, ok := extra["code_verifier"]; ok {
-				if xAdapter, ok := adapter.(*platform.XAdapter); ok {
-					xAdapter.StoreVerifier(input.WorkspaceID, verifier)
-				}
-			}
+		authURL, _ := adapter.GenerateAuthURL(input.WorkspaceID)
+		if authURL == "" {
+			return nil, huma.Error400BadRequest(fmt.Sprintf("%s does not support OAuth redirect", input.Platform))
 		}
 
 		resp := &GetAuthURLOutput{}
@@ -197,12 +206,13 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		extra := make(map[string]string)
 		if input.Platform == "x" {
+			extra["oauth_token"] = input.OAuthToken
+			extra["oauth_verifier"] = input.Verifier
 			if xAdapter, ok := adapter.(*platform.XAdapter); ok {
-				verifier, ok := xAdapter.GetVerifier(input.State)
-				if !ok {
-					return nil, huma.Error400BadRequest("invalid or expired state")
+				workspaceID, ok := xAdapter.GetWorkspaceIDForRequestToken(input.OAuthToken)
+				if ok {
+					extra["_workspace_id"] = workspaceID
 				}
-				extra["code_verifier"] = verifier
 			}
 		}
 
