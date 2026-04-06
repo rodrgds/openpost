@@ -121,6 +121,7 @@
 			const { data, error: err } = await client.GET('/accounts/{platform}/auth-url', {
 				params: { path: { platform: 'x' }, query: { workspace_id: selectedWorkspaceId } }
 			});
+			if (err) throw new Error((err as any).detail || 'Failed to get X auth URL');
 			if (data?.url) window.location.href = data.url;
 		} catch (e) {
 			error = (e as Error).message;

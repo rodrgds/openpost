@@ -26,6 +26,7 @@
 	let { workspaceId, mediaIds = $bindable([]), disabled = false }: Props = $props();
 
 	interface MediaItem {
+		clientId: string;
 		id: string;
 		file: File;
 		status: 'uploading' | 'ready' | 'error';
@@ -40,6 +41,7 @@
 	let editingAltText = $state('');
 
 	let inputElement: HTMLInputElement | null = null;
+	let uploadSeq = 0;
 
 	function resetFileInput() {
 		if (inputElement) inputElement.value = '';
@@ -50,6 +52,7 @@
 			if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
 
 			const item: MediaItem = {
+				clientId: `media-${uploadSeq++}`,
 				id: '',
 				file,
 				status: 'uploading',
@@ -63,6 +66,9 @@
 				const formData = new FormData();
 				formData.append('file', file);
 				formData.append('workspace_id', workspaceId);
+				if (item.altText) {
+					formData.append('alt_text', item.altText);
+				}
 
 				const token = getToken();
 				const resp = await fetch(`${getApiBase()}/media/upload`, {
@@ -76,12 +82,15 @@
 				}
 
 				const data = await resp.json();
-				item.id = data.id;
-				item.status = 'ready';
-				items = [...items];
+				const idx = items.findIndex((m) => m.clientId === item.clientId);
+				if (idx !== -1) {
+					items = items.map((m, i) => (i === idx ? { ...m, id: data.id, status: 'ready' } : m));
+				}
 			} catch {
-				item.status = 'error';
-				items = [...items];
+				const idx = items.findIndex((m) => m.clientId === item.clientId);
+				if (idx !== -1) {
+					items = items.map((m, i) => (i === idx ? { ...m, status: 'error' } : m));
+				}
 			}
 		}
 		resetFileInput();

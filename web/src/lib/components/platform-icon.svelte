@@ -20,5 +20,6 @@
 </script>
 
 {#if svg}
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html svg}
 {/if}
