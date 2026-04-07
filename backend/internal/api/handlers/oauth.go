@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
+
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	account_saver "github.com/openpost/backend/internal/services/account_saver"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/uptrace/bun"
@@ -24,6 +25,7 @@ type OAuthHandler struct {
 	providers                    map[string]platform.PlatformAdapter
 	auth                         *auth.Service
 	disableLinkedInThreadReplies bool
+	accountSaver                 *account_saver.AccountSaver
 }
 
 func NewOAuthHandler(
@@ -39,6 +41,7 @@ func NewOAuthHandler(
 		providers:                    providers,
 		auth:                         authService,
 		disableLinkedInThreadReplies: disableLinkedInThreadReplies,
+		accountSaver:                 account_saver.NewAccountSaver(db, encryptor),
 	}
 }
 
@@ -262,47 +265,13 @@ func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName,
 		}
 	}
 
-	encAccess, err := h.crypto.Encrypt(tokenResp.AccessToken)
+	account, err := h.accountSaver.SaveAccount(ctx, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("encryption failed")
-	}
-
-	var encRefresh []byte
-	if tokenResp.RefreshToken != "" {
-		encRefresh, err = h.crypto.Encrypt(tokenResp.RefreshToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
-		}
-	}
-
-	var expiresAt time.Time
-	if tokenResp.ExpiresIn > 0 {
-		expiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-	}
-
-	account := &models.SocialAccount{
-		ID:              uuid.New().String(),
-		WorkspaceID:     workspaceID,
-		Platform:        platformName,
-		AccountID:       accountID,
-		AccountUsername: accountUsername,
-		InstanceURL:     instanceURL,
-		AccessTokenEnc:  encAccess,
-		RefreshTokenEnc: encRefresh,
-		TokenExpiresAt:  expiresAt,
-		IsActive:        true,
-		CreatedAt:       time.Now().UTC(),
-	}
-
-	log.Printf("[Callback] Saving %s account: ID=%s, PlatformAccountID=%s, Username=%s",
-		platformName, account.ID, accountID, accountUsername)
-
-	if _, err := h.db.NewInsert().Model(account).Exec(ctx); err != nil {
 		log.Printf("[Callback] Failed to save account: %v", err)
 		return nil, huma.Error500InternalServerError("failed to save account")
 	}
 
-	log.Printf("[Callback] Account saved successfully, redirecting to /")
+	log.Printf("[Callback] Account saved successfully: ID=%s, redirecting to /", account.ID)
 
 	return &huma.StreamResponse{
 		Body: func(ctx huma.Context) {
@@ -336,42 +305,8 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
 		}
 
-		encAccess, err := h.crypto.Encrypt(tokenResp.AccessToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
-		}
-
-		var encRefresh []byte
-		if tokenResp.RefreshToken != "" {
-			encRefresh, err = h.crypto.Encrypt(tokenResp.RefreshToken)
-			if err != nil {
-				return nil, huma.Error500InternalServerError("encryption failed")
-			}
-		}
-
-		var expiresAt time.Time
-		if tokenResp.ExpiresIn > 0 {
-			expiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-		}
-
-		account := &models.SocialAccount{
-			ID:              uuid.New().String(),
-			WorkspaceID:     input.Body.WorkspaceID,
-			Platform:        "mastodon",
-			AccountID:       profile.ID,
-			AccountUsername: profile.Username,
-			InstanceURL:     input.Body.ServerName,
-			AccessTokenEnc:  encAccess,
-			RefreshTokenEnc: encRefresh,
-			TokenExpiresAt:  expiresAt,
-			IsActive:        true,
-			CreatedAt:       time.Now().UTC(),
-		}
-
-		log.Printf("[ExchangeCode] Saving mastodon account: ID=%s, WorkspaceID=%s, PlatformAccountID=%s, ServerName=%s",
-			account.ID, account.WorkspaceID, account.AccountID, input.Body.ServerName)
-
-		if _, err := h.db.NewInsert().Model(account).Exec(ctx); err != nil {
+		// Delegate saving the account (encrypting tokens and inserting) to AccountSaver
+		if _, err := h.accountSaver.SaveAccount(ctx, "mastodon", input.Body.WorkspaceID, profile.ID, profile.Username, input.Body.ServerName, tokenResp); err != nil {
 			log.Printf("[ExchangeCode] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to save account: %s", err.Error()))
 		}
@@ -414,31 +349,16 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("bluesky login failed: %s", err.Error()))
 		}
 
-		encAccess, err := h.crypto.Encrypt(accessToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
+		// Build a TokenResult for Bluesky and delegate saving to AccountSaver so encryption and DB insert are centralized
+		tokenResp := &platform.TokenResult{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			ExpiresIn:    int(2 * time.Hour / time.Second),
+			Extra:        nil,
 		}
 
-		encRefresh, err := h.crypto.Encrypt(refreshToken)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("encryption failed")
-		}
-
-		account := &models.SocialAccount{
-			ID:              uuid.New().String(),
-			WorkspaceID:     input.Body.WorkspaceID,
-			Platform:        "bluesky",
-			AccountID:       did,
-			AccountUsername: input.Body.Handle,
-			InstanceURL:     "https://bsky.social",
-			AccessTokenEnc:  encAccess,
-			RefreshTokenEnc: encRefresh,
-			TokenExpiresAt:  time.Now().UTC().Add(2 * time.Hour),
-			IsActive:        true,
-			CreatedAt:       time.Now().UTC(),
-		}
-
-		if _, err := h.db.NewInsert().Model(account).Exec(ctx); err != nil {
+		if _, err := h.accountSaver.SaveAccount(ctx, "bluesky", input.Body.WorkspaceID, did, input.Body.Handle, "https://bsky.social", tokenResp); err != nil {
+			log.Printf("[BlueskyLogin] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError("failed to save account")
 		}
 

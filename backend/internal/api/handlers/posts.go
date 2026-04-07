@@ -429,90 +429,82 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			})
 		}
 
-		// Query per-platform daily counts
-		var platformDayRows []struct {
-			Date     string `bun:"date"`
-			Platform string `bun:"platform"`
-			Count    int    `bun:"count"`
-		}
-
-		platformCountsQuery := `
-			SELECT DATE(p.scheduled_at) AS date, sa.platform AS platform, COUNT(DISTINCT p.id) AS count
-			FROM posts AS p
-			JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
-			JOIN post_destinations AS pd ON pd.post_id = p.id
-			JOIN social_accounts AS sa ON sa.id = pd.social_account_id
-			WHERE wm.user_id = ?
-				AND p.scheduled_at >= ?
-				AND p.scheduled_at < ?
-				AND p.status IN ('scheduled', 'publishing', 'published')
-		`
-		platformArgs := []interface{}{userID, monthStart, monthEnd}
-
-		if selectedWorkspaceID != "" {
-			platformCountsQuery += ` AND p.workspace_id = ?`
-			platformArgs = append(platformArgs, selectedWorkspaceID)
-		}
-		if selectedPlatform != "" {
-			platformCountsQuery += ` AND sa.platform = ?`
-			platformArgs = append(platformArgs, selectedPlatform)
-		}
-
-		platformCountsQuery += ` GROUP BY DATE(p.scheduled_at), sa.platform ORDER BY DATE(p.scheduled_at), sa.platform`
-
-		if err = h.db.NewRaw(platformCountsQuery, platformArgs...).Scan(ctx, &platformDayRows); err != nil {
-			return nil, huma.Error500InternalServerError("failed to fetch schedule platform days")
-		}
-
-		for _, row := range platformDayRows {
-			idx, ok := dayIndexByDate[row.Date]
-			if !ok {
-				continue
-			}
-			days[idx].Platforms = append(days[idx].Platforms, ScheduleDayPlatform{
-				Platform: row.Platform,
-				Count:    row.Count,
-			})
-		}
-
-		// Query per-workspace daily counts
-		var workspaceDayRows []struct {
+		// Combined query: fetch per-platform and per-workspace counts in a single call (UNION ALL)
+		var combinedRows []struct {
 			Date        string `bun:"date"`
+			Platform    string `bun:"platform"`
 			WorkspaceID string `bun:"workspace_id"`
 			Count       int    `bun:"count"`
 		}
 
-		workspaceCountsQuery := `
-			SELECT DATE(p.scheduled_at) AS date, p.workspace_id AS workspace_id, COUNT(DISTINCT p.id) AS count
-			FROM posts AS p
-			JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
-			WHERE wm.user_id = ?
-				AND p.scheduled_at >= ?
-				AND p.scheduled_at < ?
-				AND p.status IN ('scheduled', 'publishing', 'published')
-		`
-		workspaceArgs := []interface{}{userID, monthStart, monthEnd}
+		combinedQuery := ``
+		combinedArgs := make([]interface{}, 0)
 
+		// Platform counts part (only includes posts that have destinations/platforms)
+		platformPart := `
+            SELECT DATE(p.scheduled_at) AS date, sa.platform AS platform, NULL AS workspace_id, COUNT(DISTINCT p.id) AS count
+            FROM posts AS p
+            JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
+            JOIN post_destinations AS pd ON pd.post_id = p.id
+            JOIN social_accounts AS sa ON sa.id = pd.social_account_id
+            WHERE wm.user_id = ?
+                AND p.scheduled_at >= ?
+                AND p.scheduled_at < ?
+                AND p.status IN ('scheduled', 'publishing', 'published')
+        `
+		platformArgs := []interface{}{userID, monthStart, monthEnd}
 		if selectedWorkspaceID != "" {
-			workspaceCountsQuery += ` AND p.workspace_id = ?`
+			platformPart += ` AND p.workspace_id = ?`
+			platformArgs = append(platformArgs, selectedWorkspaceID)
+		}
+		if selectedPlatform != "" {
+			platformPart += ` AND sa.platform = ?`
+			platformArgs = append(platformArgs, selectedPlatform)
+		}
+		platformPart += ` GROUP BY DATE(p.scheduled_at), sa.platform`
+
+		// Workspace counts part
+		workspacePart := `
+            SELECT DATE(p.scheduled_at) AS date, NULL AS platform, p.workspace_id AS workspace_id, COUNT(DISTINCT p.id) AS count
+            FROM posts AS p
+            JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
+            WHERE wm.user_id = ?
+                AND p.scheduled_at >= ?
+                AND p.scheduled_at < ?
+                AND p.status IN ('scheduled', 'publishing', 'published')
+        `
+		workspaceArgs := []interface{}{userID, monthStart, monthEnd}
+		if selectedWorkspaceID != "" {
+			workspacePart += ` AND p.workspace_id = ?`
 			workspaceArgs = append(workspaceArgs, selectedWorkspaceID)
 		}
+		workspacePart += ` GROUP BY DATE(p.scheduled_at), p.workspace_id`
 
-		workspaceCountsQuery += ` GROUP BY DATE(p.scheduled_at), p.workspace_id ORDER BY DATE(p.scheduled_at), p.workspace_id`
+		combinedQuery = platformPart + ` UNION ALL ` + workspacePart + ` ORDER BY date`
+		combinedArgs = append(combinedArgs, platformArgs...)
+		combinedArgs = append(combinedArgs, workspaceArgs...)
 
-		if err = h.db.NewRaw(workspaceCountsQuery, workspaceArgs...).Scan(ctx, &workspaceDayRows); err != nil {
-			return nil, huma.Error500InternalServerError("failed to fetch schedule workspace days")
+		if err = h.db.NewRaw(combinedQuery, combinedArgs...).Scan(ctx, &combinedRows); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch schedule details")
 		}
 
-		for _, row := range workspaceDayRows {
+		for _, row := range combinedRows {
 			idx, ok := dayIndexByDate[row.Date]
 			if !ok {
 				continue
 			}
-			days[idx].Workspaces = append(days[idx].Workspaces, ScheduleDayWorkspace{
-				WorkspaceID: row.WorkspaceID,
-				Count:       row.Count,
-			})
+			if row.Platform != "" {
+				days[idx].Platforms = append(days[idx].Platforms, ScheduleDayPlatform{
+					Platform: row.Platform,
+					Count:    row.Count,
+				})
+			}
+			if row.WorkspaceID != "" {
+				days[idx].Workspaces = append(days[idx].Workspaces, ScheduleDayWorkspace{
+					WorkspaceID: row.WorkspaceID,
+					Count:       row.Count,
+				})
+			}
 		}
 
 		resp := &ScheduleOverviewOutput{}

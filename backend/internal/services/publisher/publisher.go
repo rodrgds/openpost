@@ -61,26 +61,47 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 
 	var threadPosts []*models.Post
 	if post.ThreadSequence == 0 {
-		threadPosts = append(threadPosts, post)
-		currentParentID := post.ID
+		// Try to fetch the full thread in a single recursive CTE query to avoid N+1 DB queries.
+		var fetched []models.Post
+		cte := `WITH RECURSIVE thread AS (
+            SELECT * FROM posts WHERE id = ?
+            UNION ALL
+            SELECT p.* FROM posts p JOIN thread t ON p.parent_post_id = t.id
+        ) SELECT * FROM thread ORDER BY thread_sequence ASC`
 
-		for {
-			var child models.Post
-			err := s.db.NewSelect().Model(&child).
-				Where("parent_post_id = ?", currentParentID).
-				Order("thread_sequence ASC").
-				Limit(1).
-				Scan(ctx)
-
-			if err != nil {
-				break
+		if err := s.db.NewRaw(cte, post.ID).Scan(ctx, &fetched); err == nil && len(fetched) > 0 {
+			threadPosts = make([]*models.Post, 0, len(fetched))
+			for i := range fetched {
+				// copy to avoid referencing loop variable
+				p := fetched[i]
+				threadPosts = append(threadPosts, &p)
 			}
-			threadPosts = append(threadPosts, &child)
-			currentParentID = child.ID
-		}
+			if len(threadPosts) > 1 {
+				log.Printf("[Publisher] Thread detected: %d posts starting from %s", len(threadPosts), post.ID)
+			}
+		} else {
+			// Fallback to iterative fetch if CTE fails for any reason
+			threadPosts = append(threadPosts, post)
+			currentParentID := post.ID
 
-		if len(threadPosts) > 1 {
-			log.Printf("[Publisher] Thread detected: %d posts starting from %s", len(threadPosts), post.ID)
+			for {
+				var child models.Post
+				err := s.db.NewSelect().Model(&child).
+					Where("parent_post_id = ?", currentParentID).
+					Order("thread_sequence ASC").
+					Limit(1).
+					Scan(ctx)
+
+				if err != nil {
+					break
+				}
+				threadPosts = append(threadPosts, &child)
+				currentParentID = child.ID
+			}
+
+			if len(threadPosts) > 1 {
+				log.Printf("[Publisher] Thread detected: %d posts starting from %s", len(threadPosts), post.ID)
+			}
 		}
 	}
 
