@@ -21,10 +21,11 @@ type UserProfile struct {
 
 // TokenResult is a platform-agnostic token response.
 type TokenResult struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
+	AccessToken  string            `json:"access_token"`
+	RefreshToken string            `json:"refresh_token"`
+	ExpiresIn    int               `json:"expires_in"`
+	TokenType    string            `json:"token_type"`
+	Extra        map[string]string `json:"extra"` // Platform-specific data (e.g., user ID for Threads)
 }
 
 // PlatformAdapter is the single interface every social platform must implement.

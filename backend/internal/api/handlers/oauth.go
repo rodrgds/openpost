@@ -255,6 +255,13 @@ func (h *OAuthHandler) Callback(api huma.API) {
 }
 
 func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*huma.StreamResponse, error) {
+	// For Threads, the account ID comes from the token response extra
+	if tokenResp.Extra != nil {
+		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
+			accountID = uid
+		}
+	}
+
 	encAccess, err := h.crypto.Encrypt(tokenResp.AccessToken)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("encryption failed")

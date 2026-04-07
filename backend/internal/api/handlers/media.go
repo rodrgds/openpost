@@ -64,7 +64,10 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 	defer file.Close()
 
 	header := make([]byte, 512)
-	n, _ := file.Read(header)
+	n, err := file.Read(header)
+	if err != nil || n == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to read file header"})
+	}
 	mimeType := http.DetectContentType(header[:n])
 	if _, err := file.Seek(0, 0); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to seek file"})

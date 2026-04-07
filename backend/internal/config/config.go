@@ -117,3 +117,36 @@ func getEnvBool(key string, fallback bool) bool {
 
 	return parsed
 }
+
+func init() {
+	// Validate critical security config on startup
+	jwtSecret := os.Getenv("JWT_SECRET")
+	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+
+	isProduction := os.Getenv("OPENPOST_ENV") == "production" ||
+		os.Getenv("OPENPOST_ENV") == "prod" ||
+		os.Getenv("GIN_MODE") == "release"
+
+	if isProduction {
+		if jwtSecret == "" {
+			log.Fatal("FATAL: JWT_SECRET is required in production. Set OPENPOST_ENV=production to enable this check.")
+		}
+		if len(jwtSecret) < 32 {
+			log.Printf("FATAL: JWT_SECRET must be at least 32 characters in production (got %d)", len(jwtSecret))
+		}
+		if encryptionKey == "" {
+			log.Fatal("FATAL: ENCRYPTION_KEY is required in production. Set OPENPOST_ENV=production to enable this check.")
+		}
+		if len(encryptionKey) < 32 {
+			log.Fatalf("FATAL: ENCRYPTION_KEY must be at least 32 characters in production (got %d)", len(encryptionKey))
+		}
+	} else {
+		// Warn in development if using defaults
+		if jwtSecret == "development-jwt-secret-change-in-production" {
+			log.Println("WARNING: Using default JWT_SECRET. Set JWT_SECRET in .env for production.")
+		}
+		if encryptionKey == "super-secret-32-byte-master-key-here" {
+			log.Println("WARNING: Using default ENCRYPTION_KEY. Set ENCRYPTION_KEY in .env for production.")
+		}
+	}
+}

@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -116,7 +118,6 @@ func main() {
 	}
 
 	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc)
-	go worker.Start(context.Background())
 
 	storage := mediastore.NewLocalStorage(cfg.MediaPath, cfg.MediaURL)
 	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
@@ -184,7 +185,32 @@ func main() {
 
 	RegisterSpaRoutes(e)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		worker.Start(ctx)
+	}()
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt)
+		<-sigCh
+		log.Println("Shutting down...")
+		cancel()
+		worker.Stop()
+	}()
+
 	log.Println("Starting OpenPost on :" + cfg.Port)
 	log.Println("OpenAPI spec available at http://localhost:" + cfg.Port + "/openapi.json")
-	log.Fatal(e.Start(":" + cfg.Port))
+
+	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+
+	wg.Wait()
+	log.Println("Server stopped")
 }

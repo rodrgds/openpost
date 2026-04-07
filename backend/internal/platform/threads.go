@@ -125,6 +125,7 @@ func (t *ThreadsAdapter) exchangeLongLivedToken(ctx context.Context, shortLivedT
 		AccessToken: tokenResp.AccessToken,
 		ExpiresIn:   tokenResp.ExpiresIn,
 		TokenType:   "Bearer",
+		Extra:       map[string]string{"user_id": t.lastUserID},
 	}, nil
 }
 
@@ -155,6 +156,15 @@ func (t *ThreadsAdapter) RefreshToken(ctx context.Context, accessToken string) (
 }
 
 func (t *ThreadsAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {
+	// Use the user ID from the token response extra if available, otherwise fetch from API
+	t.lastUserIDMux.Lock()
+	userID := t.lastUserID
+	t.lastUserIDMux.Unlock()
+
+	if userID != "" {
+		return &UserProfile{ID: userID}, nil
+	}
+
 	endpoint := "https://graph.threads.net/v1.0/me?fields=id,username,name"
 
 	respBody, err := DoRequest(ctx, "GET", endpoint, nil, map[string]string{

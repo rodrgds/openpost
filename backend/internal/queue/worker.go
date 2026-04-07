@@ -16,6 +16,7 @@ type BackgroundWorker struct {
 	workerID  string
 	interval  time.Duration
 	publisher *publisher.Service
+	done      chan struct{}
 }
 
 func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Service) *BackgroundWorker {
@@ -24,6 +25,7 @@ func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Ser
 		workerID:  id,
 		interval:  interval,
 		publisher: pub,
+		done:      make(chan struct{}),
 	}
 }
 
@@ -37,11 +39,17 @@ func (w *BackgroundWorker) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Printf("Worker %s shutting down\n", w.workerID)
+			close(w.done)
 			return
 		case <-ticker.C:
 			w.processNextJob(ctx)
 		}
 	}
+}
+
+// Stop signals the worker to stop and waits for it to finish.
+func (w *BackgroundWorker) Stop() {
+	<-w.done
 }
 
 func (w *BackgroundWorker) processNextJob(ctx context.Context) {

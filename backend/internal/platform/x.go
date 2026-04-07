@@ -22,19 +22,53 @@ type XAdapter struct {
 	consumerSecret string
 	redirectURI    string
 	requestMeta    sync.Map
+	cleanupDone    chan struct{}
 }
 
 type xRequestMeta struct {
 	Secret      string
 	WorkspaceID string
+	CreatedAt   time.Time
 }
 
 func NewXAdapter(clientID, clientSecret, redirectURI string) *XAdapter {
-	return &XAdapter{
+	x := &XAdapter{
 		consumerKey:    clientID,
 		consumerSecret: clientSecret,
 		redirectURI:    redirectURI,
+		cleanupDone:    make(chan struct{}),
 	}
+	go x.cleanupLoop()
+	return x
+}
+
+func (x *XAdapter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-x.cleanupDone:
+			return
+		case <-ticker.C:
+			x.purgeOldEntries()
+		}
+	}
+}
+
+func (x *XAdapter) purgeOldEntries() {
+	const maxAge = 10 * time.Minute
+	now := time.Now()
+
+	x.requestMeta.Range(func(key, value any) bool {
+		meta, ok := value.(xRequestMeta)
+		if !ok {
+			return true
+		}
+		if now.Sub(meta.CreatedAt) > maxAge {
+			x.requestMeta.Delete(key)
+		}
+		return true
+	})
 }
 
 func (x *XAdapter) GenerateAuthURL(state string) (string, map[string]string) {
@@ -63,7 +97,7 @@ func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("x oauth1 request token failed: %w", err)
 	}
-	x.requestMeta.Store(requestToken, xRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID})
+	x.requestMeta.Store(requestToken, xRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID, CreatedAt: time.Now()})
 
 	authURL, err := config.AuthorizationURL(requestToken)
 	if err != nil {
