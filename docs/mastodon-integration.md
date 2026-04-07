@@ -98,7 +98,7 @@ status=Hello%20World!&visibility=public
 - Posts are federated across instances
 - Rate limits vary by instance
 
-##Rate Limits
+## Rate Limits
 
 Mastodon instances typically have the following limits:
 

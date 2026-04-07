@@ -14,12 +14,13 @@ This document provides an overview of all supported social media platforms and t
 
 ## Architecture Overview
 
-All platform integrations follow a consistent pattern:
+All platform integrations follow a consistent pattern using the `PlatformAdapter` interface:
 
-1. **OAuth Handler** (`internal/api/handlers/oauth.go`) - Handles OAuth flows for all platforms
-2. **OAuth Services** (`internal/services/oauth/`) - Platform-specific OAuth implementations
-3. **Token Manager** (`internal/services/tokenmanager/`) - Manages token refresh lifecycle
-4. **Publisher** (`internal/services/publisher/`) - Handles posting to platforms
+1. **OAuth Handler** (`internal/api/handlers/oauth.go`) - Handles OAuth flows for all platforms via map lookups
+2. **Platform Adapters** (`internal/platform/`) - Implements `PlatformAdapter` interface (x.go, mastodon.go, bluesky.go, linkedin.go, threads.go)
+3. **Token Manager** (`internal/services/tokenmanager/manager.go`) - Manages token refresh lifecycle
+4. **Publisher** (`internal/services/publisher/publisher.go`) - Handles posting to platforms
+5. **Shared HTTP Helpers** (`internal/platform/http.go`) - DoRequest, DoJSON, DoMultipart, DoFormURLEncoded
 
 ## Token Security
 
@@ -42,9 +43,7 @@ TWITTER_CLIENT_SECRET=your_client_secret
 MASTODON_REDIRECT_URI=http://localhost:8080/api/v1/accounts/mastodon/callback
 MASTODON_SERVERS=[{"name":"mastodon.social","client_id":"id","client_secret":"secret","instance_url":"https://mastodon.social"}]
 
-# Bluesky
-BLUESKY_CLIENT_ID=your_client_id
-BLUESKY_CLIENT_SECRET=your_client_secret
+# Bluesky — no environment variables needed, users connect with handle + app password directly
 
 # LinkedIn
 LINKEDIN_CLIENT_ID=your_client_id
@@ -60,12 +59,18 @@ THREADS_CLIENT_SECRET=your_app_secret
 
 To add a new social platform:
 
-1. Create a service file in `internal/services/oauth/{platform}.go`
-2. Implement `GenerateAuthURL()`, `ExchangeCode()`, and `RefreshToken()` methods
-3. Add platform to the switch statements in `oauth.go` handler
-4. Add publishing method in `internal/services/publisher/publisher.go`
-5. Add refresh logic in `internal/services/tokenmanager/manager.go`
-6. Update models if platform-specific fields are needed
+1. Create a new file in `internal/platform/` (e.g., `newplatform.go`)
+2. Implement the `PlatformAdapter` interface from `internal/platform/adapter.go`:
+   - `GenerateAuthURL(state string) (authURL string, extra map[string]string)`
+   - `ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error)`
+   - `RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error)`
+   - `GetProfile(ctx context.Context, accessToken string) (*UserProfile, error)`
+   - `UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error)`
+   - `Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error)`
+3. Register the adapter in `main.go`'s providers map (e.g., `providers["newplatform"] = adapter`)
+4. The provider key gets passed to `tokenManager.SetProvider()` and `publishSvc.SetProvider()` automatically
+5. Add the platform's icon to the frontend's `compose-post.svelte` component
+6. No switch statements needed — everything uses map lookups
 
 ## Troubleshooting
 

@@ -31,7 +31,9 @@ Bluesky uses the AT Protocol with **app passwords** for authentication. No OAuth
 |-----------|-------------|
 | Create Session | `com.atproto.server.createSession` |
 | Refresh Session | `com.atproto.server.refreshSession` |
+| Get Session | `com.atproto.server.getSession` |
 | Create Record (Post) | `com.atproto.repo.createRecord` |
+| Upload Blob (Media) | `com.atproto.repo.uploadBlob` |
 
 ## Post Format
 

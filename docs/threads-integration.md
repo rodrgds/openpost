@@ -18,8 +18,9 @@ Threads uses Meta's Graph API with a two-step container model for publishing. It
 |------------|-------------|
 | `threads_basic` | Required - Basic profile access |
 | `threads_content_publish` | Create and publish posts |
+| `threads_manage_replies` | Create and manage replies on threads |
 
-Both permissions should be enabled in your Meta App settings. They work in "Ready for testing" mode for your own account.
+All three permissions should be enabled in your Meta App settings. They work in "Ready for testing" mode for your own account.
 
 ## Token Management
 
@@ -66,6 +67,15 @@ THREADS_REDIRECT_URI=https://your-ngrok-url/api/v1/accounts/threads/callback
 2. Provide screencast of user flow
 3. Explain data usage and privacy practices
 4. Wait for approval (~2-4 weeks)
+
+### 5. Local Development with Media
+
+**Important**: Threads requires publicly accessible URLs for media uploads. For local development:
+
+1. Use ngrok to expose your server: `ngrok http 8080`
+2. Set `THREADS_REDIRECT_URI` to the ngrok HTTPS URL
+3. Ensure the `/media/{id}` endpoint is publicly reachable via ngrok
+4. Media files must be served from a URL accessible by Meta's servers
 
 ## API Endpoints
 
@@ -193,10 +203,12 @@ GET https://graph.threads.net/v1.0/{user_id}/threads_publishing_limit
 ### Implementation Notes
 
 The integration uses direct HTTP calls to the Threads API:
-- No external library dependency (removed threads-go due to retry issues)
+- No external library dependency (uses `golang.org/x/oauth2` for OAuth config only)
 - Two-step publish: create container, then publish
 - OAuth state mapping stored in memory for workspace association
 - Token refresh handled automatically by the token manager
+- Container publish retries: retries up to 5 times with backoff for code 24 errors (propagation lag)
+- Container status polling: waits up to 10 attempts (3s delay) for container to be ready
 
 ## Development Mode
 

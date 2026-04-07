@@ -321,27 +321,39 @@ openpost/
 │
 ├── backend/
 │   ├── cmd/openpost/       # Main entry point
-│   └── internal/
-│       ├── api/            # HTTP handlers & middleware
-│       │   └── handlers/  # Posts, Auth, Media, OAuth handlers
-│       ├── config/         # Configuration loading
-│       ├── database/       # SQLite setup
-│       ├── models/         # Bun ORM models
-│       ├── platform/       # Platform adapter interface + implementations
-│       │   ├── adapter.go # PlatformAdapter interface
-│       │   ├── http.go    # Shared HTTP helpers
-│       │   ├── x.go       # Twitter/X adapter
-│       │   ├── mastodon.go# Mastodon adapter
-│       │   ├── bluesky.go # Bluesky adapter
-│       │   ├── linkedin.go# LinkedIn adapter
-│       │   └── threads.go # Threads adapter
-│       ├── queue/          # Background job worker
-│       └── services/       # Business logic
-│           ├── auth/       # JWT & password handling
-│           ├── crypto/     # Token encryption
-│           ├── mediastore/ # Local/S3 media storage
-│           ├── publisher/  # Post publishing logic
-│           └── tokenmanager/ # Token refresh management
+│   │   └── public/        # Embedded SvelteKit build output (not source)
+│   ├── internal/
+│   │   ├── api/            # HTTP handlers & middleware
+│   │   │   ├── handlers/  # Posts, Auth, Media, OAuth handlers
+│   │   │   └── middleware/
+│   │   │       └── auth.go# JWT authentication middleware
+│   │   ├── config/         # Configuration loading
+│   │   ├── database/       # SQLite setup
+│   │   ├── models/         # Bun ORM models
+│   │   │   ├── models.go
+│   │   │   └── models_test.go
+│   │   ├── platform/       # Platform adapter interface + implementations
+│   │   │   ├── adapter.go # PlatformAdapter interface
+│   │   │   ├── http.go    # Shared HTTP helpers
+│   │   │   ├── x.go       # Twitter/X adapter
+│   │   │   ├── mastodon.go# Mastodon adapter
+│   │   │   ├── bluesky.go # Bluesky adapter
+│   │   │   ├── linkedin.go# LinkedIn adapter
+│   │   │   └── threads.go # Threads adapter
+│   │   ├── queue/          # Background job worker
+│   │   └── services/       # Business logic
+│   │       ├── auth/       # JWT & password handling
+│   │       │   ├── auth.go
+│   │       │   └── auth_test.go
+│   │       ├── crypto/     # Token encryption
+│   │       │   ├── encrypt.go
+│   │       │   └── encrypt_test.go
+│   │       ├── mediastore/ # Local/S3 media storage
+│   │       ├── publisher/  # Post publishing logic
+│   │       └── tokenmanager/ # Token refresh management
+│   ├── .golangci.yml       # Linter configuration
+│   ├── go.mod              # Go module definition
+│   └── go.sum              # Go module checksums
 │
 ├── docs/                   # Platform integration docs
 ├── AGENTS.md               # AI agent guidelines

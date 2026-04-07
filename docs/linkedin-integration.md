@@ -102,7 +102,7 @@ POST https://api.linkedin.com/rest/posts
 Authorization: Bearer {access_token}
 Content-Type: application/json
 X-Restli-Protocol-Version: 2.0.0
-Linkedin-Version: 202401
+Linkedin-Version: {YYYYMM}  # dynamically computed (previous month)
 
 {
   "author": "urn:li:person:{person_id}",
@@ -122,8 +122,10 @@ Linkedin-Version: 202401
 LinkedIn requires a version header:
 
 ```http
-Linkedin-Version: 202401
+Linkedin-Version: YYYYMM
 ```
+
+The version is **dynamically computed** at runtime — defaults to the previous month (to avoid `NONEXISTENT_VERSION` errors when a new version isn't yet active). Override with the `LINKEDIN_API_VERSION` environment variable if needed.
 
 Versions follow `YYYYMM` format and are supported for at least 1 year.
 
@@ -148,10 +150,17 @@ Member-level limits may apply.
 ### Debug Tips
 
 1. Check token permissions in Developer Portal
-2. Verify the `Linkedin-Version` header is current
+2. Verify the `Linkedin-Version` header is current (or set `LINKEDIN_API_VERSION`)
 3. Use `/v2/userinfo` to validate token
 4. Test with Postman before implementing
 5. If replies fail with `partnerApiSocialActions.CREATE`, your app is missing `w_member_social_feed` approval
+
+### Code Structure
+
+- `internal/platform/linkedin.go` — LinkedIn platform adapter
+- Media upload uses Vector Assets API (register → PUT upload → asset URN)
+- Threading uses Comments API (`/rest/socialActions/{urn}/comments`)
+- `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES` env var disables thread replies when app lacks `w_member_social_feed`
 
 ## Access Levels
 

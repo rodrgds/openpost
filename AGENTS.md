@@ -93,7 +93,7 @@ Provider keys in the `providers` map follow specific formats:
 | Platform | Provider Key Format | Example |
 |----------|---------------------|---------|
 | X/Twitter | `"x"` | `"x"` |
-| Mastodon | `"mastodon:" + instanceURL` | `"mastodon:https://masto.pt"` |
+| Mastodon | `"mastodon:" + server.Name` | `"mastodon:Personal"` |
 | Bluesky | `"bluesky"` | `"bluesky"` |
 | LinkedIn | `"linkedin"` | `"linkedin"` |
 | Threads | `"threads"` | `"threads"` |

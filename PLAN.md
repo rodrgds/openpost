@@ -36,14 +36,28 @@ OpenPost is a lightweight, self-hosted social media scheduler — an open-source
 | Area | Status | Details |
 |------|--------|---------|
 | SvelteKit Setup | ✅ Done | Svelte 5 runes, TailwindCSS 4, Paraglide i18n. |
-| Auth UI | ✅ Done | Login and Register pages with JWT storage. |
+| UI Components | ✅ Done | shadcn-svelte component library (button, dialog, select, drawer, tooltip, textarea, sheet, label, dropdown-menu, checkbox, calendar, avatar). |
+| i18n Languages | ✅ Done | English (en), Spanish (es), Portuguese (pt) via Paraglide. |
+| Auth UI | ✅ Done | Login (`/login`) and Register (`/register`) pages with JWT storage. |
 | Workspace Switcher | ✅ Done | Dropdown to create and switch workspaces. |
-| Accounts Page | ✅ Done | Connect all 5 platforms. Shows connected accounts. |
+| Accounts Page | ✅ Done | Connect all 5 platforms. Shows connected accounts (`/accounts`). |
 | Post Composer | ✅ Done | Text editor with platform selection and scheduling. |
 | Media Upload UI | ✅ Done | Drag-and-drop zone, previews, alt text editor. |
 | Thread Builder | ✅ Done | Toggle thread mode, add/remove posts, connector lines. |
 | Schedule Calendar | ✅ Done | Monthly overview with per-platform/workspace breakdown. |
-| Dashboard | ✅ Done | Workspace overview, recent posts, schedule summary. |
+| Dashboard | ✅ Done | Workspace overview, recent posts, schedule summary (`/`). |
+| Mobile Support | ✅ Done | Capacitor wrapper for Android. Full Android project in `web/android/`. |
+
+### Frontend Routes
+
+| Route | Page |
+|-------|------|
+| `/` | Dashboard (home) |
+| `/login` | Login page |
+| `/register` | Register page |
+| `/accounts` | Connected accounts management |
+| `/connect` | Platform connection hub |
+| `/accounts/mastodon/callback` | Mastodon OAuth callback |
 
 ### What's Working End-to-End
 
@@ -68,6 +82,7 @@ OpenPost is a lightweight, self-hosted social media scheduler — an open-source
 - [ ] Post templates & auto-plug
 - [ ] Rate limit handling
 - [ ] Team & role management
+- [ ] iOS Capacitor support (Android done)
 
 ---
 
