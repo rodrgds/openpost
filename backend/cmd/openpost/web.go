@@ -8,7 +8,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-//go:embed public/*
+// Include all files recursively, including paths beginning with '_'
+// (SvelteKit outputs frontend assets under /_app/*).
+//
+//go:embed all:public
 var embeddedWeb embed.FS
 
 // RegisterSpaRoutes serves the SvelteKit SPA
