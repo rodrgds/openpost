@@ -182,6 +182,9 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		}
 
 		authURL, _ := adapter.GenerateAuthURL(input.WorkspaceID)
+		if input.Platform == "mastodon" && input.ServerName != "" {
+			authURL, _ = adapter.GenerateAuthURL(input.ServerName + ":" + input.WorkspaceID)
+		}
 		if authURL == "" {
 			return nil, huma.Error400BadRequest(fmt.Sprintf("%s does not support OAuth redirect", input.Platform))
 		}
@@ -202,6 +205,15 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		Errors:      []int{400},
 		Hidden:      true,
 	}, func(ctx context.Context, input *OAuthCallbackInput) (*huma.StreamResponse, error) {
+		workspaceID := input.State
+		if input.Platform == "mastodon" && input.ServerName == "" && input.State != "" {
+			parts := strings.SplitN(input.State, ":", 2)
+			if len(parts) == 2 {
+				input.ServerName = parts[0]
+				workspaceID = parts[1]
+			}
+		}
+
 		adapter, serverName, err := h.getProvider(input.Platform, input.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
@@ -243,7 +255,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			}
 		}
 
-		workspaceID := input.State
+		workspaceID = input.State
 		if ws, ok := extra["_workspace_id"]; ok {
 			workspaceID = ws
 		}
