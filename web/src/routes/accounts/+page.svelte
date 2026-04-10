@@ -84,6 +84,13 @@
 	}
 
 	onMount(() => {
+		const params = new URLSearchParams(window.location.search);
+		const urlError = params.get('error');
+		if (urlError) {
+			error = urlError;
+			window.history.replaceState({}, document.title, window.location.pathname);
+		}
+
 		const unsubscribe = auth.subscribe(async (state) => {
 			if (!state.isLoading && !state.isAuthenticated) {
 				goto('/login');

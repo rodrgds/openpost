@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -67,12 +68,14 @@ type GetAuthURLOutput struct {
 }
 
 type OAuthCallbackInput struct {
-	Platform   string `path:"platform" doc:"Social platform"`
-	Code       string `query:"code" doc:"OAuth authorization code"`
-	State      string `query:"state" doc:"OAuth state (workspace ID)"`
-	OAuthToken string `query:"oauth_token" doc:"OAuth 1.0a request token (X)"`
-	Verifier   string `query:"oauth_verifier" doc:"OAuth 1.0a verifier (X)"`
-	ServerName string `query:"server_name" doc:"Mastodon server name (required for mastodon)"`
+	Platform         string `path:"platform" doc:"Social platform"`
+	Code             string `query:"code" doc:"OAuth authorization code" required:"false"`
+	State            string `query:"state" doc:"OAuth state (workspace ID)"`
+	OAuthToken       string `query:"oauth_token" doc:"OAuth 1.0a request token (X)" required:"false"`
+	Verifier         string `query:"oauth_verifier" doc:"OAuth 1.0a verifier (X)" required:"false"`
+	ServerName       string `query:"server_name" doc:"Mastodon server name (required for mastodon)" required:"false"`
+	Error            string `query:"error" doc:"OAuth error" required:"false"`
+	ErrorDescription string `query:"error_description" doc:"OAuth error description" required:"false"`
 }
 
 type ExchangeCodeInput struct {
@@ -205,6 +208,19 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		Errors:      []int{400},
 		Hidden:      true,
 	}, func(ctx context.Context, input *OAuthCallbackInput) (*huma.StreamResponse, error) {
+		if input.Error != "" {
+			msg := input.Error
+			if input.ErrorDescription != "" {
+				msg = fmt.Sprintf("%s: %s", input.Error, input.ErrorDescription)
+			}
+			log.Printf("[OAuth Callback Error] %s", msg)
+			return h.redirectWithError(msg)
+		}
+
+		if input.Code == "" && input.OAuthToken == "" {
+			return h.redirectWithError("missing authorization code")
+		}
+
 		workspaceID := input.State
 		if input.Platform == "mastodon" && input.ServerName == "" && input.State != "" {
 			parts := strings.SplitN(input.State, ":", 2)
@@ -243,7 +259,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		tokenResp, err := adapter.ExchangeCode(ctx, input.Code, extra)
 		if err != nil {
-			return nil, huma.Error500InternalServerError(fmt.Sprintf("token exchange failed: %s", err.Error()))
+			return h.redirectWithError(fmt.Sprintf("token exchange failed: %s", err.Error()))
 		}
 
 		profile, err := adapter.GetProfile(ctx, tokenResp.AccessToken)
@@ -251,7 +267,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			if input.Platform == "mastodon" {
 				profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
 			} else {
-				return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to get profile: %s", err.Error()))
+				return h.redirectWithError(fmt.Sprintf("failed to get profile: %s", err.Error()))
 			}
 		}
 
@@ -266,6 +282,15 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		return h.saveAccountAndRedirect(ctx, input.Platform, workspaceID, profile.ID, profile.Username, instanceRef, tokenResp)
 	})
+}
+
+func (h *OAuthHandler) redirectWithError(msg string) (*huma.StreamResponse, error) {
+	return &huma.StreamResponse{
+		Body: func(ctx huma.Context) {
+			ctx.SetStatus(http.StatusTemporaryRedirect)
+			ctx.SetHeader("Location", "/accounts?error="+url.QueryEscape(msg))
+		},
+	}, nil
 }
 
 func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*huma.StreamResponse, error) {
