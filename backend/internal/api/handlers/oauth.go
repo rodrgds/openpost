@@ -255,7 +255,6 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			}
 		}
 
-		workspaceID = input.State
 		if ws, ok := extra["_workspace_id"]; ok {
 			workspaceID = ws
 		}
