@@ -36,28 +36,28 @@ web/
 
 ## Routes
 
-| Route | Description |
-|-------|-------------|
-| `/` | Dashboard — workspace overview, recent posts, schedule summary |
-| `/accounts` | Manage connected social accounts (X, Mastodon, Bluesky, LinkedIn, Threads) |
-| `/accounts/mastodon/callback` | Mastodon OAuth callback handler |
-| `/connect` | Connect new social platform accounts |
-| `/login` | User login |
-| `/register` | User registration |
+| Route                         | Description                                                                |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `/`                           | Dashboard — workspace overview, recent posts, schedule summary             |
+| `/accounts`                   | Manage connected social accounts (X, Mastodon, Bluesky, LinkedIn, Threads) |
+| `/accounts/mastodon/callback` | Mastodon OAuth callback handler                                            |
+| `/connect`                    | Connect new social platform accounts                                       |
+| `/login`                      | User login                                                                 |
+| `/register`                   | User registration                                                          |
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Start dev server with hot reload |
-| `bun run build` | Production build (static output for embedding in Go binary) |
-| `bun run build:capacitor` | Build for Android mobile app |
-| `bun run preview` | Preview production build locally |
-| `bun run check` | TypeScript type checking |
-| `bun run lint` | Prettier + ESLint check |
-| `bun run format` | Auto-format code with Prettier |
-| `bun run test` | Run Vitest unit tests |
-| `bun run generate:types` | Generate TypeScript types from OpenAPI spec |
+| Command                   | Description                                                 |
+| ------------------------- | ----------------------------------------------------------- |
+| `bun run dev`             | Start dev server with hot reload                            |
+| `bun run build`           | Production build (static output for embedding in Go binary) |
+| `bun run build:capacitor` | Build for Android mobile app                                |
+| `bun run preview`         | Preview production build locally                            |
+| `bun run check`           | TypeScript type checking                                    |
+| `bun run lint`            | Prettier + ESLint check                                     |
+| `bun run format`          | Auto-format code with Prettier                              |
+| `bun run test`            | Run Vitest unit tests                                       |
+| `bun run generate:types`  | Generate TypeScript types from OpenAPI spec                 |
 
 ## API Client
 
@@ -74,6 +74,7 @@ Translations are managed with Paraglide. Source messages are in `messages/*.json
 Supported languages: English (`en`), Spanish (`es`), Portuguese (`pt`).
 
 To add translations:
+
 1. Edit the relevant `messages/{lang}.json` file
 2. Run `bunx @inlang/cli machine translate` (or edit manually)
 3. The Paraglide runtime is auto-generated in `src/lib/paraglide/`
