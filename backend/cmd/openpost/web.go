@@ -67,9 +67,10 @@ func RegisterSpaRoutes(e *echo.Echo) {
 				return nil
 			}
 
-			file, _ := webFS.Open(relPath)
+			hfs := http.FS(webFS)
+			file, _ := hfs.Open(relPath)
 			defer file.Close()
-			http.ServeContent(c.Response().Writer, c.Request(), info.Name(), info.ModTime(), file.(http.File))
+			http.ServeContent(c.Response().Writer, c.Request(), info.Name(), info.ModTime(), file)
 			return nil
 		}
 
