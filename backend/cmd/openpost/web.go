@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -29,9 +30,19 @@ func RegisterSpaRoutes(e *echo.Echo) {
 			return echo.NewHTTPError(http.StatusNotFound, "API not found")
 		}
 
-		path := strings.TrimPrefix(reqPath, "/")
+		relPath := strings.TrimPrefix(path.Clean(reqPath), "/")
+		if relPath == "." {
+			relPath = ""
+		}
 
-		htmlFile := path + ".html"
+		if relPath == "" {
+			indexData, _ := fs.ReadFile(webFS, "index.html")
+			c.Response().Header().Set("Content-Type", "text/html")
+			c.Response().Write(indexData)
+			return nil
+		}
+
+		htmlFile := relPath + ".html"
 		if _, err := fs.Stat(webFS, htmlFile); err == nil {
 			data, _ := fs.ReadFile(webFS, htmlFile)
 			c.Response().Header().Set("Content-Type", "text/html")
@@ -39,10 +50,10 @@ func RegisterSpaRoutes(e *echo.Echo) {
 			return nil
 		}
 
-		info, err := fs.Stat(webFS, path)
+		info, err := fs.Stat(webFS, relPath)
 		if err == nil {
 			if info.IsDir() {
-				indexPath := path + "/index.html"
+				indexPath := relPath + "/index.html"
 				if _, err := fs.Stat(webFS, indexPath); err == nil {
 					indexData, _ := fs.ReadFile(webFS, indexPath)
 					c.Response().Header().Set("Content-Type", "text/html")
@@ -56,7 +67,7 @@ func RegisterSpaRoutes(e *echo.Echo) {
 				return nil
 			}
 
-			file, _ := webFS.Open(path)
+			file, _ := webFS.Open(relPath)
 			defer file.Close()
 			http.ServeContent(c.Response().Writer, c.Request(), info.Name(), info.ModTime(), file.(http.File))
 			return nil
