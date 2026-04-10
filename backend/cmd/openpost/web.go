@@ -49,6 +49,11 @@ func RegisterSpaRoutes(e *echo.Echo) {
 					c.Response().Write(indexData)
 					return nil
 				}
+
+				indexData, _ := fs.ReadFile(webFS, "index.html")
+				c.Response().Header().Set("Content-Type", "text/html")
+				c.Response().Write(indexData)
+				return nil
 			}
 
 			file, _ := webFS.Open(path)
