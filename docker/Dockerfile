@@ -4,10 +4,10 @@ FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
 
 # Copy the entire project to get correct relative paths for svelte.config.js
-COPY frontend/package.json frontend/bun.lock* ./
+COPY frontend/package.json frontend/bun.lock* ./frontend/
 RUN cd frontend && bun install --frozen-lockfile
 
-COPY frontend/ ./
+COPY frontend/ ./frontend/
 COPY assets/ ./assets/
 RUN cd frontend && bun run build
 
@@ -18,14 +18,14 @@ RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 WORKDIR /app
 
-COPY backend/go.mod backend/go.sum ./
-RUN go mod download
+COPY backend/go.mod backend/go.sum ./backend/
+RUN cd backend && go mod download
 
-COPY backend/ ./
+COPY backend/ ./backend/
 # Copy frontend build output from the correct location
-COPY --from=frontend-builder /app/backend/cmd/openpost/public ./cmd/openpost/public
+COPY --from=frontend-builder /app/backend/cmd/openpost/public ./backend/cmd/openpost/public
 
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o openpost ./cmd/openpost
+RUN cd backend && CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o openpost ./cmd/openpost
 
 # Runtime stage
 FROM alpine:3.19
@@ -36,7 +36,7 @@ RUN adduser -D -u 1000 openpost
 
 WORKDIR /app
 
-COPY --from=backend-builder /app/openpost .
+COPY --from=backend-builder /app/backend/openpost .
 
 RUN mkdir -p /data/media /data/db && chown -R openpost:openpost /data
 

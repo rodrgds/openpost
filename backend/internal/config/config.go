@@ -90,7 +90,7 @@ func Load() *Config {
 		}
 	}
 	// Always allow Capacitor origins
-	corsOrigins = append(corsOrigins, "capacitor://localhost", "http://localhost")
+	corsOrigins = append(corsOrigins, "capacitor://localhost", "http://localhost", "https://localhost")
 	cfg.CORSOrigins = corsOrigins
 
 	return cfg

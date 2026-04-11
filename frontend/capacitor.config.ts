@@ -13,6 +13,9 @@ const config: CapacitorConfig = {
 		},
 		StatusBar: {
 			style: 'default'
+		},
+		CapacitorHttp: {
+			enabled: true
 		}
 	}
 };

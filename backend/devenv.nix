@@ -47,7 +47,7 @@
     # Lint check (golangci-lint)
     golangci-lint = {
       enable = true;
-      entry = "golangci-lint";
+      entry = "${lib.getExe pkgs.golangci-lint}";
       files = "\\.go$";
       pass_filenames = false;
     };

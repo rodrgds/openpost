@@ -28,6 +28,7 @@ let
     runtimeInputs = [ pkgs.bun ];
     text = ''
       cd "${config.git.root}/frontend"
+      bun install --frozen-lockfile
       bun run check
     '';
   };
@@ -36,6 +37,7 @@ let
     runtimeInputs = [ pkgs.bun ];
     text = ''
       cd "${config.git.root}/frontend"
+      bun install --frozen-lockfile
       # Run tests only if test files exist, otherwise skip silently
       if find src -name "*.test.ts" -o -name "*.spec.ts" 2>/dev/null | grep -q .; then
         bun run test

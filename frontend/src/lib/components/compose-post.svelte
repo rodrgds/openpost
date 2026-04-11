@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
-	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { getApiBase, getMediaBase } from '$lib/stores/instance.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -496,7 +496,7 @@
 									{#each mediaIds as mediaId, idx}
 										<div class="relative h-16 w-16 overflow-hidden rounded-md border">
 											<img
-												src="{getApiBase()}/media/{mediaId}"
+												src="{getMediaBase()}/media/{mediaId}"
 												alt="Attached media"
 												class="h-full w-full object-cover"
 											/>

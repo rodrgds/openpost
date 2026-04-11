@@ -66,6 +66,14 @@ export function instanceStore() {
 			const url = normalizeUrl(raw);
 			if (!url) return { success: false, error: 'Please enter a server URL' };
 
+			if (IS_CAPACITOR && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+				return {
+					success: false,
+					error:
+						"Don't use 'localhost' or '127.0.0.1' on mobile. Use your computer's local IP address instead (e.g., http://192.168.1.50:8080)."
+				};
+			}
+
 			const result = await testConnection(url);
 			if (!result.ok) {
 				return { success: false, error: result.error };
