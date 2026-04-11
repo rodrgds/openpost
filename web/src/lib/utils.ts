@@ -5,17 +5,35 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WithoutChild<T> = T extends { child?: any } ? Omit<T, 'child'> : T;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WithoutChildren<T> = T extends { children?: any } ? Omit<T, 'children'> : T;
 export type WithoutChildrenOrChild<T> = WithoutChildren<WithoutChild<T>>;
 export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };
 
-export function getPlatformName(platform: string): string {
-	switch (platform) {
+export function getPlatformKey(platform: string): string {
+	const key = platform.toLowerCase().split(':')[0];
+
+	switch (key) {
+		case 'twitter':
 		case 'x':
-			return 'X (Twitter)';
+			return 'x';
+		case 'mastodon':
+			return 'mastodon';
+		case 'threads':
+			return 'threads';
+		case 'bluesky':
+			return 'bluesky';
+		case 'linkedin':
+			return 'linkedin';
+		default:
+			return key;
+	}
+}
+
+export function getPlatformName(platform: string): string {
+	switch (getPlatformKey(platform)) {
+		case 'x':
+			return 'X';
 		case 'mastodon':
 			return 'Mastodon';
 		case 'threads':
@@ -25,7 +43,7 @@ export function getPlatformName(platform: string): string {
 		case 'linkedin':
 			return 'LinkedIn';
 		default:
-			return platform;
+			return platform.split(':')[0];
 	}
 }
 
@@ -48,5 +66,5 @@ export function getPlatformColor(platform: string): string {
 		bluesky: 'bg-sky-500',
 		linkedin: 'bg-blue-600'
 	};
-	return colors[platform] || 'bg-gray-500';
+	return colors[getPlatformKey(platform)] || 'bg-gray-500';
 }
