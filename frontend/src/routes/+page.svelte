@@ -56,7 +56,7 @@
 			workspaces = wsData;
 
 			const allPosts: Post[] = [];
-			for (const ws of workspaces) {
+			for (const ws of workspaces ?? []) {
 				const { data: pData } = await client.GET('/posts', {
 					params: { query: { workspace_id: ws.id } }
 				});

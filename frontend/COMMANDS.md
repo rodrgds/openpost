@@ -29,6 +29,7 @@ Identify the core ideas and points I'm trying to communicate. Then develop argum
 Help me make this content clearer, punchier, and catchier while preserving my writing style and the core message.
 
 Focus on:
+
 - Simplifying complex sentences
 - Strengthening word choices
 - Improving flow between ideas
@@ -39,6 +40,7 @@ Focus on:
 Help me condense and tighten this content while preserving my writing style and the core message.
 
 Focus on:
+
 - Cutting redundant words and phrases
 - Eliminating filler and weak qualifiers
 - Merging overlapping sentences

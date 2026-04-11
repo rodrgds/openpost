@@ -27,6 +27,6 @@ project.inlang/cache/
 # Android build output
 android/
 
-# OpenAPI generated types
+# OpenAPI generated types (keep in git for CI/CD)
 openapi.json
 src/lib/api/types.d.ts

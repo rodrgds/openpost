@@ -229,7 +229,7 @@
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 
-		{#if overview && overview.days && overview.days.some((d) => d.count > 0)}
+		{#if overview && overview.days && overview.days.some((d: { count: number }) => d.count > 0)}
 			<Sidebar.Group>
 				<Sidebar.GroupLabel
 					class="text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
@@ -243,7 +243,7 @@
 								<span
 									>{loadingSchedule
 										? 'Loading...'
-										: `${overview.days.reduce((s, d) => s + d.count, 0)} scheduled posts`}</span
+										: `${overview.days.reduce((s: number, d: { count: number }) => s + d.count, 0)} scheduled posts`}</span
 								>
 							</Sidebar.MenuButton>
 						</Sidebar.MenuItem>
