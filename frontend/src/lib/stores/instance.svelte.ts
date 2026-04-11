@@ -9,9 +9,18 @@ let isLoading = $state(true);
 function normalizeUrl(raw: string): string {
 	let url = raw.trim();
 	if (!url) return '';
+
+	// If no protocol is provided
 	if (!url.startsWith('http://') && !url.startsWith('https://')) {
-		url = 'https://' + url;
+		// Default to HTTP for IP addresses, HTTPS for everything else
+		const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/.test(url);
+		if (isIp) {
+			url = 'http://' + url;
+		} else {
+			url = 'https://' + url;
+		}
 	}
+
 	return url.replace(/\/+$/, '');
 }
 
