@@ -214,12 +214,13 @@
 </div>
 
 {#if showCreateWorkspace}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
+		onkeydown={(e) => e.key === 'Escape' && (showCreateWorkspace = false)}
 		onclick={() => (showCreateWorkspace = false)}
 	>
 		<Card class="mx-4 w-full max-w-md" onclick={(e: MouseEvent) => e.stopPropagation()}>

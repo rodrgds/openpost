@@ -24,6 +24,8 @@ vite.config.ts.timestamp-*
 # Paraglide
 src/lib/paraglide
 project.inlang/cache/
+# Android build output
+android/
 
 # OpenAPI generated types
 openapi.json

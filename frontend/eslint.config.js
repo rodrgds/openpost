@@ -34,7 +34,9 @@ export default defineConfig(
 			// Allow @ts-ignore comments
 			'@typescript-eslint/ban-ts-comment': 'off',
 			// Allow explicit any where needed
-			'@typescript-eslint/no-explicit-any': 'off'
+			'@typescript-eslint/no-explicit-any': 'off',
+			// Allow unused svelte-ignore comments (newer plugin warns about them)
+			'svelte/no-unused-svelte-ignore': 'off'
 		}
 	},
 	{

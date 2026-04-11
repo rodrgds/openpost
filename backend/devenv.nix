@@ -1,4 +1,8 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # Go language support
@@ -33,8 +37,32 @@
     '';
   };
 
-  # Git hooks
+  # Git hooks - all must pass to allow commits
   git-hooks.hooks = {
-    gofmt.enable = true;
+    # Format check (go fmt)
+    gofmt = {
+      enable = true;
+    };
+
+    # Lint check (golangci-lint)
+    golangci-lint = {
+      enable = true;
+      entry = "golangci-lint";
+      files = "\\.go$";
+      pass_filenames = false;
+    };
+
+    # Unit tests (go test)
+    go-test = {
+      enable = true;
+      entry = lib.getExe (pkgs.writeShellApplication {
+        name = "go-test";
+        text = ''
+          cd backend && go test ./...
+        '';
+      });
+      files = "\\.go$";
+      pass_filenames = false;
+    };
   };
 }

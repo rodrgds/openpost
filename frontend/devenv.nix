@@ -20,7 +20,23 @@ let
     text = ''
       cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
-      bunx eslint .
+      bun run lint
+    '';
+  };
+  svelte-check-wrapper = pkgs.writeShellApplication {
+    name = "svelte-check-wrapper";
+    runtimeInputs = [ pkgs.bun ];
+    text = ''
+      cd "${config.git.root}/frontend"
+      bun run check
+    '';
+  };
+  vitest-wrapper = pkgs.writeShellApplication {
+    name = "vitest-wrapper";
+    runtimeInputs = [ pkgs.bun ];
+    text = ''
+      cd "${config.git.root}/frontend"
+      bun run test
     '';
   };
 in
@@ -58,19 +74,38 @@ in
     '';
   };
 
-  # Git hooks
+  # Git hooks - all must pass to allow commits
   git-hooks.hooks = {
+    # Format check (prettier)
+    npm-format = {
+      enable = true;
+      name = "prettier-npm";
+      entry = "${lib.getExe npm-format}";
+      files = "\\.(js|ts|svelte|css|html)$";
+      pass_filenames = false;
+    };
+
+    # Lint check (eslint)
     eslint = {
       enable = true;
       entry = "${lib.getExe eslint-wrapper}";
       files = "\\.(js|ts|svelte)$";
       pass_filenames = false;
     };
-    npm-format = {
+
+    # Type check (svelte-check)
+    svelte-check = {
       enable = true;
-      name = "prettier-npm";
-      entry = "${lib.getExe npm-format}";
-      files = "\\.(js|ts|svelte|css|html)$";
+      entry = "${lib.getExe svelte-check-wrapper}";
+      files = "\\.(ts|svelte)$";
+      pass_filenames = false;
+    };
+
+    # Unit tests (vitest)
+    vitest = {
+      enable = true;
+      entry = "${lib.getExe vitest-wrapper}";
+      files = "\\.(ts|svelte)$";
       pass_filenames = false;
     };
   };
