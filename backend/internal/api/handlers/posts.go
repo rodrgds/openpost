@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -214,9 +215,32 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListPostsInput) (*ListPostsOutput, error) {
 		var posts []models.Post
+
+		var workspaceIDs []string
+		if input.WorkspaceID != "" {
+			workspaceIDs = []string{input.WorkspaceID}
+		} else {
+			var workspaceMembers []models.WorkspaceMember
+			userID := middleware.GetUserID(ctx)
+			err := h.db.NewSelect().
+				Model(&workspaceMembers).
+				Where("user_id = ?", userID).
+				Scan(ctx)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error500InternalServerError("failed to fetch workspaces")
+			}
+			for _, wm := range workspaceMembers {
+				workspaceIDs = append(workspaceIDs, wm.WorkspaceID)
+			}
+		}
+
+		if len(workspaceIDs) == 0 {
+			return &ListPostsOutput{Body: []PostResponse{}}, nil
+		}
+
 		query := h.db.NewSelect().
 			Model(&posts).
-			Where("workspace_id = ?", input.WorkspaceID)
+			Where("workspace_id IN (?)", bun.In(workspaceIDs))
 
 		if input.Date != "" {
 			parsed, err := time.Parse("2006-01-02", input.Date)
