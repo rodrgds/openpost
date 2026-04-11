@@ -25,27 +25,27 @@
   # Scripts available in the shell
   scripts = {
     dev.exec = ''
-      web-dev &
+      frontend-dev &
       backend-run
     '';
 
     build.exec = ''
-      web-build && backend-build
+      frontend-build && backend-build
     '';
 
     test-all.exec = ''
-      backend-test && web-test
+      backend-test && frontend-test
     '';
 
     clean.exec = ''
       rm -rf backend/openpost
-      rm -rf web/.svelte-kit
-      rm -rf web/node_modules
+      rm -rf frontend/.svelte-kit
+      rm -rf frontend/node_modules
       rm -f backend/*.db
     '';
 
     install.exec = ''
-      web-build
+      frontend-build
       (cd backend && go mod download)
     '';
 

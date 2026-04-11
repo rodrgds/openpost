@@ -36,15 +36,15 @@ backend/cmd/openpost/public/
 .DS_Store
 Thumbs.db
 
-# Node/Web
+# Node/Frontend
 node_modules/
-web/.svelte-kit/
-web/build/
-web/.vite/
-web/package-lock.json
-web/yarn.lock
-web/pnpm-lock.yaml
-web/bun.lock
+frontend/.svelte-kit/
+frontend/build/
+frontend/.vite/
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
+frontend/bun.lock
 
 # Logs
 *.log

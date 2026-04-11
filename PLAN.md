@@ -46,7 +46,7 @@ OpenPost is a lightweight, self-hosted social media scheduler — an open-source
 | Thread Builder | ✅ Done | Toggle thread mode, add/remove posts, connector lines. |
 | Schedule Calendar | ✅ Done | Monthly overview with per-platform/workspace breakdown. |
 | Dashboard | ✅ Done | Workspace overview, recent posts, schedule summary (`/`). |
-| Mobile Support | ✅ Done | Capacitor wrapper for Android. Full Android project in `web/android/`. |
+| Mobile Support | ✅ Done | Capacitor wrapper for Android. Full Android project in `frontend/android/`. |
 
 ### Frontend Routes
 

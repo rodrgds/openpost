@@ -142,17 +142,17 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('web/android/**/*.gradle*', 'web/android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('frontend/android/**/*.gradle*', 'frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Build frontend (Capacitor mode)
-        working-directory: web
+        working-directory: frontend
         run: |
           bun install --frozen-lockfile
           VITE_APP_MODE=capacitor bun run build
 
       - name: Sync Capacitor assets
-        working-directory: web
+        working-directory: frontend
         run: npx cap sync android
 
       - name: Check signing secret
@@ -172,11 +172,11 @@ jobs:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           CLEAN_B64=$(printf '%s' "$KEYSTORE_B64" | sed -e 's/^"//;s/"$//' -e "s/^'//;s/'$//" -e 's/^data:[^,]*,//' -e 's/\\n//g' -e 's/\\r//g' | tr -d '\n\r\t ')
-          printf '%s' "$CLEAN_B64" | base64 -d > web/android/app/release-keystore.jks
+          printf '%s' "$CLEAN_B64" | base64 -d > frontend/android/app/release-keystore.jks
 
       - name: Build release APK (signed)
         if: steps.signing.outputs.has_keystore == 'true'
-        working-directory: web/android
+        working-directory: frontend/android
         run: |
           ./gradlew assembleRelease \
             -PRELEASE_STORE_FILE=release-keystore.jks \
@@ -186,15 +186,15 @@ jobs:
 
       - name: Build release APK (unsigned)
         if: steps.signing.outputs.has_keystore != 'true'
-        working-directory: web/android
+        working-directory: frontend/android
         run: ./gradlew assembleRelease
 
       - name: Prepare APK for upload
         run: |
           if [ "${{ steps.signing.outputs.has_keystore }}" = "true" ]; then
-            cp web/android/app/build/outputs/apk/release/app-release.apk openpost-app-android.apk
+            cp frontend/android/app/build/outputs/apk/release/app-release.apk openpost-app-android.apk
           else
-            cp web/android/app/build/outputs/apk/release/app-release-unsigned.apk openpost-app-android.apk
+            cp frontend/android/app/build/outputs/apk/release/app-release-unsigned.apk openpost-app-android.apk
           fi
 
       - name: Upload APK to GitHub Release

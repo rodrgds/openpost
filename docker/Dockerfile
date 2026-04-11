@@ -4,12 +4,12 @@ FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
 
 # Copy the entire project to get correct relative paths for svelte.config.js
-COPY web/package.json web/bun.lock* ./web/
-RUN cd web && bun install --frozen-lockfile
+COPY frontend/package.json frontend/bun.lock* ./
+RUN cd frontend && bun install --frozen-lockfile
 
-COPY web/ ./web/
+COPY frontend/ ./
 COPY assets/ ./assets/
-RUN cd web && bun run build
+RUN cd frontend && bun run build
 
 # Build stage for backend
 FROM golang:1.25-alpine AS backend-builder

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/rodrgds/openpost" target="_blank">
-    <img alt="OpenPost Logo" src="./web/static/logo.svg" width="280"/>
+    <img alt="OpenPost Logo" src="./frontend/static/logo.svg" width="280"/>
   </a>
 </p>
 
@@ -18,7 +18,7 @@
 
 <div align="center">
   <strong>
-  <h2>A lightweight, self-hosted social media scheduler</h2><br />
+  <h2>A lightweight, self-hosted social media scheduler with web and Android app</h2><br />
   </strong>
   The open-source alternative to Typefully, Buffer, and Hypefury.<br />
   One lightweight binary. No dependencies. Full control.
@@ -106,7 +106,7 @@ git clone https://github.com/rodrgds/openpost.git
 cd openpost
 
 # Install frontend dependencies and build
-cd web
+cd frontend
 bun install
 bun run build
 
@@ -126,7 +126,7 @@ The application will start on `http://localhost:8080`.
 
 ```bash
 # From project root
-cd web && bun install && bun run build && cd ../backend && go build -o openpost ./cmd/openpost
+cd frontend && bun install && bun run build && cd ../backend && go build -o openpost ./cmd/openpost
 ```
 
 ### Development Mode
@@ -135,7 +135,7 @@ For development, you can run the frontend and backend separately:
 
 ```bash
 # Terminal 1: Frontend (with hot reload)
-cd web
+cd frontend
 bun run dev
 
 # Terminal 2: Backend (with hot reload)
@@ -310,13 +310,14 @@ See [docs/threads-integration.md](docs/threads-integration.md) for detailed setu
 
 ```
 openpost/
-├── web/                    # SvelteKit frontend
+├── frontend/                  # SvelteKit frontend (web + Android app)
 │   ├── src/
 │   │   ├── lib/
 │   │   │   ├── api/       # API client (openapi-fetch)
 │   │   │   ├── components/# UI components
 │   │   │   └── stores/    # Auth, UI state
 │   │   └── routes/        # SvelteKit routes
+│   ├── android/            # Android native app (Capacitor)
 │   └── package.json
 │
 ├── backend/
