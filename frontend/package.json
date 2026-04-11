@@ -1,12 +1,11 @@
 {
-	"name": "web",
+	"name": "frontend",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
-		"build:web": "vite build",
 		"build:capacitor": "VITE_APP_MODE=capacitor vite build && npx cap sync android",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",

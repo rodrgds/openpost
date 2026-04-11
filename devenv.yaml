@@ -8,4 +8,4 @@ inputs:
     url: github:cachix/devenv-nixpkgs/rolling
 imports:
   - ./backend
-  - ./web
+  - ./frontend

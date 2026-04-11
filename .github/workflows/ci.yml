@@ -94,23 +94,23 @@ jobs:
       - name: Install frontend dependencies
         shell: devenv shell bash -- -e {0}
         run: |
-          cd web
+          cd frontend
           bun install --frozen-lockfile
 
       - name: Run frontend type checking
         shell: devenv shell bash -- -e {0}
         run: |
-          cd web
+          cd frontend
           bun run check
 
       - name: Run frontend tests
         shell: devenv shell bash -- -e {0}
         run: |
-          cd web
+          cd frontend
           bun run test
 
       - name: Build frontend
         shell: devenv shell bash -- -e {0}
         run: |
-          cd web
+          cd frontend
           bun run build

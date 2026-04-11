@@ -9,7 +9,7 @@ let
     name = "npm-format";
     runtimeInputs = [ pkgs.bun ];
     text = ''
-      cd "${config.git.root}/web"
+      cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
       bun run format
     '';
@@ -18,7 +18,7 @@ let
     name = "eslint-wrapper";
     runtimeInputs = [ pkgs.bun ];
     text = ''
-      cd "${config.git.root}/web"
+      cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
       bunx eslint .
     '';
@@ -33,28 +33,28 @@ in
 
   # Scripts for frontend development
   scripts = {
-    web-dev.exec = ''
-      cd web && bun install && bun run dev
+    frontend-dev.exec = ''
+      cd frontend && bun install && bun run dev
     '';
 
-    web-build.exec = ''
-      cd web && bun install && bun run build
+    frontend-build.exec = ''
+      cd frontend && bun install && bun run build
     '';
 
-    web-test.exec = ''
-      cd web && bun run test
+    frontend-test.exec = ''
+      cd frontend && bun run test
     '';
 
-    web-check.exec = ''
-      cd web && bun run check
+    frontend-check.exec = ''
+      cd frontend && bun run check
     '';
 
-    web-lint.exec = ''
-      cd web && bun run lint
+    frontend-lint.exec = ''
+      cd frontend && bun run lint
     '';
 
-    web-format.exec = ''
-      cd web && bun run format
+    frontend-format.exec = ''
+      cd frontend && bun run format
     '';
   };
 

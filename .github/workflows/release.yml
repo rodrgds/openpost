@@ -89,7 +89,7 @@ jobs:
       - name: Build frontend
         shell: devenv shell bash -- -e {0}
         run: |
-          cd web
+          cd frontend
           bun install --frozen-lockfile
           bun run build
 
