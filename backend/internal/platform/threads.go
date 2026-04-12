@@ -73,21 +73,13 @@ func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, extra ma
 
 	var tokenResp struct {
 		AccessToken string      `json:"access_token"`
-		UserID      interface{} `json:"user_id"`
+		UserID      json.Number `json:"user_id"`
 	}
 	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
 		return nil, fmt.Errorf("decoding threads token: %w", err)
 	}
 
-	var userID string
-	switch v := tokenResp.UserID.(type) {
-	case float64:
-		userID = fmt.Sprintf("%.0f", v)
-	case string:
-		userID = v
-	default:
-		return nil, fmt.Errorf("unexpected user_id type: %T", tokenResp.UserID)
-	}
+	userID := tokenResp.UserID.String()
 
 	t.lastUserIDMux.Lock()
 	t.lastUserID = userID
