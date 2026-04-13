@@ -28,16 +28,44 @@
 		thread_replies_supported?: boolean;
 	};
 
-	interface Props {
-		initialDate?: DateValue;
-		onSuccess?: () => void;
-		onCancel?: () => void;
+	interface PostMedia {
+		media_id: string;
+		display_order: number;
+		file_path: string;
+		mime_type: string;
 	}
 
-	let { initialDate, onSuccess, onCancel }: Props = $props();
+	interface PostDestination {
+		social_account_id: string;
+		platform: string;
+		status: string;
+	}
 
-	let content = $state('');
-	let mediaIds = $state<string[]>([]);
+	interface InitialPost {
+		id: string;
+		workspace_id: string;
+		content: string;
+		status: string;
+		scheduled_at: string;
+		media: PostMedia[];
+		destinations: PostDestination[];
+	}
+
+	interface Props {
+		initialDate?: DateValue;
+		initialPost?: InitialPost;
+		onSuccess?: () => void;
+		onCancel?: () => void;
+		isPage?: boolean;
+	}
+
+	let { initialDate, initialPost, onSuccess, onCancel, isPage = false }: Props = $props();
+
+	let isEditMode = $derived(!!initialPost);
+	let editingPostId = $state<string | null>(initialPost?.id ?? null);
+
+	let content = $state(initialPost?.content ?? '');
+	let mediaIds = $state<string[]>(initialPost?.media?.map((m) => m.media_id) ?? []);
 	let isThreadMode = $state(false);
 	let threadPosts = $state<Array<{ content: string; mediaIds: string[] }>>([
 		{ content: '', mediaIds: [] }
@@ -45,9 +73,11 @@
 	let isSubmitting = $state(false);
 	let error = $state('');
 	let workspaces = $state<Workspace[]>([]);
-	let selectedWorkspaceId = $state<string>('');
+	let selectedWorkspaceId = $state<string>(initialPost?.workspace_id ?? '');
 	let accounts = $state<SocialAccountWithThreadSupport[]>([]);
-	let selectedAccountIds = $state<string[]>([]);
+	let selectedAccountIds = $state<string[]>(
+		initialPost?.destinations?.map((d) => d.social_account_id) ?? []
+	);
 	let loadingWorkspaces = $state(true);
 	let loadingAccounts = $state(false);
 	let accountsPanelOpen = $state(false);
@@ -247,7 +277,7 @@
 		}
 	}
 
-	async function createPost(publishNow: boolean = false) {
+	async function createPost(publishNow: boolean = false, saveAsDraft: boolean = false) {
 		error = '';
 
 		if (!selectedWorkspaceId) {
@@ -260,7 +290,7 @@
 			return;
 		}
 
-		if (selectedAccountIds.length === 0) {
+		if (!saveAsDraft && selectedAccountIds.length === 0) {
 			error = 'Please select at least one account to publish to';
 			return;
 		}
@@ -268,14 +298,26 @@
 		let scheduledAt: string | undefined;
 		if (publishNow) {
 			scheduledAt = new Date().toISOString();
-		} else {
+		} else if (!saveAsDraft) {
 			scheduledAt = getScheduledAt();
 		}
 
 		isSubmitting = true;
 
 		try {
-			if (isThreadMode) {
+			if (isEditMode && editingPostId) {
+				const { error: err } = await (client as any).PATCH('/posts/{id}', {
+					params: { path: { id: editingPostId } },
+					body: {
+						content,
+						scheduled_at: scheduledAt ?? '',
+						social_account_ids: selectedAccountIds,
+						media_ids: mediaIds
+					}
+				});
+				if (err) throw new Error((err as any)?.detail || 'Failed to update post');
+				if (onSuccess) onSuccess();
+			} else if (isThreadMode) {
 				const validPosts = threadPosts.filter((p) => p.content.trim().length > 0);
 				if (validPosts.length < 2) {
 					error = 'A thread must have at least 2 posts with content';
@@ -295,6 +337,7 @@
 					}
 				});
 				if (err) throw new Error((err as any).detail || 'Failed to create thread');
+				if (onSuccess) onSuccess();
 			} else {
 				const { error: err } = await client.POST('/posts', {
 					body: {
@@ -306,8 +349,8 @@
 					}
 				});
 				if (err) throw new Error(err.detail || 'Failed to create post');
+				if (onSuccess) onSuccess();
 			}
-			if (onSuccess) onSuccess();
 		} catch (e) {
 			error = (e as Error).message || 'Failed to create post';
 		} finally {
@@ -690,17 +733,31 @@
 			{#if onCancel}
 				<Button type="button" variant="outline" onclick={onCancel}>Cancel</Button>
 			{/if}
-			<Button
-				type="button"
-				variant="secondary"
-				onclick={handlePostNow}
-				disabled={isSubmitting || !hasValidContent() || selectedAccountIds.length === 0}
-			>
-				{isSubmitting ? 'Posting...' : 'Post Now'}
-			</Button>
-			<Button type="submit" disabled={isSubmitting || !selectedDate || !selectedTime}>
-				{isSubmitting ? 'Creating...' : 'Schedule Post'}
-			</Button>
+			{#if !isEditMode}
+				<Button
+					type="button"
+					variant="outline"
+					onclick={() => createPost(false, true)}
+					disabled={isSubmitting || !hasValidContent()}
+				>
+					{isSubmitting ? 'Saving...' : 'Save as Draft'}
+				</Button>
+				<Button
+					type="button"
+					variant="secondary"
+					onclick={handlePostNow}
+					disabled={isSubmitting || !hasValidContent() || selectedAccountIds.length === 0}
+				>
+					{isSubmitting ? 'Posting...' : 'Post Now'}
+				</Button>
+				<Button type="submit" disabled={isSubmitting || !selectedDate || !selectedTime}>
+					{isSubmitting ? 'Scheduling...' : 'Schedule Post'}
+				</Button>
+			{:else}
+				<Button type="submit" disabled={isSubmitting}>
+					{isSubmitting ? 'Saving...' : 'Save Changes'}
+				</Button>
+			{/if}
 		</div>
 	</form>
 </div>

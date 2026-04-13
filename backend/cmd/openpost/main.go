@@ -152,6 +152,9 @@ func main() {
 	postHandler.CreatePost(api)
 	postHandler.CreateThread(api)
 	postHandler.ListPosts(api)
+	postHandler.GetPost(api)
+	postHandler.UpdatePost(api)
+	postHandler.DeletePost(api)
 	postHandler.GetScheduleOverview(api)
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)

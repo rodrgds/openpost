@@ -61,6 +61,8 @@ type PostResponse struct {
 type ListPostsInput struct {
 	WorkspaceID string `query:"workspace_id" doc:"Filter by workspace ID"`
 	Date        string `query:"date" doc:"Filter by date (YYYY-MM-DD)"`
+	Status      string `query:"status" doc:"Filter by status (draft, scheduled, published, failed)"`
+	Limit       int    `query:"limit" doc:"Limit number of results (default 50, max 200)"`
 }
 
 type ListPostsOutput struct {
@@ -242,6 +244,10 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			Model(&posts).
 			Where("workspace_id IN (?)", bun.In(workspaceIDs))
 
+		if input.Status != "" {
+			query = query.Where("status = ?", input.Status)
+		}
+
 		if input.Date != "" {
 			parsed, err := time.Parse("2006-01-02", input.Date)
 			if err != nil {
@@ -252,7 +258,12 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			query = query.Where("scheduled_at >= ? AND scheduled_at < ?", dayStart, dayEnd)
 		}
 
-		err := query.Order("scheduled_at ASC").Limit(50).Scan(ctx)
+		limit := input.Limit
+		if limit <= 0 || limit > 200 {
+			limit = 50
+		}
+
+		err := query.Order("COALESCE(scheduled_at, created_at) DESC").Limit(limit).Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list posts")
 		}
@@ -674,4 +685,408 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		resp.Body.PostIDs = postIDs
 		return resp, nil
 	})
+}
+
+type GetPostInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+}
+
+type GetPostOutput struct {
+	Body *PostDetailResponse
+}
+
+type PostMediaResponse struct {
+	MediaID      string `json:"media_id" doc:"Media ID"`
+	DisplayOrder int    `json:"display_order" doc:"Display order"`
+	FilePath     string `json:"file_path" doc:"File path for media URL"`
+	MimeType     string `json:"mime_type" doc:"Media MIME type"`
+}
+
+type PostDetailResponse struct {
+	ID           string                    `json:"id" doc:"Post ID"`
+	WorkspaceID  string                    `json:"workspace_id" doc:"Workspace ID"`
+	CreatedByID  string                    `json:"created_by" doc:"Creator user ID"`
+	Content      string                    `json:"content" doc:"Post content"`
+	Status       string                    `json:"status" doc:"Post status"`
+	ScheduledAt  string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
+	CreatedAt    string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
+	Media        []PostMediaResponse       `json:"media,omitempty" doc:"Attached media"`
+	Destinations []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
+}
+
+func (h *PostHandler) GetPost(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-post",
+		Method:      http.MethodGet,
+		Path:        "/posts/{id}",
+		Summary:     "Get a single post",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{404},
+	}, func(ctx context.Context, input *GetPostInput) (*GetPostOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		var destinations []struct {
+			PostID          string `bun:"post_id"`
+			SocialAccountID string `bun:"social_account_id"`
+			Platform        string `bun:"platform"`
+			Status          string `bun:"status"`
+		}
+		err = h.db.NewSelect().
+			TableExpr("post_destinations AS pd").
+			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+			Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
+			Where("pd.post_id = ?", input.PathID).
+			Scan(ctx, &destinations)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch destinations")
+		}
+
+		var mediaAttachments []struct {
+			MediaID      string `bun:"media_id"`
+			DisplayOrder int    `bun:"display_order"`
+			FilePath     string `bun:"file_path"`
+			MimeType     string `bun:"mime_type"`
+		}
+		err = h.db.NewSelect().
+			TableExpr("post_media AS pm").
+			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type").
+			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
+			Where("pm.post_id = ?", input.PathID).
+			Order("pm.display_order ASC").
+			Scan(ctx, &mediaAttachments)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error500InternalServerError("failed to fetch media")
+		}
+
+		destResp := make([]PostDestinationResponse, len(destinations))
+		for i, d := range destinations {
+			destResp[i] = PostDestinationResponse{
+				SocialAccountID: d.SocialAccountID,
+				Platform:        d.Platform,
+				Status:          d.Status,
+			}
+		}
+
+		mediaResp := make([]PostMediaResponse, len(mediaAttachments))
+		for i, m := range mediaAttachments {
+			mediaResp[i] = PostMediaResponse{
+				MediaID:      m.MediaID,
+				DisplayOrder: m.DisplayOrder,
+				FilePath:     m.FilePath,
+				MimeType:     m.MimeType,
+			}
+		}
+
+		return &GetPostOutput{Body: &PostDetailResponse{
+			ID:           post.ID,
+			WorkspaceID:  post.WorkspaceID,
+			CreatedByID:  post.CreatedByID,
+			Content:      post.Content,
+			Status:       post.Status,
+			ScheduledAt:  post.ScheduledAt.Format(time.RFC3339),
+			CreatedAt:    post.CreatedAt.Format(time.RFC3339),
+			Media:        mediaResp,
+			Destinations: destResp,
+		}}, nil
+	})
+}
+
+type UpdatePostInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+	Body   struct {
+		Content          *string  `json:"content,omitempty" doc:"Post content"`
+		ScheduledAt      *string  `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Set to empty string to unschedule (make draft)."`
+		SocialAccountIDs []string `json:"social_account_ids,omitempty" doc:"Social account IDs to publish to (replace all)"`
+		MediaIDs         []string `json:"media_ids,omitempty" doc:"Media attachment IDs to include (replace all)"`
+	}
+}
+
+type UpdatePostOutput struct {
+	Body *PostDetailResponse
+}
+
+func (h *PostHandler) UpdatePost(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-post",
+		Method:      http.MethodPatch,
+		Path:        "/posts/{id}",
+		Summary:     "Update a post",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *UpdatePostInput) (*UpdatePostOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		if post.Status == "published" {
+			return nil, huma.Error400BadRequest("cannot edit a published post")
+		}
+
+		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			if input.Body.Content != nil {
+				post.Content = *input.Body.Content
+			}
+
+			if input.Body.ScheduledAt != nil {
+				if *input.Body.ScheduledAt == "" {
+					post.Status = "draft"
+					post.ScheduledAt = time.Time{}
+					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to unschedule post: %w", err)
+					}
+					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to cancel job: %w", err)
+					}
+				} else {
+					parsed, parseErr := time.Parse(time.RFC3339, *input.Body.ScheduledAt)
+					if parseErr != nil {
+						return fmt.Errorf("invalid scheduled_at format: %w", parseErr)
+					}
+					oldScheduledAt := post.ScheduledAt
+					post.ScheduledAt = parsed
+					post.Status = "scheduled"
+					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to update post: %w", err)
+					}
+					if !oldScheduledAt.IsZero() {
+						if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+							return fmt.Errorf("failed to cancel old job: %w", err)
+						}
+					}
+					payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+					job := &models.Job{
+						ID:      uuid.New().String(),
+						Type:    "publish_post",
+						Payload: string(payload),
+						RunAt:   post.ScheduledAt,
+					}
+					if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to create job: %w", err)
+					}
+				}
+				return nil
+			}
+
+			if input.Body.Content != nil {
+				if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to update content: %w", err)
+				}
+			}
+
+			if input.Body.SocialAccountIDs != nil {
+				if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to remove old destinations: %w", err)
+				}
+				for _, accID := range input.Body.SocialAccountIDs {
+					dest := models.PostDestination{
+						ID:              uuid.New().String(),
+						PostID:          post.ID,
+						SocialAccountID: accID,
+						Status:          "pending",
+					}
+					if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to add destination: %w", err)
+					}
+				}
+			}
+
+			if input.Body.MediaIDs != nil {
+				if _, err := tx.NewDelete().Model(&models.PostMedia{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to remove old media: %w", err)
+				}
+				for i, mediaID := range input.Body.MediaIDs {
+					pm := models.PostMedia{
+						PostID:       post.ID,
+						MediaID:      mediaID,
+						DisplayOrder: i,
+					}
+					if _, err := tx.NewInsert().Model(&pm).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to add media: %w", err)
+					}
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError(err.Error())
+		}
+
+		var respPost models.Post
+		if err := h.db.NewSelect().Model(&respPost).Where("id = ?", post.ID).Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to refetch post")
+		}
+
+		var destinations []struct {
+			PostID          string `bun:"post_id"`
+			SocialAccountID string `bun:"social_account_id"`
+			Platform        string `bun:"platform"`
+			Status          string `bun:"status"`
+		}
+		h.db.NewSelect().
+			TableExpr("post_destinations AS pd").
+			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+			Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
+			Where("pd.post_id = ?", post.ID).
+			Scan(ctx, &destinations)
+
+		var mediaAttachments []struct {
+			MediaID      string `bun:"media_id"`
+			DisplayOrder int    `bun:"display_order"`
+			FilePath     string `bun:"file_path"`
+			MimeType     string `bun:"mime_type"`
+		}
+		h.db.NewSelect().
+			TableExpr("post_media AS pm").
+			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type").
+			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
+			Where("pm.post_id = ?", post.ID).
+			Order("pm.display_order ASC").
+			Scan(ctx, &mediaAttachments)
+
+		destResp := make([]PostDestinationResponse, len(destinations))
+		for i, d := range destinations {
+			destResp[i] = PostDestinationResponse{
+				SocialAccountID: d.SocialAccountID,
+				Platform:        d.Platform,
+				Status:          d.Status,
+			}
+		}
+
+		mediaResp := make([]PostMediaResponse, len(mediaAttachments))
+		for i, m := range mediaAttachments {
+			mediaResp[i] = PostMediaResponse{
+				MediaID:      m.MediaID,
+				DisplayOrder: m.DisplayOrder,
+				FilePath:     m.FilePath,
+				MimeType:     m.MimeType,
+			}
+		}
+
+		return &UpdatePostOutput{Body: &PostDetailResponse{
+			ID:           respPost.ID,
+			WorkspaceID:  respPost.WorkspaceID,
+			CreatedByID:  respPost.CreatedByID,
+			Content:      respPost.Content,
+			Status:       respPost.Status,
+			ScheduledAt:  respPost.ScheduledAt.Format(time.RFC3339),
+			CreatedAt:    respPost.CreatedAt.Format(time.RFC3339),
+			Media:        mediaResp,
+			Destinations: destResp,
+		}}, nil
+	})
+}
+
+type DeletePostInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+}
+
+type DeletePostOutput struct {
+	Body struct {
+		Message string `json:"message" doc:"Success message"`
+	}
+}
+
+func (h *PostHandler) DeletePost(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-post",
+		Method:      http.MethodDelete,
+		Path:        "/posts/{id}",
+		Summary:     "Delete a post",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *DeletePostInput) (*DeletePostOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		if post.Status == "published" || post.Status == "publishing" {
+			return nil, huma.Error400BadRequest("cannot delete a post that is published or being published")
+		}
+
+		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewDelete().Model(&models.PostMedia{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
+				return fmt.Errorf("failed to delete post media: %w", err)
+			}
+			if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
+				return fmt.Errorf("failed to delete destinations: %w", err)
+			}
+			if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+				return fmt.Errorf("failed to delete jobs: %w", err)
+			}
+			if _, err := tx.NewDelete().Model(&post).Where("id = ?", post.ID).Exec(txCtx); err != nil {
+				return fmt.Errorf("failed to delete post: %w", err)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError(err.Error())
+		}
+
+		return &DeletePostOutput{Body: struct {
+			Message string `json:"message" doc:"Success message"`
+		}{Message: "post deleted successfully"}}, nil
+	})
+}
+
+func (h *PostHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	var members []models.WorkspaceMember
+	err := h.db.NewSelect().
+		Model(&members).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Scan(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to check workspace access")
+	}
+	if len(members) == 0 {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
+	return nil
 }

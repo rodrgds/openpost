@@ -185,7 +185,7 @@
 
 		<!-- New Post Button -->
 		<div class="px-2 pb-2">
-			<Button class="w-full justify-start gap-2" onclick={() => ui.openCompose()}>
+			<Button class="w-full justify-start gap-2" onclick={() => goto('/posts/new')}>
 				<PlusIcon class="size-4" />
 				<span>New Post</span>
 			</Button>
