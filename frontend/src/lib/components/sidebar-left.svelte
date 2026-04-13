@@ -12,6 +12,7 @@
 	import DayPostsModal from './day-posts-modal.svelte';
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
+	import ImageIcon from 'lucide-svelte/icons/image';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
@@ -72,6 +73,12 @@
 			url: '/accounts',
 			icon: UsersIcon,
 			isActive: () => pathname.startsWith('/accounts')
+		},
+		{
+			title: 'Media',
+			url: '/media',
+			icon: ImageIcon,
+			isActive: () => pathname.startsWith('/media')
 		}
 	];
 

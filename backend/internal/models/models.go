@@ -9,9 +9,10 @@ import (
 type Workspace struct {
 	bun.BaseModel `bun:"table:workspaces"`
 
-	ID        string    `bun:",pk" json:"id"`
-	Name      string    `bun:",notnull" json:"name"`
-	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID               string    `bun:",pk" json:"id"`
+	Name             string    `bun:",notnull" json:"name"`
+	MediaCleanupDays int       `bun:",default:0" json:"media_cleanup_days"` // 0 = disabled
+	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type User struct {
@@ -82,14 +83,16 @@ type PostDestination struct {
 type MediaAttachment struct {
 	bun.BaseModel `bun:"table:media_attachments"`
 
-	ID               string `bun:",pk" json:"id"`
-	WorkspaceID      string `bun:",notnull" json:"workspace_id"`
-	FilePath         string `bun:",notnull" json:"file_path"`
-	StorageType      string `bun:",default:'local'" json:"storage_type"` // 'local', 's3'
-	MimeType         string `json:"mime_type"`
-	ProcessingStatus string `bun:",default:'ready'" json:"processing_status"` // 'processing', 'ready', 'failed'
-	Size             int64  `json:"size"`
-	AltText          string `json:"alt_text"`
+	ID               string    `bun:",pk" json:"id"`
+	WorkspaceID      string    `bun:",notnull" json:"workspace_id"`
+	FilePath         string    `bun:",notnull" json:"file_path"`
+	StorageType      string    `bun:",default:'local'" json:"storage_type"` // 'local', 's3'
+	MimeType         string    `json:"mime_type"`
+	ProcessingStatus string    `bun:",default:'ready'" json:"processing_status"` // 'processing', 'ready', 'failed'
+	Size             int64     `json:"size"`
+	AltText          string    `json:"alt_text"`
+	IsFavorite       bool      `bun:",default:false" json:"is_favorite"`
+	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type PostMedia struct {

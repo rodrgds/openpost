@@ -117,18 +117,20 @@ func main() {
 		publishSvc.SetProvider(name, adapter)
 	}
 
-	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc)
-
 	storage := mediastore.NewLocalStorage(cfg.MediaPath, cfg.MediaURL)
 	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
 		log.Printf("Warning: could not create media directory %s: %v", cfg.MediaPath, err)
 	}
 	mediaHandler := handlers.NewMediaHandler(db, storage, authService)
-	mediaHandler.RegisterRoutes(e)
+
+	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc, storage)
 
 	apiGroup := e.Group("/api/v1")
 	humaConfig := huma.DefaultConfig("OpenPost API", "1.0.0")
 	api := humaecho.NewWithGroup(e, apiGroup, humaConfig)
+
+	mediaHandler.RegisterRoutes(api)
+	mediaHandler.RegisterLegacyRoutes(e)
 
 	e.GET("/openapi.json", func(c echo.Context) error {
 		spec := api.OpenAPI()

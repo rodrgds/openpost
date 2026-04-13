@@ -2,10 +2,13 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"path/filepath"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/publisher"
 	"github.com/uptrace/bun"
 )
@@ -16,15 +19,17 @@ type BackgroundWorker struct {
 	workerID  string
 	interval  time.Duration
 	publisher *publisher.Service
+	storage   mediastore.BlobStorage
 	done      chan struct{}
 }
 
-func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Service) *BackgroundWorker {
+func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Service, storage mediastore.BlobStorage) *BackgroundWorker {
 	return &BackgroundWorker{
 		db:        db,
 		workerID:  id,
 		interval:  interval,
 		publisher: pub,
+		storage:   storage,
 		done:      make(chan struct{}),
 	}
 }
@@ -121,7 +126,48 @@ func (w *BackgroundWorker) executeJob(ctx context.Context, job *models.Job) erro
 	case "refresh_token":
 		// TODO: Call token manager
 		return nil
+	case "media_cleanup":
+		return w.handleMediaCleanup(ctx, job.Payload)
 	default:
 		return nil
 	}
+}
+
+func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload string) error {
+	var cleanupJob struct {
+		WorkspaceID string `json:"workspace_id"`
+		Days        int    `json:"days"`
+	}
+	if err := json.Unmarshal([]byte(payload), &cleanupJob); err != nil {
+		return err
+	}
+
+	if cleanupJob.Days <= 0 {
+		return nil
+	}
+
+	cutoff := time.Now().Add(-time.Duration(cleanupJob.Days) * 24 * time.Hour)
+
+	var media []models.MediaAttachment
+	err := w.db.NewSelect().Model(&media).
+		Where("workspace_id = ?", cleanupJob.WorkspaceID).
+		Where("is_favorite = ?", false).
+		Where("created_at < ?", cutoff).
+		Where("id NOT IN (SELECT media_id FROM post_media)").
+		Scan(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, m := range media {
+		if err := w.storage.Delete(filepath.Base(m.FilePath)); err != nil {
+			log.Printf("Failed to delete media file %s: %v", m.ID, err)
+		}
+		if _, err := w.db.NewDelete().Model(&m).Where("id = ?", m.ID).Exec(ctx); err != nil {
+			log.Printf("Failed to delete media record %s: %v", m.ID, err)
+		}
+		log.Printf("Cleaned up media %s for workspace %s", m.ID, cleanupJob.WorkspaceID)
+	}
+
+	return nil
 }
