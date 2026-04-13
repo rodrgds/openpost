@@ -52,6 +52,9 @@ func CreateSchema(db *bun.DB) error {
 		(*models.MediaAttachment)(nil),
 		(*models.PostMedia)(nil),
 		(*models.Job)(nil),
+		(*models.SocialMediaSet)(nil),
+		(*models.SocialMediaSetAccount)(nil),
+		(*models.PostVariant)(nil),
 	}
 	for _, model := range m {
 		if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {

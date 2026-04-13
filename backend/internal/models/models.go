@@ -114,3 +114,34 @@ type Job struct {
 	LockedAt    time.Time `json:"locked_at"`
 	LockedBy    string    `json:"locked_by"`
 }
+
+type SocialMediaSet struct {
+	bun.BaseModel `bun:"table:social_media_sets"`
+
+	ID          string    `bun:",pk" json:"id"`
+	WorkspaceID string    `bun:",notnull" json:"workspace_id"`
+	Name        string    `bun:",notnull" json:"name"`
+	IsDefault   bool      `bun:",default:false" json:"is_default"`
+	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type SocialMediaSetAccount struct {
+	bun.BaseModel `bun:"table:social_media_set_accounts"`
+
+	SetID           string `bun:",pk" json:"set_id"`
+	SocialAccountID string `bun:",pk" json:"social_account_id"`
+	IsMain          bool   `bun:",default:false" json:"is_main"`
+}
+
+type PostVariant struct {
+	bun.BaseModel `bun:"table:post_variants"`
+
+	ID              string    `bun:",pk" json:"id"`
+	PostID          string    `bun:",notnull" json:"post_id"`
+	SocialAccountID string    `bun:",notnull" json:"social_account_id"`
+	Content         string    `bun:",notnull" json:"content"`
+	MediaIDs        string    `bun:",nullzero" json:"media_ids"` // JSON array of media IDs override
+	IsUnsynced      bool      `bun:",default:false" json:"is_unsynced"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}

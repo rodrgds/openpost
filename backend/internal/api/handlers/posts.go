@@ -1090,3 +1090,259 @@ func (h *PostHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, use
 	}
 	return nil
 }
+
+type VariantInput struct {
+	SocialAccountID string  `json:"social_account_id" doc:"Social account ID"`
+	Content         *string `json:"content,omitempty" doc:"Custom content for this platform (empty = use parent content)"`
+	MediaIDs        *string `json:"media_ids,omitempty" doc:"JSON array of media IDs override"`
+	IsUnsynced      bool    `json:"is_unsynced" doc:"Whether this variant has diverged from parent"`
+}
+
+type UpsertVariantsInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+	Body   struct {
+		Variants []VariantInput `json:"variants" doc:"Variant overrides per social account"`
+	}
+}
+
+type VariantResponse struct {
+	ID              string `json:"id" doc:"Variant ID"`
+	PostID          string `json:"post_id" doc:"Post ID"`
+	SocialAccountID string `json:"social_account_id" doc:"Social account ID"`
+	Content         string `json:"content" doc:"Variant content (empty = use parent)"`
+	MediaIDs        string `json:"media_ids" doc:"JSON array of media IDs override"`
+	IsUnsynced      bool   `json:"is_unsynced" doc:"Whether this variant has diverged from parent"`
+	CreatedAt       string `json:"created_at" doc:"Creation time"`
+	UpdatedAt       string `json:"updated_at" doc:"Last update time"`
+}
+
+type UpsertVariantsOutput struct {
+	Body struct {
+		Variants []VariantResponse `json:"variants" doc:"Updated variants"`
+	}
+}
+
+func (h *PostHandler) UpsertVariants(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "upsert-post-variants",
+		Method:      http.MethodPut,
+		Path:        "/posts/{id}/variants",
+		Summary:     "Upsert per-platform content variants for a post",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *UpsertVariantsInput) (*UpsertVariantsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			for _, v := range input.Body.Variants {
+				var existing models.PostVariant
+				err := tx.NewSelect().
+					Model(&existing).
+					Where("post_id = ? AND social_account_id = ?", input.PathID, v.SocialAccountID).
+					Scan(txCtx)
+
+				now := time.Now().UTC()
+				if errors.Is(err, sql.ErrNoRows) {
+					content := post.Content
+					if v.Content != nil {
+						content = *v.Content
+					}
+					mediaIDs := ""
+					if v.MediaIDs != nil {
+						mediaIDs = *v.MediaIDs
+					}
+					variant := models.PostVariant{
+						ID:              uuid.New().String(),
+						PostID:          input.PathID,
+						SocialAccountID: v.SocialAccountID,
+						Content:         content,
+						MediaIDs:        mediaIDs,
+						IsUnsynced:      v.IsUnsynced || (v.Content != nil),
+						CreatedAt:       now,
+						UpdatedAt:       now,
+					}
+					if _, err := tx.NewInsert().Model(&variant).Exec(txCtx); err != nil {
+						return err
+					}
+				} else {
+					if v.Content != nil {
+						existing.Content = *v.Content
+						existing.IsUnsynced = true
+					}
+					if v.MediaIDs != nil {
+						existing.MediaIDs = *v.MediaIDs
+						existing.IsUnsynced = true
+					}
+					if v.IsUnsynced {
+						existing.IsUnsynced = true
+					}
+					existing.UpdatedAt = now
+					if _, err := tx.NewUpdate().Model(&existing).Where("post_id = ? AND social_account_id = ?", input.PathID, v.SocialAccountID).Exec(txCtx); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to upsert variants")
+		}
+
+		var variants []models.PostVariant
+		h.db.NewSelect().
+			Model(&variants).
+			Where("post_id = ?", input.PathID).
+			Scan(ctx)
+
+		resp := make([]VariantResponse, len(variants))
+		for i, v := range variants {
+			resp[i] = VariantResponse{
+				ID:              v.ID,
+				PostID:          v.PostID,
+				SocialAccountID: v.SocialAccountID,
+				Content:         v.Content,
+				MediaIDs:        v.MediaIDs,
+				IsUnsynced:      v.IsUnsynced,
+				CreatedAt:       v.CreatedAt.Format(time.RFC3339),
+				UpdatedAt:       v.UpdatedAt.Format(time.RFC3339),
+			}
+		}
+
+		return &UpsertVariantsOutput{Body: struct {
+			Variants []VariantResponse `json:"variants" doc:"Updated variants"`
+		}{Variants: resp}}, nil
+	})
+}
+
+type GetVariantsInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+}
+
+type GetVariantsOutput struct {
+	Body struct {
+		Variants []VariantResponse `json:"variants" doc:"Post variants"`
+	}
+}
+
+func (h *PostHandler) GetVariants(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-post-variants",
+		Method:      http.MethodGet,
+		Path:        "/posts/{id}/variants",
+		Summary:     "Get per-platform content variants for a post",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *GetVariantsInput) (*GetVariantsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		var variants []models.PostVariant
+		h.db.NewSelect().
+			Model(&variants).
+			Where("post_id = ?", input.PathID).
+			Scan(ctx)
+
+		resp := make([]VariantResponse, len(variants))
+		for i, v := range variants {
+			resp[i] = VariantResponse{
+				ID:              v.ID,
+				PostID:          v.PostID,
+				SocialAccountID: v.SocialAccountID,
+				Content:         v.Content,
+				MediaIDs:        v.MediaIDs,
+				IsUnsynced:      v.IsUnsynced,
+				CreatedAt:       v.CreatedAt.Format(time.RFC3339),
+				UpdatedAt:       v.UpdatedAt.Format(time.RFC3339),
+			}
+		}
+
+		return &GetVariantsOutput{Body: struct {
+			Variants []VariantResponse `json:"variants" doc:"Post variants"`
+		}{Variants: resp}}, nil
+	})
+}
+
+type DeleteVariantsInput struct {
+	PathID string `path:"id" doc:"Post ID"`
+}
+
+type DeleteVariantsOutput struct {
+	Body struct {
+		Message string `json:"message" doc:"Success message"`
+	}
+}
+
+func (h *PostHandler) DeleteVariants(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-post-variants",
+		Method:      http.MethodDelete,
+		Path:        "/posts/{id}/variants",
+		Summary:     "Delete all variants for a post (reset to unified content)",
+		Tags:        []string{"Posts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *DeleteVariantsInput) (*DeleteVariantsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var post models.Post
+		err := h.db.NewSelect().
+			Model(&post).
+			Where("id = ?", input.PathID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("post not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch post")
+		}
+
+		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		_, err = h.db.NewDelete().
+			Model(&models.PostVariant{}).
+			Where("post_id = ?", input.PathID).
+			Exec(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to delete variants")
+		}
+
+		return &DeleteVariantsOutput{Body: struct {
+			Message string `json:"message" doc:"Success message"`
+		}{Message: "variants deleted successfully"}}, nil
+	})
+}

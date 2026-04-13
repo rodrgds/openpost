@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { client, type Workspace, type SocialAccount } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
@@ -14,15 +14,37 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { goto } from '$app/navigation';
 	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
+	import LayersIcon from 'lucide-svelte/icons/layers';
+	import PlusIcon from 'lucide-svelte/icons/plus';
+	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import { getPlatformName, getPlatformColor } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import SettingsIcon from 'lucide-svelte/icons/settings';
 
 	interface MastodonServer {
 		name: string;
 		instance_url: string;
+	}
+
+	interface SetAccount {
+		social_account_id: string;
+		platform: string;
+		account_username: string;
+		is_main: boolean;
+	}
+
+	interface SocialMediaSet {
+		id: string;
+		workspace_id: string;
+		name: string;
+		is_default: boolean;
+		created_at: string;
+		accounts: SetAccount[];
 	}
 
 	let workspaces = $state<Workspace[] | null>(null);
@@ -33,18 +55,32 @@
 	let accounts = $state<SocialAccount[]>([]);
 	let accountsLoading = $state(false);
 
+	let sets = $state<SocialMediaSet[]>([]);
+	let setsLoading = $state(false);
+
 	let mastodonServers = $state<MastodonServer[]>([]);
 	let selectedWorkspaceName = $derived(
 		workspaces?.find((workspace) => workspace.id === selectedWorkspaceId)?.name ||
 			'Select workspace'
 	);
 
-	// Bluesky modal state
 	let blueskyModalOpen = $state(false);
 	let blueskyHandle = $state('');
 	let blueskyAppPassword = $state('');
 	let blueskyLoading = $state(false);
 	let blueskyError = $state('');
+
+	let createSetDialogOpen = $state(false);
+	let newSetName = $state('');
+	let newSetDefault = $state(false);
+	let newSetAccountIds = $state<string[]>([]);
+	let createSetLoading = $state(false);
+
+	let editSetDialogOpen = $state(false);
+	let editingSet = $state<SocialMediaSet | null>(null);
+	let editSetName = $state('');
+	let editSetDefault = $state(false);
+	let editSetAccountIds = $state<string[]>([]);
 
 	async function loadAccounts() {
 		if (!selectedWorkspaceId) return;
@@ -59,6 +95,22 @@
 			accounts = [];
 		} finally {
 			accountsLoading = false;
+		}
+	}
+
+	async function loadSets() {
+		if (!selectedWorkspaceId) return;
+		setsLoading = true;
+		try {
+			const { data, error: err } = await client.GET('/sets', {
+				params: { query: { workspace_id: selectedWorkspaceId } }
+			});
+			sets = (data ?? []) as unknown as SocialMediaSet[];
+		} catch (e) {
+			console.error('Failed to load sets:', e);
+			sets = [];
+		} finally {
+			setsLoading = false;
 		}
 	}
 
@@ -78,9 +130,94 @@
 				params: { path: { account_id: accountId } }
 			});
 			await loadAccounts();
+			await loadSets();
 		} catch (e) {
 			error = (e as Error).message;
 		}
+	}
+
+	async function createSet() {
+		if (!newSetName.trim() || !selectedWorkspaceId) return;
+		createSetLoading = true;
+		try {
+			await (client as any).POST('/sets', {
+				body: {
+					workspace_id: selectedWorkspaceId,
+					name: newSetName.trim(),
+					is_default: newSetDefault,
+					account_ids: newSetAccountIds
+				}
+			});
+			createSetDialogOpen = false;
+			newSetName = '';
+			newSetDefault = false;
+			newSetAccountIds = [];
+			await loadSets();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			createSetLoading = false;
+		}
+	}
+
+	async function updateSet() {
+		if (!editingSet || !editSetName.trim()) return;
+		createSetLoading = true;
+		try {
+			await (client as any).PATCH('/sets/{id}', {
+				params: { path: { id: editingSet.id } },
+				body: {
+					name: editSetName.trim(),
+					is_default: editSetDefault
+				}
+			});
+
+			const currentAccIds = editingSet.accounts.map((a) => a.social_account_id);
+			const toAdd = editSetAccountIds.filter((id) => !currentAccIds.includes(id));
+			const toRemove = currentAccIds.filter((id) => !editSetAccountIds.includes(id));
+
+			for (const accId of toAdd) {
+				await (client as any).POST('/sets/{id}/accounts', {
+					params: { path: { id: editingSet.id } },
+					body: { account_ids: [accId] }
+				});
+			}
+
+			for (const accId of toRemove) {
+				await (client as any).DELETE('/sets/{id}/accounts/{account_id}', {
+					params: { path: { id: editingSet.id, account_id: accId } }
+				});
+			}
+
+			editSetDialogOpen = false;
+			editingSet = null;
+			await loadSets();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			createSetLoading = false;
+		}
+	}
+
+	async function deleteSet(setId: string) {
+		if (!confirm('Delete this set? Posts using this set will keep their account selections.'))
+			return;
+		try {
+			await (client as any).DELETE('/sets/{id}', {
+				params: { path: { id: setId } }
+			});
+			await loadSets();
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
+	function openEditSet(set: SocialMediaSet) {
+		editingSet = set;
+		editSetName = set.name;
+		editSetDefault = set.is_default;
+		editSetAccountIds = set.accounts.map((a) => a.social_account_id);
+		editSetDialogOpen = true;
 	}
 
 	onMount(() => {
@@ -101,6 +238,7 @@
 					if (workspaces && workspaces.length > 0) {
 						selectedWorkspaceId = workspaces[0].id;
 						await loadAccounts();
+						await loadSets();
 					}
 					await loadMastodonServers();
 				} catch (e) {
@@ -116,6 +254,7 @@
 	$effect(() => {
 		if (selectedWorkspaceId) {
 			loadAccounts();
+			loadSets();
 		}
 	});
 
@@ -188,6 +327,7 @@
 			if (err) throw new Error(err.detail || 'Login failed');
 			blueskyModalOpen = false;
 			await loadAccounts();
+			await loadSets();
 		} catch (e) {
 			blueskyError = (e as Error).message;
 		} finally {
@@ -236,6 +376,32 @@
 			error = (e as Error).message;
 		}
 	}
+
+	function toggleNewSetAccount(accId: string) {
+		if (newSetAccountIds.includes(accId)) {
+			newSetAccountIds = newSetAccountIds.filter((id) => id !== accId);
+		} else {
+			newSetAccountIds = [...newSetAccountIds, accId];
+		}
+	}
+
+	function toggleEditSetAccount(accId: string) {
+		if (editSetAccountIds.includes(accId)) {
+			editSetAccountIds = editSetAccountIds.filter((id) => id !== accId);
+		} else {
+			editSetAccountIds = [...editSetAccountIds, accId];
+		}
+	}
+
+	const accountsByPlatform = $derived.by(() => {
+		const grouped = new Map<string, SocialAccount[]>();
+		for (const acc of accounts) {
+			const key = acc.platform;
+			if (!grouped.has(key)) grouped.set(key, []);
+			grouped.get(key)!.push(acc);
+		}
+		return grouped;
+	});
 </script>
 
 <svelte:head>
@@ -260,7 +426,7 @@
 	</div>
 {:else}
 	<div class="mx-auto max-w-4xl px-4 py-8">
-		<h1 class="mb-6 text-2xl font-bold">Connected Accounts</h1>
+		<h1 class="mb-6 text-2xl font-bold">Accounts & Sets</h1>
 
 		{#if error}
 			<div
@@ -307,46 +473,157 @@
 			</DropdownMenu.Root>
 		</div>
 
+		<div class="mb-8 space-y-4">
+			<div class="flex items-center justify-between">
+				<h2 class="text-lg font-medium">Social Media Sets</h2>
+				<Button onclick={() => (createSetDialogOpen = true)} size="sm" class="gap-1">
+					<PlusIcon class="h-4 w-4" />
+					New Set
+				</Button>
+			</div>
+
+			{#if setsLoading}
+				<div class="flex justify-center py-4">
+					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
+				</div>
+			{:else if sets.length === 0}
+				<div class="rounded-md border border-dashed bg-muted/50 p-6 text-center">
+					<LayersIcon class="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+					<p class="mb-1 text-sm font-medium">No sets yet</p>
+					<p class="mb-3 text-xs text-muted-foreground">
+						Create sets to group accounts for quick posting
+					</p>
+					<Button onclick={() => (createSetDialogOpen = true)} size="sm">
+						Create your first set
+					</Button>
+				</div>
+			{:else}
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					{#each sets as set}
+						<Card class="relative">
+							<CardContent class="p-4">
+								<div class="mb-3 flex items-start justify-between">
+									<div class="flex items-center gap-2">
+										<div
+											class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10"
+										>
+											<LayersIcon class="h-5 w-5 text-primary" />
+										</div>
+										<div>
+											<h3 class="font-medium">{set.name}</h3>
+											<p class="text-xs text-muted-foreground">
+												{set.accounts.length} account{set.accounts.length !== 1 ? 's' : ''}
+											</p>
+										</div>
+									</div>
+									<div class="flex items-center gap-1">
+										{#if set.is_default}
+											<span class="rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
+												Default
+											</span>
+										{/if}
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-8 w-8"
+											onclick={() => openEditSet(set)}
+										>
+											<SettingsIcon class="h-4 w-4" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-8 w-8 text-destructive hover:text-destructive"
+											onclick={() => deleteSet(set.id)}
+										>
+											<TrashIcon class="h-4 w-4" />
+										</Button>
+									</div>
+								</div>
+								{#if set.accounts.length > 0}
+									<div class="flex flex-wrap gap-1">
+										{#each set.accounts as acc}
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+											>
+												<PlatformIcon platform={acc.platform} class="h-3 w-3" />
+												{acc.account_username || acc.platform}
+											</span>
+										{/each}
+									</div>
+								{:else}
+									<p class="text-xs text-muted-foreground">No accounts in this set</p>
+								{/if}
+							</CardContent>
+						</Card>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
 		<div class="mb-8">
 			<h2 class="mb-4 text-lg font-medium">Connected Accounts</h2>
 
 			{#if accountsLoading}
 				<div class="flex justify-center py-4">
-					<div class="h-6 w-6 animate-spin rounded-full border-b-2 border-primary"></div>
+					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
 				</div>
 			{:else if !accounts || accounts.length === 0}
 				<div class="rounded-md border bg-muted/50 p-4 text-center text-muted-foreground">
 					No accounts connected yet. Connect a platform below to get started.
 				</div>
 			{:else}
-				<div class="space-y-3">
-					{#each accounts as account}
+				<div class="space-y-4">
+					{#each [...accountsByPlatform.entries()] as [platform, platformAccounts]}
 						<Card>
-							<CardContent class="flex items-center justify-between p-4">
-								<div class="flex items-center gap-3">
+							<CardContent class="p-4">
+								<div class="mb-3 flex items-center gap-3">
 									<div
 										class="h-10 w-10 {getPlatformColor(
-											account.platform
+											platform
 										)} flex items-center justify-center rounded-full"
 									>
-										<PlatformIcon platform={account.platform} class="h-4 w-4 text-white" />
+										<PlatformIcon {platform} class="h-5 w-5 text-white" />
 									</div>
 									<div>
-										<h3 class="font-medium capitalize">{account.platform}</h3>
+										<h3 class="font-medium capitalize">{getPlatformName(platform)}</h3>
 										<p class="text-sm text-muted-foreground">
-											{#if account.account_username}
-												@{account.account_username}
-											{:else if account.instance_url}
-												{account.instance_url.replace('https://', '')}
-											{:else}
-												Account ID: {account.account_id}
-											{/if}
+											{platformAccounts.length} account{platformAccounts.length !== 1 ? 's' : ''}
 										</p>
 									</div>
 								</div>
-								<Button variant="outline" size="sm" onclick={() => disconnectAccount(account.id)}>
-									Disconnect
-								</Button>
+								<div class="space-y-2">
+									{#each platformAccounts as account}
+										<div class="flex items-center justify-between rounded-md border p-3">
+											<div class="flex items-center gap-3">
+												<div class="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+													<PlatformIcon platform={account.platform} class="h-4 w-4" />
+												</div>
+												<div>
+													<p class="font-medium">
+														{#if account.account_username}
+															@{account.account_username}
+														{:else if account.instance_url}
+															{account.instance_url.replace('https://', '')}
+														{:else}
+															{account.account_id}
+														{/if}
+													</p>
+													<p class="text-xs text-muted-foreground">
+														{account.is_active ? 'Connected' : 'Disconnected'}
+													</p>
+												</div>
+											</div>
+											<Button
+												variant="outline"
+												size="sm"
+												onclick={() => disconnectAccount(account.id)}
+											>
+												Disconnect
+											</Button>
+										</div>
+									{/each}
+								</div>
 							</CardContent>
 						</Card>
 					{/each}
@@ -512,5 +789,139 @@
 				</Button>
 			</div>
 		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={createSetDialogOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Create Social Media Set</Dialog.Title>
+			<Dialog.Description>
+				Group accounts together for quick posting. Sets appear in the compose post dropdown.
+			</Dialog.Description>
+		</Dialog.Header>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				createSet();
+			}}
+			class="space-y-4"
+		>
+			<div class="space-y-2">
+				<Label for="set-name">Set Name</Label>
+				<Input
+					id="set-name"
+					bind:value={newSetName}
+					placeholder="e.g. Tech Twitter, Professional"
+					required
+				/>
+			</div>
+			<div class="flex items-center gap-2">
+				<Checkbox id="set-default" bind:checked={newSetDefault} />
+				<Label for="set-default" class="text-sm font-normal">
+					Set as the default set for this workspace
+				</Label>
+			</div>
+			{#if accounts.length > 0}
+				<div class="space-y-2">
+					<Label>Accounts to Include</Label>
+					<div class="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
+						{#each accounts as account}
+							<label class="flex items-center gap-2 rounded p-2 hover:bg-muted/50">
+								<Checkbox
+									checked={newSetAccountIds.includes(account.id)}
+									onCheckedChange={() => toggleNewSetAccount(account.id)}
+								/>
+								<PlatformIcon platform={account.platform} class="h-4 w-4" />
+								<span class="text-sm">
+									{#if account.account_username}
+										@{account.account_username}
+									{:else if account.instance_url}
+										{account.instance_url.replace('https://', '')}
+									{:else}
+										{account.platform}
+									{/if}
+								</span>
+							</label>
+						{/each}
+					</div>
+				</div>
+			{/if}
+			<div class="flex justify-end gap-2">
+				<Dialog.Close>
+					<Button variant="outline" type="button">Cancel</Button>
+				</Dialog.Close>
+				<Button type="submit" disabled={createSetLoading || !newSetName.trim()}>
+					{createSetLoading ? 'Creating...' : 'Create Set'}
+				</Button>
+			</div>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={editSetDialogOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Edit Social Media Set</Dialog.Title>
+			<Dialog.Description>Update the set name, default status, and accounts.</Dialog.Description>
+		</Dialog.Header>
+		{#if editingSet}
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					updateSet();
+				}}
+				class="space-y-4"
+			>
+				<div class="space-y-2">
+					<Label for="edit-set-name">Set Name</Label>
+					<Input
+						id="edit-set-name"
+						bind:value={editSetName}
+						placeholder="e.g. Tech Twitter, Professional"
+						required
+					/>
+				</div>
+				<div class="flex items-center gap-2">
+					<Checkbox id="edit-set-default" bind:checked={editSetDefault} />
+					<Label for="edit-set-default" class="text-sm font-normal">
+						Set as the default set for this workspace
+					</Label>
+				</div>
+				{#if accounts.length > 0}
+					<div class="space-y-2">
+						<Label>Accounts in Set</Label>
+						<div class="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
+							{#each accounts as account}
+								<label class="flex items-center gap-2 rounded p-2 hover:bg-muted/50">
+									<Checkbox
+										checked={editSetAccountIds.includes(account.id)}
+										onCheckedChange={() => toggleEditSetAccount(account.id)}
+									/>
+									<PlatformIcon platform={account.platform} class="h-4 w-4" />
+									<span class="text-sm">
+										{#if account.account_username}
+											@{account.account_username}
+										{:else if account.instance_url}
+											{account.instance_url.replace('https://', '')}
+										{:else}
+											{account.platform}
+										{/if}
+									</span>
+								</label>
+							{/each}
+						</div>
+					</div>
+				{/if}
+				<div class="flex justify-end gap-2">
+					<Dialog.Close>
+						<Button variant="outline" type="button">Cancel</Button>
+					</Dialog.Close>
+					<Button type="submit" disabled={createSetLoading || !editSetName.trim()}>
+						{createSetLoading ? 'Saving...' : 'Save Changes'}
+					</Button>
+				</div>
+			</form>
+		{/if}
 	</Dialog.Content>
 </Dialog.Root>

@@ -156,6 +156,18 @@ func main() {
 	postHandler.UpdatePost(api)
 	postHandler.DeletePost(api)
 	postHandler.GetScheduleOverview(api)
+	postHandler.UpsertVariants(api)
+	postHandler.GetVariants(api)
+	postHandler.DeleteVariants(api)
+
+	setHandler := handlers.NewSetHandler(db, authService)
+	setHandler.CreateSet(api)
+	setHandler.ListSets(api)
+	setHandler.GetSet(api)
+	setHandler.UpdateSet(api)
+	setHandler.DeleteSet(api)
+	setHandler.AddSetAccounts(api)
+	setHandler.RemoveSetAccount(api)
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)
 	oauthHandler.ListMastodonServers(api)

@@ -23,6 +23,9 @@
 	import { getPlatformKey, getPlatformName } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import * as Collapsible from '$lib/components/ui/collapsible';
+	import UnlinkIcon from 'lucide-svelte/icons/unlink';
+	import Link2Icon from 'lucide-svelte/icons/link-2';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	type SocialAccountWithThreadSupport = SocialAccount & {
 		thread_replies_supported?: boolean;
@@ -49,6 +52,26 @@
 		scheduled_at: string;
 		media: PostMedia[];
 		destinations: PostDestination[];
+	}
+
+	interface SocialMediaSet {
+		id: string;
+		workspace_id: string;
+		name: string;
+		is_default: boolean;
+		created_at: string;
+		accounts: Array<{
+			social_account_id: string;
+			platform: string;
+			account_username: string;
+			is_main: boolean;
+		}>;
+	}
+
+	interface VariantOverride {
+		social_account_id: string;
+		content: string;
+		is_unsynced: boolean;
 	}
 
 	interface Props {
@@ -81,6 +104,13 @@
 	let loadingWorkspaces = $state(true);
 	let loadingAccounts = $state(false);
 	let accountsPanelOpen = $state(false);
+
+	let sets = $state<SocialMediaSet[]>([]);
+	let selectedSetId = $state<string | null>(null);
+	let loadingSets = $state(false);
+
+	let variants = $state<Map<string, string>>(new Map());
+	let platformCustomizationOpen = $state(false);
 
 	let selectedDate = $state<CalendarDate | undefined>(undefined);
 	let selectedTime = $state<string | null>(null);
@@ -137,6 +167,41 @@
 		}
 	});
 
+	async function loadSets(workspaceId: string) {
+		loadingSets = true;
+		try {
+			const { data, error: err } = await client.GET('/sets', {
+				params: { query: { workspace_id: workspaceId } }
+			});
+			sets = (data ?? []) as unknown as SocialMediaSet[];
+			const defaultSet = sets.find((s) => s.is_default);
+			if (defaultSet && !selectedSetId) {
+				selectedSetId = defaultSet.id;
+				applySetAccounts(defaultSet);
+			}
+		} catch (e) {
+			console.error('Failed to load sets:', e);
+			sets = [];
+		} finally {
+			loadingSets = false;
+		}
+	}
+
+	function applySetAccounts(set: SocialMediaSet) {
+		const accountIds = set.accounts.map((a) => a.social_account_id);
+		selectedAccountIds = accountIds;
+	}
+
+	function handleSetChange(setId: string | null) {
+		selectedSetId = setId;
+		if (setId) {
+			const set = sets.find((s) => s.id === setId);
+			if (set) {
+				applySetAccounts(set);
+			}
+		}
+	}
+
 	async function loadAccounts(workspaceId: string) {
 		if (!workspaceId) return;
 		loadingAccounts = true;
@@ -150,6 +215,7 @@
 				.map((a) => a.id);
 			selectedAccountIds = allowedIds;
 			accountsPanelOpen = false;
+			await loadSets(workspaceId);
 		} catch (e) {
 			console.error('Failed to load accounts:', e);
 			accounts = [];
@@ -161,6 +227,8 @@
 
 	function handleWorkspaceChange(value: string) {
 		selectedWorkspaceId = value;
+		selectedSetId = null;
+		variants = new Map();
 		loadAccounts(value);
 	}
 
@@ -175,16 +243,19 @@
 		} else {
 			selectedAccountIds = [...selectedAccountIds, id];
 		}
+		selectedSetId = null;
 	}
 
 	function selectAllAccounts() {
 		selectedAccountIds = accounts
 			.filter((a) => !isThreadMode || a.thread_replies_supported !== false)
 			.map((a) => a.id);
+		selectedSetId = null;
 	}
 
 	function clearAllAccounts() {
 		selectedAccountIds = [];
+		selectedSetId = null;
 	}
 
 	function isThreadDisabledAccount(account: SocialAccountWithThreadSupport): boolean {
@@ -316,6 +387,19 @@
 					}
 				});
 				if (err) throw new Error((err as any)?.detail || 'Failed to update post');
+
+				if (variants.size > 0) {
+					const variantPayload = Array.from(variants.entries()).map(([accId, variantContent]) => ({
+						social_account_id: accId,
+						content: variantContent,
+						is_unsynced: true
+					}));
+					await (client as any).PUT('/posts/{id}/variants', {
+						params: { path: { id: editingPostId } },
+						body: { variants: variantPayload }
+					});
+				}
+
 				if (onSuccess) onSuccess();
 			} else if (isThreadMode) {
 				const validPosts = threadPosts.filter((p) => p.content.trim().length > 0);
@@ -325,7 +409,7 @@
 					return;
 				}
 
-				const { error: err } = await client.POST('/posts/thread' as any, {
+				const { data, error: err } = await client.POST('/posts/thread' as any, {
 					body: {
 						workspace_id: selectedWorkspaceId,
 						social_account_ids: selectedAccountIds,
@@ -337,9 +421,23 @@
 					}
 				});
 				if (err) throw new Error((err as any).detail || 'Failed to create thread');
+
+				if (data?.post_ids && variants.size > 0) {
+					const firstPostId = data.post_ids[0];
+					const variantPayload = Array.from(variants.entries()).map(([accId, variantContent]) => ({
+						social_account_id: accId,
+						content: variantContent,
+						is_unsynced: true
+					}));
+					await (client as any).PUT('/posts/{id}/variants', {
+						params: { path: { id: firstPostId } },
+						body: { variants: variantPayload }
+					});
+				}
+
 				if (onSuccess) onSuccess();
 			} else {
-				const { error: err } = await client.POST('/posts', {
+				const { data, error: err } = await client.POST('/posts', {
 					body: {
 						workspace_id: selectedWorkspaceId,
 						content,
@@ -349,6 +447,20 @@
 					}
 				});
 				if (err) throw new Error(err.detail || 'Failed to create post');
+
+				if (data?.id && variants.size > 0) {
+					const postId = isEditMode && editingPostId ? editingPostId : data.id;
+					const variantPayload = Array.from(variants.entries()).map(([accId, variantContent]) => ({
+						social_account_id: accId,
+						content: variantContent,
+						is_unsynced: true
+					}));
+					await (client as any).PUT('/posts/{id}/variants', {
+						params: { path: { id: postId } },
+						body: { variants: variantPayload }
+					});
+				}
+
 				if (onSuccess) onSuccess();
 			}
 		} catch (e) {
@@ -423,6 +535,22 @@
 			isThreadMode = false;
 		}
 	}
+
+	function handleVariantChange(accountId: string, value: string) {
+		const newVariants = new Map(variants);
+		if (value === content) {
+			newVariants.delete(accountId);
+		} else {
+			newVariants.set(accountId, value);
+		}
+		variants = newVariants;
+	}
+
+	function isVariantUnsynced(accountId: string): boolean {
+		return variants.has(accountId);
+	}
+
+	const hasVariants = $derived(variants.size > 0);
 </script>
 
 <div class="space-y-6">
@@ -597,6 +725,51 @@
 								>{:else}Select a workspace first.{/if}
 						</div>
 					{:else}
+						{#if sets.length > 0 && !isEditMode}
+							<div class="mb-3 flex items-center gap-2">
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button {...props} variant="outline" size="sm" class="gap-2">
+												<LayersIcon class="h-4 w-4" />
+												{sets.find((s) => s.id === selectedSetId)?.name || 'Select a set'}
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content class="w-56" align="start">
+										<DropdownMenu.Item onSelect={() => handleSetChange(null)} class="gap-2">
+											<div class="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+												<Link2Icon class="h-4 w-4" />
+											</div>
+											<span>All accounts</span>
+										</DropdownMenu.Item>
+										<DropdownMenu.Separator />
+										{#each sets as set}
+											<DropdownMenu.Item onSelect={() => handleSetChange(set.id)} class="gap-2">
+												<div
+													class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"
+												>
+													<LayersIcon class="h-4 w-4" />
+												</div>
+												<div class="flex flex-col">
+													<span>{set.name}</span>
+													<span class="text-xs text-muted-foreground">
+														{set.accounts.length} account{set.accounts.length !== 1 ? 's' : ''}
+													</span>
+												</div>
+												{#if set.is_default}
+													<span class="ml-auto text-xs text-muted-foreground">Default</span>
+												{/if}
+											</DropdownMenu.Item>
+										{/each}
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+								<Button href="/accounts" variant="ghost" size="sm" class="text-xs">
+									Manage sets
+								</Button>
+							</div>
+						{/if}
+
 						<Collapsible.Root bind:open={accountsPanelOpen}>
 							<Collapsible.Trigger
 								class="flex w-full items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
@@ -677,6 +850,69 @@
 								</div>
 							</Collapsible.Content>
 						</Collapsible.Root>
+
+						{#if selectedAccountIds.length > 1 && !isEditMode}
+							<Collapsible.Root bind:open={platformCustomizationOpen}>
+								<Collapsible.Trigger
+									class="mt-3 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+								>
+									{#if hasVariants}
+										<UnlinkIcon class="h-4 w-4 text-primary" />
+									{:else}
+										<Link2Icon class="h-4 w-4" />
+									{/if}
+									<span>
+										{hasVariants
+											? `Customizing ${variants.size} platform${variants.size !== 1 ? 's' : ''}`
+											: 'Customize per platform'}
+									</span>
+								</Collapsible.Trigger>
+								<Collapsible.Content>
+									<div class="mt-3 space-y-3">
+										<p class="text-xs text-muted-foreground">
+											Override content for specific platforms. Leave empty to use the default
+											content above.
+										</p>
+										{#each selectedAccountIds as accId}
+											{@const account = accounts.find((a) => a.id === accId)}
+											{#if account}
+												<div class="space-y-1">
+													<div class="flex items-center gap-2">
+														<PlatformIcon
+															platform={getPlatformKey(account.platform)}
+															class="h-4 w-4"
+														/>
+														<span class="text-sm font-medium capitalize">
+															{getPlatformName(account.platform)}
+														</span>
+														{#if isVariantUnsynced(accId)}
+															<span
+																class="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
+															>
+																Customized
+															</span>
+														{/if}
+													</div>
+													<Textarea
+														value={variants.get(accId) ?? content}
+														oninput={(e) =>
+															handleVariantChange(accId, (e.target as HTMLTextAreaElement).value)}
+														rows={3}
+														placeholder="Use default content..."
+														class="resize-none text-sm"
+													/>
+													<div class="flex justify-end">
+														<span class="text-xs text-muted-foreground">
+															{(variants.get(accId) ?? content).length} characters
+														</span>
+													</div>
+												</div>
+											{/if}
+										{/each}
+									</div>
+								</Collapsible.Content>
+							</Collapsible.Root>
+						{/if}
 					{/if}
 				</div>
 			</div>
