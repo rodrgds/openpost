@@ -285,30 +285,93 @@ type SocialMediaSetAccount struct {
 **Why:** Users need to manage their media assets — see what's uploaded, what's used, and clean up unused files.
 
 **Backend changes:**
-- `GET /media?workspace_id={id}` — List all media for a workspace with usage info
+- `GET /media?workspace_id={id}` — List all media for a workspace with usage info (pagination support)
 - `GET /media/{id}/usage` — Return which posts reference this media
 - `DELETE /media/{id}` — Delete media (only if not attached to any post)
-- Add `is_favorite` field to `MediaAttachment` model
+- `PATCH /media/{id}` — Update alt text, favorite status
+- `POST /media/batch-delete` — Delete multiple unused media at once
+- `POST /media/upload` — Accept batch upload (multiple files)
 
 **Data model changes:**
 
 ```go
 type MediaAttachment struct {
-    // ... existing fields ...
-    IsFavorite bool      `bun:",default:false" json:"is_favorite"`
-    CreatedAt  time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+    bun.BaseModel `bun:"table:media_attachments"`
+
+    ID               string    `bun:",pk" json:"id"`
+    WorkspaceID      string    `bun:",notnull" json:"workspace_id"`
+    FilePath         string    `bun:",notnull" json:"file_path"`
+    StorageType      string    `bun:",default:'local'" json:"storage_type"` // 'local', 's3'
+
+    // Original file info
+    MimeType         string    `json:"mime_type"`
+    Size             int64     `json:"size"`
+    OriginalFilename string    `json:"original_filename"`
+
+    // Image-specific metadata
+    Width            int       `json:"width"`
+    Height           int       `json:"height"`
+
+    // Thumbnail paths (JSON: {"sm": "sm_xxx.jpg", "md": "md_xxx.jpg"})
+    ThumbnailsJSON   string    `bun:"thumbnails" json:"thumbnails"`
+
+    // Deduplication
+    FileHash         string    `bun:",unique" json:"-"` // SHA-256 for detecting duplicates
+
+    // User-facing metadata
+    AltText          string    `json:"alt_text"`
+    IsFavorite       bool      `bun:",default:false" json:"is_favorite"`
+
+    // Usage tracking (denormalized for quick filtering)
+    UsageCount       int       `bun:",default:0" json:"usage_count"`
+    LastUsedAt       time.Time `json:"last_used_at"`
+
+    CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// MediaUsage tracks which posts use which media (replaces simple PostMedia join for richer queries)
+type MediaUsage struct {
+    bun.BaseModel `bun:"table:media_usage"`
+
+    MediaID    string    `bun:",pk" json:"media_id"`
+    PostID     string    `bun:",pk" json:"post_id"`
+    VariantID  string    `json:"variant_id"` // If used in a platform variant
+    UsedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"used_at"`
 }
 ```
 
+**Thumbnail generation:**
+- On upload, generate small (150px) and medium (400px) thumbnails using `github.com/disintegration/imaging`
+- Store thumbnails alongside originals with size prefix (`sm_`, `md_`)
+- Return thumbnail URLs in API responses for grid views
+- Use original file for compose preview and publishing
+
+**Deduplication:**
+- Compute SHA-256 hash on upload before storing
+- If hash matches existing media in same workspace, return existing media ID instead
+- Prevents storage bloat from repeated uploads
+
+**Batch operations:**
+- Batch delete: `POST /media/batch-delete` with array of IDs, onlyDeletes unused ones
+- Batch upload: multipart form with multiple files, returns array of media objects
+
 **Frontend:**
 - New route: `/media/+page.svelte`
-- Grid view of media thumbnails with:
-  - Usage indicator: "Used in 2 posts" / "Unused" / "Attached to scheduled post"
-  - Favorite toggle (heart/star)
-  - Delete button (disabled if attached to scheduled/published posts with tooltip explaining why)
-  - Filter: All / Used / Unused / Favorites
-  - Sort: Newest / Oldest / Size
-- Upload new media directly from the library page
+- Grid view of media thumbnails (use the `sm` thumbnail for grid, `md` for preview)
+- Usage indicator: "Used in 2 posts" / "Unused" / "Attached to scheduled post"
+- Favorite toggle (heart/star)
+- Delete button (disabled if attached to scheduled/published posts with tooltip explaining why)
+- Batch selection with toolbar actions (delete selected, favorite selected)
+- Filter: All / Used / Unused / Favorites
+- Sort: Newest / Oldest / Size
+- Upload new media directly from the library page (drag-and-drop zone)
+
+**Libraries:**
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/disintegration/imaging` | Thumbnail generation, image resizing |
+| `crypto/sha256` (stdlib) | File deduplication hashing |
 
 ---
 
@@ -328,7 +391,10 @@ type MediaAttachment struct {
   - `is_favorite = false`
   - `created_at < NOW() - INTERVAL cleanup_days DAYS`
 - Deletes the media file from storage and the database record
+- Also deletes any orphaned thumbnail files
 - Add workspace settings UI for this toggle
+
+**Important consideration:** The cleanup job should also remove thumbnail files (`sm_*`, `md_*` prefixes) when deleting media, not just the original.
 
 ---
 
@@ -360,6 +426,8 @@ type Post struct {
 }
 ```
 
+**Edge case:** If the randomized time pushes the post to the next day, the calendar should still show the user-intended time, not the actual run time.
+
 ---
 
 #### 4.2 Posting Schedule (Time Slots)
@@ -385,11 +453,28 @@ type PostingSchedule struct {
     ID          string `bun:",pk" json:"id"`
     WorkspaceID string `bun:",notnull" json:"workspace_id"`
     SetID       string `json:"set_id"` // Optional: per-set schedules
-    DayOfWeek   int    `bun:",notnull" json:"day_of_week"` // 0=Sunday, 6=Saturday
-    Hour        int    `bun:",notnull" json:"hour"`        // 0-23
-    Minute      int    `bun:",notnull" json:"minute"`       // 0-59
+
+    // Store times in UTC for consistency, convert on read using workspace timezone
+    UTCHour    int    `bun:",notnull" json:"utc_hour"`    // 0-23 UTC
+    UTCMinute  int    `bun:",notnull" json:"utc_minute"`  // 0-59 UTC
+    DayOfWeek  int    `bun:",notnull" json:"day_of_week"` // 0=Sunday, 6=Saturday (in UTC)
+
+    // Display/helpers
+    Label      string `json:"label"`     // e.g., "Morning", "Lunch", "Evening"
+    IsActive   bool   `bun:",default:true" json:"is_active"`
+
+    CreatedAt  time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 ```
+
+**Important:** Times must be stored in UTC and converted to/from the workspace's timezone on read. This prevents bugs when users change their timezone or when daylight saving time shifts occur. The `Workspace.Timezone` field (from Phase 5) is used for all display conversions.
+
+**"Next available slot" logic:**
+1. Get current time in workspace timezone
+2. Look up active schedule entries for the current day-of-week
+3. Find the first slot where `UTCHour:UTCMinute` is after `now`
+4. If no slots remain today, check the next day, wrapping around the week
+5. Apply `RandomDelayMinutes` if configured
 
 ---
 
@@ -407,14 +492,21 @@ type PostingSchedule struct {
 
 **Sections:**
 - **Profile** — Email, password change
+- **Security** — Two-factor authentication (TOTP), active sessions, login history
 - **Workspace Settings** — Default timezone, week start (Mon/Sun), media cleanup
 - **Posting Schedule** — Time slots management
 - **Connected Accounts** — Manage sets (link to accounts page)
-- **Danger Zone** — Delete workspace, leave workspace
+- **Integrations** — Directus config, AI config (keys for later phases)
+- **Danger Zone** — Delete workspace, leave workspace, export data
 
 **Backend:**
 - `GET /settings` — Return user preferences + workspace settings
 - `PATCH /settings` — Update preferences
+- `POST /settings/2fa/enable` — Enable TOTP 2FA (returns QR code + backup codes)
+- `POST /settings/2fa/verify` — Verify 2FA setup
+- `POST /settings/2fa/disable` — Disable 2FA
+- `GET /settings/sessions` — List active sessions
+- `DELETE /settings/sessions/{id}` — Revoke a session
 - Add `timezone` and `week_start` fields to `Workspace` model
 
 **Data model changes:**
@@ -426,7 +518,40 @@ type Workspace struct {
     WeekStart          int    `bun:",default:1" json:"week_start"` // 0=Sunday, 1=Monday
     MediaCleanupDays   int    `bun:",default:0" json:"media_cleanup_days"` // 0 = disabled
 }
+
+// NEW: Two-factor authentication
+type User2FA struct {
+    bun.BaseModel `bun:"table:user_2fa"`
+
+    ID           string    `bun:",pk" json:"id"`
+    UserID       string    `bun:",unique,notnull" json:"user_id"`
+    Secret       string    `bun:",notnull" json:"-"` // TOTP secret (encrypted)
+    BackupCodes  string    `bun:",notnull" json:"-"` // JSON array of hashed backup codes
+    Enabled      bool      `bun:",default:false" json:"enabled"`
+    VerifiedAt   time.Time `json:"verified_at"`
+    CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// NEW: Session tracking
+type UserSession struct {
+    bun.BaseModel `bun:"table:user_sessions"`
+
+    ID           string    `bun:",pk" json:"id"`
+    UserID       string    `bun:",notnull" json:"user_id"`
+    TokenHash    string    `bun:",notnull" json:"-"` // Hashed refresh token
+    DeviceInfo   string    `json:"device_info"`     // User-Agent parsed
+    IPAddress    string    `json:"ip_address"`
+    LastActiveAt time.Time `json:"last_active_at"`
+    ExpiresAt    time.Time `bun:",notnull" json:"expires_at"`
+    CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
 ```
+
+**2FA Library:**
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/pquerna/otp` | TOTP/HOTP implementation for 2FA |
 
 ---
 
@@ -434,13 +559,13 @@ type Workspace struct {
 
 ---
 
-#### 6.1 Prompt Library
+#### 6.1 Prompt Library & Content Templates
 
 **Priority:** Medium  
 **Effort:** Medium  
 **Depends on:** 1.1 (compose page)
 
-**What:** A `/prompts` page with a curated library of writing prompts, plus integration into the compose page for quick inspiration.
+**What:** A `/prompts` page with a curated library of writing prompts, plus content templates with variable substitution for reuse. Also, integration into the compose page for quick inspiration.
 
 **Implementation:**
 
@@ -448,63 +573,311 @@ type Workspace struct {
 - Seed prompts stored as JSON or in the database (start with a static file, move to DB later)
 - `GET /prompts?category={cat}` — List prompts with optional category filter
 - `POST /prompts` — Create custom prompt (user-specific)
+- `GET /templates` — List content templates
+- `POST /templates` — Create template with variable placeholders
+- `POST /templates/{id}/render` — Render a template with given variables
 - Categories: "Tools & Workflow", "Reflection", "Announcement", "Engagement", "Tutorial", etc.
 
-**Data model:**
+**Data models:**
 
 ```go
 type Prompt struct {
     bun.BaseModel `bun:"table:prompts"`
 
-    ID         string `bun:",pk" json:"id"`
-    WorkspaceID string `json:"workspace_id"` // null = global prompt
-    UserID     string `json:"user_id"`        // null = workspace/global prompt
-    Text       string `bun:",notnull" json:"text"`
-    Category   string `bun:",notnull" json:"category"`
-    IsBuiltIn  bool   `bun:",default:false" json:"is_built_in"`
-    CreatedAt  time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+    ID          string    `bun:",pk" json:"id"`
+    WorkspaceID string    `json:"workspace_id"` // null = global prompt
+    UserID      string    `json:"user_id"`      // null = workspace/global prompt
+    Text        string    `bun:",notnull" json:"text"`
+    Category    string    `bun:",notnull" json:"category"`
+    IsBuiltIn   bool      `bun:",default:false" json:"is_built_in"`
+    CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// NEW: Content templates with variable substitution
+type ContentTemplate struct {
+    bun.BaseModel `bun:"table:content_templates"`
+
+    ID           string `bun:",pk" json:"id"`
+    WorkspaceID  string `bun:",notnull" json:"workspace_id"`
+    UserID       string `bun:",notnull" json:"user_id"`
+    Name         string `bun:",notnull" json:"name"`
+    Category     string `json:"category"` // "thread", "announcement", "cta", "engagement"
+    Content      string `bun:",notnull" json:"content"` // Template text with {{variable}} placeholders
+    VariablesJSON string `bun:"variables" json:"variables"` // ["product_name", "link", "cta_text"]
+    IsShared     bool   `bun:",default:false" json:"is_shared"` // Share with workspace
+    UsageCount   int    `bun:",default:0" json:"usage_count"`
+    CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 ```
 
 **Frontend:**
 - `/prompts` — Browse prompts by category, search, create custom
+- `/templates` — Browse and manage content templates
 - Compose page: "Need inspiration?" button that opens a prompt picker
+- Compose page: "Use template" button that opens template picker with variable filling
 - Dashboard: Weekly prompt suggestion card
 
 ---
 
-#### 6.2 AI Writing Assistance (OpenRouter)
+#### 6.2 AI Writing Assistance (Genkit)
 
 **Priority:** Low (future)  
-**Effort:** Large  
-**Depends on:** 1.1, writing style config
+**Effort:** Medium  
+**Depends on:** 1.1, writing style config, settings page (for API key)
 
-**What:** Optional AI integration for writing assistance — suggest rewrites, expand ideas, adjust tone, generate drafts from prompts.
+**What:** Optional AI integration for writing assistance — suggest rewrites, expand ideas, adjust tone, generate drafts from prompts. Uses [Genkit](https://genkit.dev/) (by Firebase/Google) for a type-safe, observable AI framework with structured output, streaming, Dotprompt templates, and multi-provider support.
+
+**Why Genkit over a raw API SDK:** Genkit provides more than just a unified API — it gives us **typed flows** (type-safe in/out with Go generics), **structured output** (generate Go structs directly from AI), **built-in observability** (tracing, usage tracking per flow), **Dotprompt** (prompt template files with versioning), a **local Developer UI** for testing, and **tool calling** (letting AI interact with OpenPost data). This means less boilerplate, built-in budget tracking via flow tracing, and a much better developer experience.
+
+**Libraries:**
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/firebase/genkit/go` | Genkit core — flows, structured output, streaming, observability |
+| `github.com/firebase/genkit/go/plugins/googlegenai` | Google AI / Gemini provider (generous free tier, no credit card needed) |
+| `github.com/firebase/genkit/go/plugins/openai` | OpenAI provider |
+| `github.com/firebase/genkit/go/plugins/anthropic` | Anthropic provider (can be added when available) |
+| Dotprompt (built-in) | Prompt template management with `.prompt` files |
+
+**Key Genkit advantages for OpenPost:**
+- **Flows** wrap AI calls in typed, observable functions — perfect for exposing as API endpoints
+- **`GenerateData[T]`** with Go generics produces typed structs directly (PostSuggestion, ToneAdjustment, etc.)
+- **Streaming flows** work over SSE for real-time compose-page suggestions
+- **Dotprompt** files let us version and iterate on prompts without code changes
+- **Developer UI** (`genkit start`) lets us test AI flows locally before deploying
+- **Built-in tracing** gives us token counts, latency, and cost per flow invocation — no manual usage tracking needed
+- **Tool calling** lets AI flows call OpenPost APIs (e.g., "list my drafts" → AI calls the posts tool)
 
 **Implementation:**
-- Workspace-level OpenRouter API key configuration (encrypted at rest)
-- User-defined "writing style" profile (tone, voice, length preferences, examples)
-- `POST /ai/suggest` — Takes content + context + style profile, returns suggestions
-- `POST /ai/generate` — Takes a prompt, generates a draft post
-- Compose page: "AI Assist" button that shows inline suggestions
-- All AI features are opt-in and require user-provided API key
 
-**Data model:**
+**Backend — Genkit flows:**
 
 ```go
+// internal/ai/flows.go
+package ai
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/firebase/genkit/go/ai"
+    "github.com/firebase/genkit/go/genkit"
+    "github.com/firebase/genkit/go/plugins/googlegenai"
+)
+
+// Typed input/output schemas using Go structs with jsonschema tags
+type SuggestInput struct {
+    Content       string `json:"content" jsonschema:"description=Current post content to improve"`
+    StyleID       string `json:"styleId,omitempty" jsonschema:"description=Writing style ID to apply"`
+    PlatformHint  string `json:"platformHint,omitempty" jsonschema:"description=Target platform for tone adjustment"`
+}
+
+type SuggestOutput struct {
+    Suggestions []Suggestion `json:"suggestions"`
+}
+
+type Suggestion struct {
+    Type       string `json:"type"`        // "rewrite", "expand", "shorten", "tone_adjust"
+    Content    string `json:"content"`     // The suggested text
+    Reasoning  string `json:"reasoning"`   // Why this suggestion was made
+    Confidence float64 `json:"confidence"` // 0.0-1.0
+}
+
+type GenerateInput struct {
+    Prompt       string `json:"prompt" jsonschema:"description=Topic or idea to generate a post about"`
+    StyleID      string `json:"styleId,omitempty" jsonschema:"description=Writing style ID"`
+    PlatformHint string `json:"platformHint,omitempty" jsonschema:"description=Target platform"`
+}
+
+type GenerateOutput struct {
+    Content string `json:"content"`
+    Title   string `json:"title"`
+}
+
+// Initialize Genkit and register flows
+func Setup(g *genkit.Genkit) {
+    // Register flows — these become observable, typed API endpoints
+    genkit.DefineFlow(g, "suggest", func(ctx context.Context, input *SuggestInput) (*SuggestOutput, error) {
+        systemPrompt := buildSystemPrompt(input.StyleID, input.PlatformHint)
+        
+        result, err := genkit.GenerateData[SuggestOutput](ctx, g,
+            ai.WithPrompt(input.Content),
+            ai.WithSystemPrompt(systemPrompt),
+        )
+        if err != nil {
+            return nil, fmt.Errorf("AI suggest failed: %w", err)
+        }
+        return result, nil
+    })
+
+    genkit.DefineFlow(g, "generate", func(ctx context.Context, input *GenerateInput) (*GenerateOutput, error) {
+        systemPrompt := buildSystemPrompt(input.StyleID, input.PlatformHint)
+        
+        result, err := genkit.GenerateData[GenerateOutput](ctx, g,
+            ai.WithPrompt(input.Prompt),
+            ai.WithSystemPrompt(systemPrompt),
+        )
+        if err != nil {
+            return nil, fmt.Errorf("AI generate failed: %w", err)
+        }
+        return result, nil
+    })
+}
+
+// In main.go:
+func main() {
+    ctx := context.Background()
+    
+    g := genkit.Init(ctx,
+        genkit.WithPlugins(&googlegenai.GoogleAI{}),
+        genkit.WithDefaultModel("googleai/gemini-2.5-flash"),
+    )
+    
+    ai.Setup(g)
+    
+    // Expose flows as HTTP endpoints
+    mux.HandleFunc("POST /api/v1/ai/suggest", genkit.Handler(suggestFlow))
+    mux.HandleFunc("POST /api/v1/ai/generate", genkit.Handler(generateFlow))
+    
+    // ... rest of server setup
+}
+```
+
+**Dotprompt templates** (stored as `.prompt` files for versioning):
+
+```yaml
+# prompts/suggest.prompt
+---
+model: googleai/gemini-2.5-flash
+input:
+  schema:
+    content: string
+    platformHint: string
+output:
+  schema:
+    suggestions:
+      type: array
+      items:
+        type: object
+        properties:
+          type: string
+          content: string
+          reasoning: string
+---
+
+You are a social media writing assistant. The user has written the following post content.
+Suggest improvements based on the platform hint: {{platformHint}}.
+
+Rules:
+- Keep the tone authentic, not robotic
+- Suggest concise alternatives
+- Consider platform-specific constraints
+
+User's content:
+{{content}}
+```
+
+**Streaming for compose page:**
+- Genkit streaming flows send partial results via SSE
+- Frontend uses `fetch` with `ReadableStream` to display suggestions incrementally
+- Flow tracing automatically captures token counts and latency for budgeting
+
+**API endpoints:**
+- `POST /ai/suggest` — Takes content + context + style, returns typed `SuggestOutput`
+- `POST /ai/generate` — Takes a prompt, returns typed `GenerateOutput`
+- `POST /ai/stream` — SSE streaming endpoint (Genkit streaming flow)
+- `GET /ai/usage` — Return current month's usage (aggregated from Genkit flow traces)
+- All AI features are opt-in and require workspace-level API key configuration
+
+**Budget tracking and rate limiting:**
+- Genkit's built-in flow tracing captures token counts per invocation
+- Aggregate traces into `ai_usage` table for per-workspace budgeting
+- Per-workspace monthly spend limits (configurable)
+- Fallback model support: configure a secondary model in Genkit init
+- Content safety: basic input sanitization, optional output filtering
+
+**Data models:**
+
+```go
+type AIConfig struct {
+    bun.BaseModel `bun:"table:ai_configs"`
+
+    ID              string `bun:",pk" json:"id"`
+    WorkspaceID     string `bun:",notnull,unique" json:"workspace_id"`
+    APIKeyEnc       []byte `bun:",notnull" json:"-"` // Encrypted provider API key
+
+    // Provider configuration — Genkit supports multiple providers via plugins
+    Provider        string `bun:",default:'googleai'" json:"provider"` // "googleai", "openai", "anthropic"
+    DefaultModel    string `bun:",default:'googleai/gemini-2.5-flash'" json:"default_model"`
+    FallbackModel   string `bun:",default:'googleai/gemini-2.0-flash'" json:"fallback_model"`
+    MaxTokens       int    `bun:",default:1000" json:"max_tokens"`
+    Temperature     float64 `bun:",default:0.7" json:"temperature"`
+
+    // Budgeting
+    MonthlyBudgetCents int `bun:",default:0" json:"monthly_budget_cents"` // 0 = unlimited
+    CurrentSpendCents int `bun:",default:0" json:"current_spend_cents"`
+
+    // Feature toggles
+    EnableRewrite   bool `bun:",default:true" json:"enable_rewrite"`
+    EnableGenerate  bool `bun:",default:true" json:"enable_generate"`
+    EnableExpand    bool `bun:",default:true" json:"enable_expand"`
+
+    CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type WritingStyle struct {
     bun.BaseModel `bun:"table:writing_styles"`
 
-    ID          string `bun:",pk" json:"id"`
-    WorkspaceID string `bun:",notnull" json:"workspace_id"`
-    Name        string `bun:",notnull" json:"name"`
-    Description string `json:"description"`
-    Tone        string `json:"tone"`         // e.g., "casual", "professional", "witty"
-    SamplePosts string `json:"sample_posts"` // JSON array of example posts
-    IsDefault   bool   `bun:",default:false" json:"is_default"`
+    ID           string `bun:",pk" json:"id"`
+    WorkspaceID  string `bun:",notnull" json:"workspace_id"`
+    Name         string `bun:",notnull" json:"name"`
+    Description  string `json:"description"`
+
+    // Style parameters
+    Tone        string `json:"tone"`         // "casual", "professional", "witty"
+    Formality   int    `json:"formality"`    // 1-5 scale
+    Length      string `json:"length"`       // "short", "medium", "long"
+
+    // Few-shot examples for the AI (JSON array of {input, output} pairs)
+    ExamplesJSON string `bun:"examples" json:"examples"`
+
+    // System prompt override (full control for advanced users)
+    SystemPrompt string `json:"system_prompt"`
+
+    IsDefault    bool      `bun:",default:false" json:"is_default"`
+    CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// Usage tracking — populated from Genkit flow traces
+type AIUsage struct {
+    bun.BaseModel `bun:"table:ai_usage"`
+
+    ID          string    `bun:",pk" json:"id"`
+    WorkspaceID string    `bun:",notnull" json:"workspace_id"`
+    UserID      string    `bun:",notnull" json:"user_id"`
+    FlowName    string    `bun:",notnull" json:"flow_name"` // "suggest", "generate", etc.
+    RequestType string    `json:"request_type"` // "rewrite", "generate", "expand"
+    Provider    string    `json:"provider"`
+    Model       string    `json:"model"`
+    TokensIn    int       `json:"tokens_in"`
+    TokensOut   int       `json:"tokens_out"`
+    CostCents   int       `json:"cost_cents"` // Cost in cents for tracking
+    DurationMs  int       `json:"duration_ms"`
     CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 ```
+
+**Frontend:**
+- Settings > AI: Configure provider, API key, budget, default model
+- Compose page: "AI Assist" button that shows inline streaming suggestions
+- Writing style selector dropdown in compose page
+- Usage dashboard in settings showing monthly spend (data from Genkit traces)
+
+**Developer workflow:**
+- `genkit start -- go run .` launches the app with the Developer UI at `localhost:4000`
+- Test all AI flows interactively with typed inputs/outputs
+- Inspect traces for token usage, latency, and cost
+- Iterate on `.prompt` files without code changes
 
 ---
 
@@ -520,11 +893,45 @@ type WritingStyle struct {
 
 **What:** Allow users to configure a Directus CMS connection to automatically push published posts and media as items.
 
+**Libraries:**
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/altipla-consulting/directus-go/v2` | Directus 11 Go SDK for REST API interaction |
+
 **Implementation:**
+
+**Connection:**
 - Workspace settings: Directus server URL, API token, collection name
-- Template mapping: define how OpenPost fields map to Directus fields
-- Background sync: after successful publish, push post data to Directus via REST API
-- Media upload: send media to Directus as files
+- Verify connectivity on save (`GET /server/info` health check)
+- Store API token encrypted at rest using existing `TokenEncryptor`
+
+**Field mapping:**
+- Visual field mapper: drag-and-drop UI mapping OpenPost fields → Directus fields
+- Auto-detect Directus collection fields via `GET /collections/{collection}` API
+- Pre-populate sensible defaults: `content` → `body`, `status` → `publish_status`, `media` → `featured_image`
+- Support custom field mapping via JSON config stored in `DirectusConfig.FieldMapJSON`
+
+**Sync behavior:**
+- **One-way (default):** OpenPost → Directus. After successful publish, push post data and media
+- **Two-way (optional):** Directus changes sync back via webhook (`DirectusConfig.WebhookSecret` for verification)
+- **Directus-master (optional):** OpenPost creates draft, Directus manages published state
+- Store `PostStatusMapJSON` to map OpenPost statuses (draft/scheduled/published) to Directus statuses
+
+**Media handling:**
+- Upload media to Directus as files before creating the collection item
+- Reference uploaded file IDs in the item payload
+- Configure target folder in Directus (`DirectusFolderID`)
+
+**Conflict resolution:**
+- If a post is edited in both systems, use `LastSyncAt` + `UpdatedAt` timestamps to detect conflicts
+- Default strategy: "last write wins" with a sync log for manual review
+- `DirectusSyncLog` table tracks every sync attempt with status and error details
+
+**Background sync:**
+- After successful publish, insert a `Job` of type `"directus_sync"` with the post ID as payload
+- Background worker picks up the job, pushes post data to Directus via REST API
+- On failure, retry with exponential backoff (up to `MaxAttempts`)
 
 **Data model:**
 
@@ -533,12 +940,45 @@ type DirectusConfig struct {
     bun.BaseModel `bun:"table:directus_configs"`
 
     ID          string `bun:",pk" json:"id"`
-    WorkspaceID string `bun:",notnull" json:"workspace_id"`
-    ServerURL   string `bun:",notnull" json:"server_url"`
-    APIToken    string `bun:",notnull" json:"-"` // encrypted
-    Collection  string `bun:",notnull" json:"collection"` // target Directus collection
-    FieldMap    string `json:"field_map"` // JSON mapping: {"content": "body", "media": "image", ...}
-    AutoSync    bool   `bun:",default:false" json:"auto_sync"`
+    WorkspaceID string `bun:",notnull,unique" json:"workspace_id"`
+
+    // Connection
+    ServerURL     string `bun:",notnull" json:"server_url"`
+    APITokenEnc   []byte `bun:",notnull" json:"-"` // Encrypted
+    WebhookSecret string `json:"-"` // For verifying incoming Directus webhooks
+
+    // Collection mapping
+    Collection     string `bun:",notnull" json:"collection"`
+    FieldMapJSON   string `bun:"field_map" json:"field_map"`
+    // Example: {"content": "body", "media": "featured_image", "status": "publish_status", "scheduled_at": "publish_date"}
+
+    // Status mapping (OpenPost status → Directus status)
+    PostStatusMapJSON string `bun:"post_status_map" json:"post_status_map"`
+    // Example: {"draft": "draft", "scheduled": "review", "published": "published"}
+
+    // Sync settings
+    SyncDirection string `bun:",default:'oneway'" json:"sync_direction"` // "oneway", "twoway", "directus_master"
+    AutoSync      bool   `bun:",default:false" json:"auto_sync"`
+    SyncMedia     bool   `bun:",default:true" json:"sync_media"`
+    DirectusFolderID string `json:"directus_folder_id"` // Target folder for uploads
+
+    // Diagnostics
+    LastSyncAt    time.Time `json:"last_sync_at"`
+    LastSyncError string    `json:"last_sync_error"`
+
+    CreatedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type DirectusSyncLog struct {
+    bun.BaseModel `bun:"table:directus_sync_logs"`
+
+    ID          string    `bun:",pk" json:"id"`
+    ConfigID    string    `bun:",notnull" json:"config_id"`
+    PostID      string    `json:"post_id"`
+    Direction   string    `bun:",notnull" json:"direction"` // "to_directus", "from_directus"
+    Status      string    `bun:",notnull" json:"status"`    // "success", "failed"
+    ErrorMessage string   `json:"error_message"`
+    CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 ```
 
@@ -557,7 +997,8 @@ type DirectusConfig struct {
 - `GET /api-keys` — List keys (show last 4 chars only)
 - `DELETE /api-keys/{id}` — Revoke a key
 - New auth middleware for API key auth (in addition to JWT)
-- Rate limiting per key
+- Rate limiting per key using Echo middleware (`golang.org/x/time/rate`)
+- API key permissions (scopes): `read`, `write`, `admin`
 
 **Data model:**
 
@@ -565,33 +1006,192 @@ type DirectusConfig struct {
 type APIKey struct {
     bun.BaseModel `bun:"table:api_keys"`
 
-    ID          string `bun:",pk" json:"id"`
-    WorkspaceID string `bun:",notnull" json:"workspace_id"`
-    Name        string `bun:",notnull" json:"name"`
-    KeyPrefix   string `bun:",notnull" json:"key_prefix"` // First 8 chars for identification
-    KeyHash     string `bun:",notnull" json:"-"` // SHA-256 hash of full key
+    ID          string    `bun:",pk" json:"id"`
+    WorkspaceID string    `bun:",notnull" json:"workspace_id"`
+    Name        string    `bun:",notnull" json:"name"`
+    KeyPrefix   string    `bun:",notnull" json:"key_prefix"` // First 8 chars for identification
+    KeyHash     string    `bun:",notnull" json:"-"`          // SHA-256 hash of full key
+
+    // Scopes: comma-separated list of permissions: "read", "write", "admin"
+    Scopes      string    `bun:",default:'read'" json:"scopes"`
+
     LastUsedAt  time.Time `json:"last_used_at"`
     CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
     ExpiresAt   time.Time `json:"expires_at"`
 }
 ```
 
+**Key format:** `op_{8-char-prefix}_{24-char-secret}` (e.g., `op_abc12345_xYz9...`)
+**Hashing:** SHA-256 of the full key, stored in `KeyHash`. On authentication, hash the provided key and compare.
+**Scopes:**
+- `read`: GET endpoints only
+- `write`: POST/PATCH/DELETE endpoints
+- `admin`: Full access including API key management
+
 ---
 
 #### 7.3 MCP Server
 
-**Priority:** Very Low (nice to have)  
-**Effort:** Large  
+**Priority:** Low (nice to have)  
+**Effort:** Medium  
 **Depends on:** API key system (7.2)
 
-**What:** Model Context Protocol server allowing AI agents to interact with OpenPost.
+**What:** Model Context Protocol server allowing AI agents to interact with OpenPost. Uses the official Go MCP SDK for protocol compliance. Integrates with Genkit flows from Phase 6.2 for AI-powered tools.
 
-**Implementation:**
-- New Go package `internal/mcp` implementing the MCP protocol
-- Expose tools: `create_post`, `list_posts`, `get_post`, `upload_media`, `list_accounts`
-- SSE or stdio transport
-- Authentication via API keys
-- Scope keys to specific workspaces and permissions
+**Why rethink: The original spec was too brief.** MCP is a well-defined protocol with official Go SDK support. The implementation needs proper tool schemas, transport handling, authentication, and error handling. This is synergistic with Phase 6.2 (Genkit AI) — the MCP server can expose Genkit flows as MCP tools, and Genkit's tool-calling can also connect to external MCP servers.
+
+**Libraries:**
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/modelcontextprotocol/go-sdk/mcp` | Official MCP Go SDK — server, tools, resources, SSE/stdio/HTTP transports |
+| `github.com/firebase/genkit/go` | Genkit — typed flows, structured output, streaming, Dotprompt, observability |
+| `github.com/firebase/genkit/go/plugins/googlegenai` | Google AI / Gemini provider (free tier, no CC) |
+| `github.com/firebase/genkit/go/plugins/openai` | OpenAI provider |
+
+**Architecture:**
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
+│  AI Client      │────▶│  OpenPost MCP   │────▶│  OpenPost   │
+│  (Claude, etc.) │     │  Server          │     │  REST API   │
+└─────────────────┘     └──────┬───────────┘     └─────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │  API Keys    │
+                        │  (Auth)      │
+                        └──────────────┘
+```
+
+**Transports:**
+- **Stdio:** For local development and CLI tools (Cursor, Claude Desktop). Server runs as subprocess.
+- **Streamable HTTP:** For web-accessible deployments. Uses `mcp.NewStreamableHTTPHandler` from the official SDK. Mount at `/mcp` on the existing Echo server.
+- Default: stdio for local, HTTP for deployed.
+
+**Authentication:**
+- API key-based: MCP requests include an API key in the connection metadata
+- Keys are scoped to workspaces (key can only access its workspace's data)
+- Rate limiting per key (inherited from 7.2's rate limiter)
+
+**Tools exposed:**
+
+| Tool | Description | Input Schema |
+|------|-------------|-------------|
+| `create_post` | Create a new post (draft or scheduled) | `workspace_id`, `content`, `status`, `scheduled_at?`, `account_ids?` |
+| `list_posts` | List posts with optional filtering | `workspace_id`, `status?`, `limit?`, `offset?` |
+| `get_post` | Get a specific post by ID | `post_id` |
+| `update_post` | Update post content or schedule | `post_id`, `content?`, `scheduled_at?` |
+| `delete_post` | Delete a draft or scheduled post | `post_id` |
+| `schedule_post` | Schedule a draft post | `post_id`, `scheduled_at` |
+| `list_accounts` | List connected social accounts | `workspace_id` |
+| `upload_media` | Upload a media file | `workspace_id`, `file_path`, `alt_text?` |
+| `list_prompts` | Get writing prompts | `category?` |
+| `generate_draft` | Generate a draft using AI (requires AI config) | `workspace_id`, `prompt`, `style_id?` |
+
+**Implementation sketch:**
+
+```go
+// internal/mcp/server.go
+package mcp
+
+import (
+    "context"
+    "net/http"
+
+    mcp "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+type Server struct {
+    server    *mcp.Server
+    db        *bun.DB
+    apiKeySvc *services.APIKeyService
+    cfg       MCPServerConfig
+}
+
+type MCPServerConfig struct {
+    Enabled bool
+    Port    int // For HTTP transport, 0 = disabled
+    RateLimitRequestsPerMinute int
+    AllowedTools []string // empty = all
+}
+
+func New(db *bun.DB, apiKeySvc *services.APIKeyService, cfg MCPServerConfig) *Server {
+    s := &Server{db: db, apiKeySvc: apiKeySvc, cfg: cfg}
+
+    s.server = mcp.NewServer(
+        &mcp.Implementation{
+            Name:    "openpost-mcp",
+            Version: "1.0.0",
+        },
+        &mcp.ServerOptions{},
+    )
+
+    s.registerTools()
+    return s
+}
+
+func (s *Server) registerTools() {
+    // create_post tool
+    mcp.AddTool(s.server, &mcp.Tool{
+        Name:        "create_post",
+        Description: "Create a new post in OpenPost (draft or scheduled)",
+        InputSchema: map[string]interface{}{
+            "type": "object",
+            "properties": map[string]interface{}{
+                "workspace_id": map[string]interface{}{
+                    "type":        "string",
+                    "description": "Workspace ID to create post in",
+                },
+                "content": map[string]interface{}{
+                    "type":        "string",
+                    "description": "Post content text",
+                },
+                "status": map[string]interface{}{
+                    "type":        "string",
+                    "enum":        []string{"draft", "scheduled"},
+                    "description": "Post status",
+                },
+                "scheduled_at": map[string]interface{}{
+                    "type":        "string",
+                    "format":      "date-time",
+                    "description": "ISO 8601 datetime for scheduled posts",
+                },
+                "account_ids": map[string]interface{}{
+                    "type":        "array",
+                    "items":       map[string]interface{}{"type": "string"},
+                    "description": "Social account IDs to publish to",
+                },
+            },
+            "required": []string{"workspace_id", "content"},
+        },
+    }, s.handleCreatePost)
+
+    // ... register other tools similarly
+}
+
+// Transport handlers
+func (s *Server) ServeStdio(ctx context.Context) error {
+    return s.server.Run(ctx, &mcp.StdioTransport{})
+}
+
+func (s *Server) ServeHTTP(ctx context.Context, addr string) error {
+    handler := mcp.NewStreamableHTTPHandler(
+        func(r *http.Request) *mcp.Server {
+            // Authenticate API key from request headers here
+            return s.server
+        },
+        nil,
+    )
+    httpServer := &http.Server{Addr: addr, Handler: handler}
+    return httpServer.ListenAndServe()
+}
+```
+
+**Integration with Genkit (Phase 6.2 synergy):**
+- If AI config is enabled for a workspace, the `generate_draft` MCP tool calls the Genkit `generate` flow
+- Genkit's tool-calling capabilities can connect to external MCP servers for advanced AI features (web search, code execution, etc.)
+- This means the MCP server can both serve tools AND Genkit flows can invoke external tools
 
 ---
 
@@ -624,39 +1224,142 @@ type APIKey struct {
 **What:** General code quality improvements throughout the codebase.
 
 **Areas to address:**
-- Remove unused i18n scaffold or properly implement it
-- Consistent error handling patterns in frontend (toast notifications vs inline errors)
+
+**Backend:**
+- Add Go tests for handlers and services (target: 80% coverage on critical paths)
+- Use `github.com/stretchr/testify` (already in project) for assertions and mocks
+- Use `go:generate` with `github.com/vektra/mockery/v2` for mock generation
+- Consistent response shapes across all endpoints
+- Proper HTTP status codes (currently inconsistent)
+- Add workspace-scoped middleware to reduce boilerplate in handlers
+- Consider soft-delete (`deleted_at` column) for posts and media instead of hard deletes
+- Add pagination to all list endpoints (cursor-based for posts, offset for media)
+
+**Frontend:**
+- Remove unused i18n scaffold or properly implement it via Paraglide
+- Svelte 5 migration debt:
+  - Replace any remaining Svelte 4 reactive statements (`$:`) with `$derived`/`$effect`
+  - Convert Svelte stores to `.svelte.ts` files using `$state` for shared state
+  - Remove any `svelte/legacy` imports
+- Consistent error handling patterns (toast notifications vs inline errors)
 - Add proper loading states and skeleton screens
-- Type-safe API client regeneration workflow
-- Backend: Consistent response shapes, proper HTTP status codes
-- Frontend: Extract shared state management (workspaces, accounts) into proper stores
-- Add Vitest tests for frontend components
-- Add Go tests for handlers and services
-- Fix any `any` type casts in frontend (e.g., in compose-post, accounts pages)
+- Type-safe API client — regenerate `types.d.ts` from OpenAPI spec in the build pipeline
+- Fix all `any` type casts in frontend (especially compose-post, accounts pages)
+- Extract shared state management into proper Svelte 5 stores:
+
+```typescript
+// lib/stores/workspaces.svelte.ts
+import type { components } from '$lib/api/types'
+
+type Workspace = components['schemas']['Workspace']
+
+class WorkspaceStore {
+    workspaces = $state<Workspace[]>([])
+    currentWorkspace = $state<Workspace | null>(null)
+    loading = $state(false)
+    error = $state<string | null>(null)
+
+    async fetchWorkspaces() {
+        this.loading = true
+        this.error = null
+        try {
+            const { data, error } = await api.GET('/workspaces')
+            if (error) throw new Error(error.message)
+            this.workspaces = data
+        } catch (e) {
+            this.error = e.message
+        } finally {
+            this.loading = false
+        }
+    }
+
+    setCurrent(id: string) {
+        this.currentWorkspace = this.workspaces.find(w => w.id === id) ?? null
+    }
+}
+
+export const workspaceStore = new WorkspaceStore()
+```
+
+**Testing:**
+
+| Library | Purpose |
+|---------|---------|
+| `vitest` | Unit tests (already installed) |
+| `@testing-library/svelte` | Component testing utilities |
+| `@playwright/test` | E2E testing |
+| `msw` | API mocking in tests |
+| `github.com/vektra/mockery/v2` | Go mock generation |
+| `github.com/stretchr/testify` | Go test assertions (already installed) |
 
 ---
 
 ## Database Migration Strategy
 
-Since `CreateSchema` uses `.IfNotExists()`, adding new tables is straightforward. For adding columns to existing tables, a migration system needs to be introduced:
+Since `CreateSchema` uses `.IfNotExists()`, adding new tables is straightforward. For adding columns to existing tables, a proper migration system is essential — **this must be implemented before any schema changes.**
 
-1. Create a `migrations` table to track applied migrations
-2. Write migration functions that execute `ALTER TABLE` statements
-3. Run migrations on startup after `CreateSchema`
-4. Each new feature (sets, variants, schedules, etc.) should include its migration
+SQLite `ALTER TABLE` has significant limitations (cannot drop columns, limited type changes). Use a migration tool that handles these constraints.
 
-**Suggested migration structure:**
+**Recommended library:** `github.com/pressly/goose/v3` — industry-standard, SQLite-friendly, supports SQL and Go migrations.
+
+**Migration strategy:**
+
+1. Add `goose` as a dependency
+2. Create a `migrations/` directory with numbered SQL files
+3. Create a `migrations` table to track applied migrations
+4. Run migrations on startup after `CreateSchema` (for new installations)
+5. For existing installations, migrations handle `ALTER TABLE` and data migration
+6. Each new feature (sets, variants, schedules, etc.) gets its own migration file
+
+**Migration files structure:**
+
+```
+backend/migrations/
+├── 001_create_migrations_table.sql
+├── 002_add_workspace_timezone.sql
+├── 003_add_media_fields.sql
+├── 004_add_post_variant_random_delay.sql
+├── 005_add_posting_schedules.sql
+├── 006_add_ai_config_writing_styles.sql
+├── 007_add_api_keys.sql
+├── 008_add_directus_configs.sql
+└── 009_add_user_2fa_sessions.sql
+```
+
+**Example migration:**
+
+```sql
+-- 002_add_workspace_timezone.sql
+-- +migrate Up
+ALTER TABLE workspaces ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC';
+ALTER TABLE workspaces ADD COLUMN week_start INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE workspaces ADD COLUMN media_cleanup_days INTEGER NOT NULL DEFAULT 0;
+
+-- +migrate Down
+-- SQLite doesn't support DROP COLUMN before 3.35.0
+-- For downgrade, we'd need to recreate the table
+-- This is acceptable for early-stage development
+```
+
+**Migration runner:**
 
 ```go
-type Migration struct {
-    bun.BaseModel `bun:"table:migrations"`
-    ID            string    `bun:",pk" json:"id"`
-    AppliedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"applied_at"`
-}
+// internal/database/migrate.go
+package database
 
-// In database.go, after CreateSchema:
+import (
+    "embed"
+    "github.com/pressly/goose/v3"
+    "github.com/uptrace/bun"
+)
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
+
 func RunMigrations(db *bun.DB) error {
-    // Apply each migration in order, tracking in migrations table
+    goose.SetBaseFS(embedMigrations)
+    sqlDB := db.DB // Get underlying *sql.DB
+    return goose.Up(sqlDB, "migrations")
 }
 ```
 
@@ -665,6 +1368,9 @@ func RunMigrations(db *bun.DB) error {
 ## Feature Dependency Graph
 
 ```
+Phase 0 (Prerequisites)
+└── 0.1 Database Migration System ←── MUST be done before any schema changes
+
 Phase 1 (Core UX)
 ├── 1.1 Post Page (shallow routing) ←── foundation for everything
 ├── 1.2 Drafting System ←── builds on 1.1
@@ -677,24 +1383,24 @@ Phase 2 (Platform Power)
 └── 2.3 Accounts Redesign ←── needs 2.2 for sets UI
 
 Phase 3 (Media)
-├── 3.1 Media Library ←── independent
+├── 3.1 Media Library ←── independent (needs 0.1 for schema changes)
 └── 3.2 Auto Cleanup ←── needs 3.1
 
 Phase 4 (Smart Scheduling)
 ├── 4.1 Randomized Times ←── independent
-└── 4.2 Time Slot Schedules ←── can use 2.2 sets
+└── 4.2 Time Slot Schedules ←── needs 5.1 (timezone settings) for display
 
 Phase 5 (Settings)
-└── 5.1 Settings Page ←── aggregator for workspace prefs
+└── 5.1 Settings Page ←── aggregator for workspace prefs + security (2FA)
 
 Phase 6 (Content)
-├── 6.1 Prompt Library ←── needs 1.1
-└── 6.2 AI Assistance ←── future, needs config infrastructure
+├── 6.1 Prompt Library & Templates ←── needs 1.1
+└── 6.2 AI Assistance (Genkit) ←── needs 5.1 (settings for API key config)
 
 Phase 7 (Integrations)
-├── 7.1 Directus ←── needs settings page
-├── 7.2 API Keys ←── needs settings page
-└── 7.3 MCP Server ←── needs 7.2
+├── 7.1 Directus ←── needs 5.1 (settings for config)
+├── 7.2 API Keys ←── needs 5.1 (settings page)
+└── 7.3 MCP Server ←── needs 7.2, uses official Go MCP SDK
 
 Phase 8 (Polish)
 ├── 8.1 App Icon ←── independent
@@ -707,29 +1413,30 @@ Phase 8 (Polish)
 
 Within the phases, here's the recommended order considering dependencies and impact:
 
-| # | Feature | Phase | Sprint Estimate |
-|---|---------|-------|-----------------|
-| 1 | Post edit/delete/re-schedule (PATCH/DELETE APIs) | 1.4 | 3 days |
-| 2 | Drafting system (backend already supports, needs UI) | 1.2 | 2 days |
-| 3 | Dedicated post page + shallow routing | 1.1 | 3 days |
-| 4 | Dashboard redesign | 1.3 | 3 days |
-| 5 | Social media sets (data model + API) | 2.2 | 3 days |
-| 6 | Per-platform content customization | 2.1 | 5 days |
-| 7 | Accounts page redesign | 2.3 | 3 days |
-| 8 | Media library page | 3.1 | 3 days |
-| 9 | Randomized posting times | 4.1 | 1 day |
-| 10 | App logo & icon update | 8.1 | 1 day |
-| 11 | Prompt library | 6.1 | 3 days |
-| 12 | Settings page (timezone, week start, cleanup) | 5.1 | 3 days |
-| 13 | Media auto-cleanup | 3.2 | 2 days |
-| 14 | Time slot schedules | 4.2 | 3 days |
-| 15 | API key management | 7.2 | 3 days |
-| 16 | Directus integration | 7.1 | 5 days |
-| 17 | AI writing assistance | 6.2 | 5+ days |
-| 18 | MCP server | 7.3 | 5+ days |
-| 19 | Codebase cleanup | 8.2 | ongoing |
+| # | Feature | Phase | Sprint Estimate | Notes |
+|---|---------|-------|-----------------|-------|
+| 0 | **Database migration system (goose)** | 0.1 | 2 days | **Must be first — blocks all schema changes** |
+| 1 | Post edit/delete/re-schedule (PATCH/DELETE APIs) | 1.4 | 3 days | |
+| 2 | Drafting system (backend already supports, needs UI) | 1.2 | 2 days | |
+| 3 | Dedicated post page + shallow routing | 1.1 | 3 days | |
+| 4 | Dashboard redesign | 1.3 | 3 days | |
+| 5 | Social media sets (data model + API) | 2.2 | 3 days | |
+| 6 | Per-platform content customization | 2.1 | 5 days | |
+| 7 | Accounts page redesign | 2.3 | 3 days | |
+| 8 | Media library page (incl. thumbnails, dedup) | 3.1 | 4 days | Enhanced from original |
+| 9 | Randomized posting times | 4.1 | 1 day | |
+| 10 | App logo & icon update | 8.1 | 1 day | |
+| 11 | Prompt library & content templates | 6.1 | 3 days | Expanded from original |
+| 12 | Settings page (timezone, week start, cleanup, 2FA) | 5.1 | 4 days | Expanded from original |
+| 13 | Media auto-cleanup | 3.2 | 2 days | |
+| 14 | Time slot schedules (timezone-aware) | 4.2 | 3 days | Must use UTC storage |
+| 15 | API key management (with scopes) | 7.2 | 3 days | Enhanced from original |
+| 16 | Directus integration (with conflict resolution) | 7.1 | 5 days | Enhanced from original |
+| 17 | AI writing assistance (Genkit) | 6.2 | 5 days | Genkit flows, Dotprompt, streaming, budgeting |
+| 18 | MCP server (official Go SDK) | 7.3 | 4 days | Uses official MCP Go SDK + Genkit flows |
+| 19 | Codebase cleanup | 8.2 | ongoing | |
 
-**Recommended first sprint (2 weeks):** Items 1-4 — Core UX improvements that make the app usable for real daily scheduling.
+**Recommended first sprint (2 weeks):** Items 0-4 — Migration system + Core UX improvements that make the app usable for real daily scheduling.
 
 **Recommended second sprint (2 weeks):** Items 5-7 — Platform customization power features.
 
@@ -746,8 +1453,9 @@ These were mentioned but should be deprioritized:
 | **Auto-retweet / auto-plug** | Needs per-platform scheduling rules, potentially a separate job type |
 | **Thread finishers** | Pre-defined endings for threads, related to prompt/templating system |
 | **Timezone auto-detection** | Nice-to-have, start with manual selection in settings |
-| **AI writing style (OpenRouter)** | Powerful but complex; start with prompt library first |
-| **MCP server** | Requires API key system first; low user demand |
+| **Analytics dashboard** | Post performance, best posting times, platform comparison — consider for v2 |
+| **Real-time notifications** | WebSocket-based live dashboard updates when posts are published |
+| **Collaborative editing** | Multi-user real-time editing indicators |
 
 ---
 
@@ -761,10 +1469,40 @@ These were mentioned but should be deprioritized:
 5. **No pagination** — `list-posts` returns max 50 with no pagination controls
 
 ### Recommended Technical Improvements
-1. Add a proper database migration system (see Migration Strategy above)
-2. Create Svelte stores for `workspaces`, `accounts`, `posts` with cache invalidation
+1. Add a proper database migration system using `github.com/pressly/goose/v3`
+2. Create Svelte 5 stores (`.svelte.ts` files with `$state`) for `workspaces`, `accounts`, `posts` with cache invalidation
 3. Add toast/notification system for success/error feedback
 4. Regenerate `types.d.ts` from OpenAPI spec in the build pipeline
 5. Add pagination to all list endpoints (cursor-based for posts, offset for media)
 6. Add workspace-scoped middleware to reduce boilerplate in handlers
-7. Consider adding soft-delete (e.g., `deleted_at` column) for posts and media instead of hard deletes
+7. Consider adding soft-delete (`deleted_at` column) for posts and media instead of hard deletes
+8. Add Svelte error boundaries (`try/catch` in component boundaries) to prevent cascading failure
+
+### Dependency Reference
+
+**Go Backend:**
+
+| Library | Purpose | Phase |
+|---------|---------|-------|
+| `github.com/labstack/echo/v4` | HTTP framework (installed) | Existing |
+| `github.com/uptrace/bun` | ORM (installed) | Existing |
+| `github.com/danielgtaylor/huma/v2` | OpenAPI spec generation (installed) | Existing |
+| `github.com/pressly/goose/v3` | Database migrations | Phase 0 |
+| `github.com/disintegration/imaging` | Image thumbnails, resizing | Phase 3 |
+| `github.com/pquerna/otp` | TOTP 2FA implementation | Phase 5 |
+| `github.com/firebase/genkit/go` | Genkit AI framework — flows, structured output, streaming, Dotprompt, observability | Phase 6 |
+| `github.com/altipla-consulting/directus-go/v2` | Directus CMS integration | Phase 7 |
+| `github.com/modelcontextprotocol/go-sdk/mcp` | Official MCP Go SDK | Phase 7 |
+| `github.com/vektra/mockery/v2` | Mock generation for tests | Phase 8 |
+| `golang.org/x/time/rate` | API key rate limiting | Phase 7 |
+
+**Frontend:**
+
+| Library | Purpose | Phase |
+|---------|---------|-------|
+| `svelte` ^5.51.0 | Framework (installed) | Existing |
+| `bits-ui` ^2.16.3 | UI primitives (installed) | Existing |
+| `openapi-fetch` ^0.17.0 | Typed API client (installed) | Existing |
+| `@playwright/test` | E2E testing | Phase 8 |
+| `msw` | API mocking in tests | Phase 8 |
+| `@testing-library/svelte` | Component testing | Phase 8 |

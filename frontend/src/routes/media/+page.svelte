@@ -2,28 +2,37 @@
 	import { onMount } from 'svelte';
 	import { client, type Workspace, getToken } from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import ImageIcon from 'lucide-svelte/icons/image';
 	import VideoIcon from 'lucide-svelte/icons/video';
-	import FileIcon from 'lucide-svelte/icons/file';
 	import HeartIcon from 'lucide-svelte/icons/heart';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import UploadIcon from 'lucide-svelte/icons/upload';
 	import XIcon from 'lucide-svelte/icons/x';
 	import ExternalLinkIcon from 'lucide-svelte/icons/external-link';
+	import CheckIcon from 'lucide-svelte/icons/check';
+	import ChevronLeftIcon from 'lucide-svelte/icons/chevron-left';
+	import ChevronRightIcon from 'lucide-svelte/icons/chevron-right';
+	import Grid2X2Icon from 'lucide-svelte/icons/grid-2x2';
 
 	interface MediaItem {
 		id: string;
 		workspace_id: string;
 		mime_type: string;
 		size: number;
+		original_filename: string;
+		width: number;
+		height: number;
 		alt_text: string;
 		is_favorite: boolean;
 		created_at: string;
 		url: string;
+		thumbnail_url: string;
 		usage_count: number;
 		processing_status: string;
 	}
@@ -35,14 +44,22 @@
 		scheduled: string;
 	}
 
+	interface BatchDeleteResult {
+		deleted: number;
+		failed_ids: string[];
+	}
+
 	let workspaces = $state<Workspace[] | null>(null);
 	let selectedWorkspaceId = $state('');
 	let loading = $state(true);
 	let error = $state('');
+	let toastMessage = $state('');
 
 	let mediaItems = $state<MediaItem[]>([]);
 	let mediaLoading = $state(false);
 	let totalCount = $state(0);
+	let currentPage = $state(0);
+	const pageSize = 40;
 
 	let filter = $state<string>('all');
 	let sort = $state<string>('newest');
@@ -57,7 +74,8 @@
 	let mediaUsage = $state<MediaUsage[]>([]);
 	let usageLoading = $state(false);
 
-	let isDraggingUpload = $state(false);
+	let selectedMediaIds = $state<Set<string>>(new Set());
+	let isSelectionMode = $state(false);
 
 	async function loadWorkspaces() {
 		try {
@@ -75,13 +93,17 @@
 		if (!selectedWorkspaceId) return;
 		mediaLoading = true;
 		error = '';
+		selectedMediaIds.clear();
+		isSelectionMode = false;
 		try {
 			const { data, error: err } = await (client as any).GET('/media', {
 				params: {
 					query: {
 						workspace_id: selectedWorkspaceId,
 						filter: filter,
-						sort: sort
+						sort: sort,
+						limit: pageSize,
+						offset: currentPage * pageSize
 					}
 				}
 			});
@@ -107,8 +129,17 @@
 				item.is_favorite = data?.is_favorite ?? !item.is_favorite;
 			}
 		} catch (e) {
-			error = (e as Error).message;
+			toastMessage = (e as Error).message;
 		}
+	}
+
+	async function toggleFavoriteBatch() {
+		const ids = Array.from(selectedMediaIds);
+		for (const id of ids) {
+			await toggleFavorite(id);
+		}
+		selectedMediaIds.clear();
+		isSelectionMode = false;
 	}
 
 	async function deleteMedia(mediaId: string) {
@@ -120,8 +151,36 @@
 			if (err) throw new Error(err.detail || 'Failed to delete media');
 			mediaItems = mediaItems.filter((m) => m.id !== mediaId);
 			totalCount--;
+			toastMessage = 'Media deleted successfully';
 		} catch (e) {
-			error = (e as Error).message;
+			toastMessage = (e as Error).message;
+		}
+	}
+
+	async function deleteSelectedBatch() {
+		if (selectedMediaIds.size === 0) return;
+		if (!confirm(`Delete ${selectedMediaIds.size} selected media items? This cannot be undone.`))
+			return;
+
+		try {
+			const { data, error: err } = await (client as any).POST('/media/batch-delete', {
+				body: {
+					media_ids: Array.from(selectedMediaIds)
+				}
+			});
+			if (err) throw new Error(err.detail || 'Failed to delete media');
+
+			const result = data as BatchDeleteResult;
+			mediaItems = mediaItems.filter(
+				(m) => !result.deleted || !selectedMediaIds.has(m.id) || result.failed_ids?.includes(m.id)
+			);
+			totalCount -= result.deleted;
+			toastMessage = `Deleted ${result.deleted} media items`;
+			selectedMediaIds.clear();
+			isSelectionMode = false;
+			await loadMedia();
+		} catch (e) {
+			toastMessage = (e as Error).message;
 		}
 	}
 
@@ -137,7 +196,7 @@
 			if (err) throw new Error(err.detail || 'Failed to load usage');
 			mediaUsage = (data?.usage ?? []) as unknown as MediaUsage[];
 		} catch (e) {
-			error = (e as Error).message;
+			toastMessage = (e as Error).message;
 		} finally {
 			usageLoading = false;
 		}
@@ -176,6 +235,52 @@
 
 			uploadDialogOpen = false;
 			fileInput.value = '';
+			toastMessage = 'File uploaded successfully';
+			await loadMedia();
+		} catch (e) {
+			uploadError = (e as Error).message;
+		} finally {
+			uploadLoading = false;
+			uploadProgress = '';
+		}
+	}
+
+	async function handleBatchUpload() {
+		if (!selectedWorkspaceId) return;
+		uploadLoading = true;
+		uploadError = '';
+		uploadProgress = 'Uploading...';
+
+		const fileInput = document.getElementById('batch-file-upload') as HTMLInputElement;
+		if (!fileInput?.files?.length) {
+			uploadError = 'Please select files';
+			uploadLoading = false;
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append('workspace_id', selectedWorkspaceId);
+		for (const file of fileInput.files) {
+			formData.append('files', file);
+		}
+
+		try {
+			const token = getToken();
+			const response = await fetch(`${getApiBase()}/media/batch-upload`, {
+				method: 'POST',
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+				body: formData
+			});
+
+			if (!response.ok) {
+				const errData = await response.json();
+				throw new Error(errData.error || 'Upload failed');
+			}
+
+			const result = await response.json();
+			uploadDialogOpen = false;
+			fileInput.value = '';
+			toastMessage = `Uploaded ${result.uploaded?.length || 0} files`;
 			await loadMedia();
 		} catch (e) {
 			uploadError = (e as Error).message;
@@ -195,12 +300,54 @@
 		const date = new Date(dateStr);
 		return date.toLocaleDateString('en-US', {
 			month: 'short',
-			day: 'numeric'
+			day: 'numeric',
+			timeZone: workspaceCtx.settings.timezone || 'UTC'
 		});
 	}
 
 	function isImage(mimeType: string): boolean {
 		return mimeType.startsWith('image/');
+	}
+
+	function toggleSelection(mediaId: string) {
+		if (selectedMediaIds.has(mediaId)) {
+			selectedMediaIds.delete(mediaId);
+		} else {
+			selectedMediaIds.add(mediaId);
+		}
+		selectedMediaIds = new Set(selectedMediaIds);
+		isSelectionMode = selectedMediaIds.size > 0;
+	}
+
+	function selectAll() {
+		const unusedMedia = mediaItems.filter((m) => m.usage_count === 0);
+		if (unusedMedia.length === selectedMediaIds.size) {
+			selectedMediaIds.clear();
+		} else {
+			unusedMedia.forEach((m) => selectedMediaIds.add(m.id));
+		}
+		selectedMediaIds = new Set(selectedMediaIds);
+		isSelectionMode = selectedMediaIds.size > 0;
+	}
+
+	function cancelSelection() {
+		selectedMediaIds.clear();
+		selectedMediaIds = new Set(selectedMediaIds);
+		isSelectionMode = false;
+	}
+
+	function nextPage() {
+		if ((currentPage + 1) * pageSize < totalCount) {
+			currentPage++;
+			loadMedia();
+		}
+	}
+
+	function prevPage() {
+		if (currentPage > 0) {
+			currentPage--;
+			loadMedia();
+		}
 	}
 
 	onMount(() => {
@@ -209,6 +356,15 @@
 
 	$effect(() => {
 		if (selectedWorkspaceId) {
+			currentPage = 0;
+			loadMedia();
+		}
+	});
+
+	$effect(() => {
+		const _trigger = [filter, sort];
+		if (_trigger && selectedWorkspaceId) {
+			currentPage = 0;
 			loadMedia();
 		}
 	});
@@ -219,9 +375,23 @@
 		{ value: 'unused', label: 'Unused' },
 		{ value: 'favorites', label: 'Favorites' }
 	];
+
+	const totalPages = $derived(Math.ceil(totalCount / pageSize));
+	const unusedCount = $derived(mediaItems.filter((m) => m.usage_count === 0).length);
 </script>
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
+	{#if toastMessage}
+		<div
+			class="pointer-events-auto fixed right-4 bottom-4 z-50 mb-4 flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg"
+		>
+			<span class="text-sm">{toastMessage}</span>
+			<button onclick={() => (toastMessage = '')}>
+				<XIcon class="size-4" />
+			</button>
+		</div>
+	{/if}
+
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div>
 			<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
@@ -231,6 +401,9 @@
 			<p class="mt-1 text-sm text-muted-foreground">
 				{#if totalCount > 0}
 					{totalCount} file{totalCount !== 1 ? 's' : ''}
+					{#if filter === 'unused'}
+						({unusedCount} unused)
+					{/if}
 				{:else}
 					Manage your media attachments
 				{/if}
@@ -296,6 +469,31 @@
 		</div>
 	</div>
 
+	<!-- Selection Toolbar -->
+	{#if isSelectionMode}
+		<div class="mb-4 flex items-center gap-4 rounded-lg border bg-muted/50 p-3">
+			<span class="text-sm font-medium">{selectedMediaIds.size} selected</span>
+			{#if unusedCount > 0}
+				<Button variant="outline" size="sm" onclick={selectAll}>
+					{unusedCount === selectedMediaIds.size ? 'Deselect All' : 'Select All Unused'}
+				</Button>
+			{/if}
+			<div class="ml-auto flex items-center gap-2">
+				<Button variant="outline" size="sm" onclick={toggleFavoriteBatch}>
+					<HeartIcon class="mr-1 h-4 w-4" />
+					Toggle Favorite
+				</Button>
+				{#if selectedMediaIds.size > 0}
+					<Button variant="destructive" size="sm" onclick={deleteSelectedBatch}>
+						<TrashIcon class="mr-1 h-4 w-4" />
+						Delete Selected
+					</Button>
+				{/if}
+				<Button variant="ghost" size="sm" onclick={cancelSelection}>Cancel</Button>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Media Grid -->
 	{#if mediaLoading}
 		<div class="flex items-center justify-center py-16">
@@ -325,12 +523,16 @@
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each mediaItems as media (media.id)}
 				<div
-					class="group relative overflow-hidden rounded-lg border bg-card transition-all hover:shadow-sm"
+					class="group relative overflow-hidden rounded-lg border bg-card transition-all hover:shadow-sm {selectedMediaIds.has(
+						media.id
+					)
+						? 'ring-2 ring-primary'
+						: ''}"
 				>
 					<div class="relative aspect-square overflow-hidden bg-muted/30">
 						{#if isImage(media.mime_type)}
 							<img
-								src={media.url}
+								src={media.thumbnail_url || media.url}
 								alt={media.alt_text || 'Media'}
 								class="size-full object-cover transition-transform group-hover:scale-105"
 							/>
@@ -339,6 +541,24 @@
 								<VideoIcon class="size-10 text-muted-foreground/40" />
 							</div>
 						{/if}
+
+						<!-- Selection checkbox -->
+						<button
+							class="absolute top-2 left-2 rounded-md bg-background/80 p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background {!isSelectionMode &&
+							media.usage_count === 0
+								? 'opacity-0 group-hover:opacity-100'
+								: ''}"
+							onclick={(e) => {
+								e.stopPropagation();
+								toggleSelection(media.id);
+							}}
+						>
+							{#if selectedMediaIds.has(media.id)}
+								<CheckIcon class="size-4 text-primary" />
+							{:else}
+								<div class="size-4 rounded-sm border-2 border-muted-foreground"></div>
+							{/if}
+						</button>
 
 						<!-- Hover Actions -->
 						<div
@@ -380,8 +600,16 @@
 					</div>
 
 					<div class="p-2.5">
+						{#if media.original_filename}
+							<p class="truncate text-xs font-medium" title={media.original_filename}>
+								{media.original_filename}
+							</p>
+						{/if}
 						<p class="truncate text-xs text-muted-foreground">
 							{formatSize(media.size)} · {formatDate(media.created_at)}
+							{#if media.width && media.height}
+								· {media.width}×{media.height}
+							{/if}
 						</p>
 						<div class="mt-1.5">
 							{#if media.usage_count > 0}
@@ -403,6 +631,28 @@
 				</div>
 			{/each}
 		</div>
+
+		<!-- Pagination -->
+		{#if totalPages > 1}
+			<div class="mt-6 flex items-center justify-center gap-4">
+				<Button variant="outline" size="sm" onclick={prevPage} disabled={currentPage === 0}>
+					<ChevronLeftIcon class="mr-1 h-4 w-4" />
+					Previous
+				</Button>
+				<span class="text-sm text-muted-foreground">
+					Page {currentPage + 1} of {totalPages}
+				</span>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={nextPage}
+					disabled={currentPage >= totalPages - 1}
+				>
+					Next
+					<ChevronRightIcon class="ml-1 h-4 w-4" />
+				</Button>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -411,19 +661,50 @@
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Upload Media</Dialog.Title>
-			<Dialog.Description>Upload an image or video to use in your posts.</Dialog.Description>
+			<Dialog.Description>Upload images or videos to use in your posts.</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-4 py-4">
-			<label
-				class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-primary/50"
-				for="file-upload"
-			>
-				<UploadIcon class="mb-2 h-8 w-8 text-muted-foreground/40" />
-				<p class="text-sm font-medium">Click to select a file</p>
-				<p class="text-xs text-muted-foreground">Image or video</p>
-			</label>
-			<input id="file-upload" type="file" accept="image/*,video/*" class="hidden" />
+			<div class="space-y-2">
+				<label class="text-sm font-medium">Single Upload</label>
+				<label
+					class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-primary/50"
+					for="file-upload"
+				>
+					<UploadIcon class="mb-2 h-8 w-8 text-muted-foreground/40" />
+					<p class="text-sm font-medium">Click to select a file</p>
+					<p class="text-xs text-muted-foreground">Image or video (max 50MB)</p>
+				</label>
+				<input id="file-upload" type="file" accept="image/*,video/*" class="hidden" />
+			</div>
+
+			<div class="relative">
+				<div class="absolute inset-0 flex items-center">
+					<div class="w-full border-t"></div>
+				</div>
+				<div class="relative flex justify-center text-xs uppercase">
+					<span class="bg-background px-2 text-muted-foreground">Or</span>
+				</div>
+			</div>
+
+			<div class="space-y-2">
+				<label class="text-sm font-medium">Batch Upload (up to 10)</label>
+				<label
+					class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-primary/50"
+					for="batch-file-upload"
+				>
+					<Grid2X2Icon class="mb-2 h-8 w-8 text-muted-foreground/40" />
+					<p class="text-sm font-medium">Select multiple files</p>
+					<p class="text-xs text-muted-foreground">Images or videos</p>
+				</label>
+				<input
+					id="batch-file-upload"
+					type="file"
+					accept="image/*,video/*"
+					multiple
+					class="hidden"
+				/>
+			</div>
 
 			{#if uploadError}
 				<p class="text-sm text-destructive">{uploadError}</p>
@@ -475,7 +756,11 @@
 						<div class="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
 							<span class="rounded-full bg-muted px-2 py-0.5">{usage.status}</span>
 							{#if usage.scheduled}
-								<span>{new Date(usage.scheduled).toLocaleString()}</span>
+								<span
+									>{new Date(usage.scheduled).toLocaleString('en-US', {
+										timeZone: workspaceCtx.settings.timezone || 'UTC'
+									})}</span
+								>
 							{/if}
 						</div>
 					</div>

@@ -13,6 +13,7 @@
 	import HouseIcon from 'lucide-svelte/icons/home';
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import ImageIcon from 'lucide-svelte/icons/image';
+	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
@@ -29,6 +30,7 @@
 	import { recreateClient } from '$lib/api/client';
 	import { getLocalTimeZone, today } from '@internationalized/date';
 	import { ui } from '$lib/stores/ui.svelte';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 
 	let authState = $derived($auth);
 	const sidebar = Sidebar.useSidebar();
@@ -79,6 +81,12 @@
 			url: '/media',
 			icon: ImageIcon,
 			isActive: () => pathname.startsWith('/media')
+		},
+		{
+			title: 'Settings',
+			url: '/settings',
+			icon: SettingsIcon,
+			isActive: () => pathname.startsWith('/settings')
 		}
 	];
 
@@ -103,6 +111,7 @@
 
 	onMount(async () => {
 		loadOverview();
+		await workspaceCtx.initialize();
 	});
 
 	// Track previous month to detect actual changes
@@ -231,6 +240,7 @@
 					bind:value={selectedDate}
 					bind:placeholder={calendarPlaceholder}
 					day={dayMarker}
+					weekStartsOn={workspaceCtx.settings.week_start as 0 | 1 | 2 | 3 | 4 | 5 | 6}
 					class="mx-auto bg-transparent p-2 select-none [--cell-size:--spacing(8)] [&_[role=gridcell]_[role=button][data-today]]:bg-sidebar-primary [&_[role=gridcell]_[role=button][data-today]]:text-sidebar-primary-foreground [&_tr]:justify-center"
 				/>
 			</Sidebar.GroupContent>

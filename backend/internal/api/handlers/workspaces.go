@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/queue"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
@@ -124,5 +126,150 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 			})
 		}
 		return resp, nil
+	})
+}
+
+type GetWorkspaceSettingsInput struct {
+	PathID string `path:"id" doc:"Workspace ID"`
+}
+
+type GetWorkspaceSettingsOutput struct {
+	Body struct {
+		Timezone         string `json:"timezone"`
+		WeekStart        int    `json:"week_start"`
+		MediaCleanupDays int    `json:"media_cleanup_days"`
+	}
+}
+
+type UpdateWorkspaceSettingsInput struct {
+	PathID string `path:"id" doc:"Workspace ID"`
+	Body   struct {
+		Timezone         *string `json:"timezone,omitempty"`
+		WeekStart        *int    `json:"week_start,omitempty"`
+		MediaCleanupDays *int    `json:"media_cleanup_days,omitempty"`
+	}
+}
+
+type UpdateWorkspaceSettingsOutput struct {
+	Body struct {
+		Timezone         string `json:"timezone"`
+		WeekStart        int    `json:"week_start"`
+		MediaCleanupDays int    `json:"media_cleanup_days"`
+	}
+}
+
+func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-workspace-settings",
+		Method:      http.MethodGet,
+		Path:        "/workspaces/{id}/settings",
+		Summary:     "Get workspace settings",
+		Tags:        []string{"Workspaces"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *GetWorkspaceSettingsInput) (*GetWorkspaceSettingsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var memberCount int
+		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+			Where("workspace_id = ? AND user_id = ?", input.PathID, userID).
+			Count(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+		}
+		if memberCount == 0 {
+			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+		}
+
+		var workspace models.Workspace
+		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.PathID).Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("workspace not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch workspace")
+		}
+
+		return &GetWorkspaceSettingsOutput{Body: struct {
+			Timezone         string `json:"timezone"`
+			WeekStart        int    `json:"week_start"`
+			MediaCleanupDays int    `json:"media_cleanup_days"`
+		}{
+			Timezone:         workspace.Timezone,
+			WeekStart:        workspace.WeekStart,
+			MediaCleanupDays: workspace.MediaCleanupDays,
+		}}, nil
+	})
+}
+
+func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-workspace-settings",
+		Method:      http.MethodPatch,
+		Path:        "/workspaces/{id}/settings",
+		Summary:     "Update workspace settings",
+		Tags:        []string{"Workspaces"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *UpdateWorkspaceSettingsInput) (*UpdateWorkspaceSettingsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var memberCount int
+		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+			Where("workspace_id = ? AND user_id = ?", input.PathID, userID).
+			Count(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+		}
+		if memberCount == 0 {
+			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+		}
+
+		var workspace models.Workspace
+		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.PathID).Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("workspace not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch workspace")
+		}
+
+		if input.Body.Timezone != nil {
+			workspace.Timezone = *input.Body.Timezone
+		}
+		if input.Body.WeekStart != nil {
+			if *input.Body.WeekStart < 0 || *input.Body.WeekStart > 1 {
+				return nil, huma.Error400BadRequest("week_start must be 0 (Sunday) or 1 (Monday)")
+			}
+			workspace.WeekStart = *input.Body.WeekStart
+		}
+		if input.Body.MediaCleanupDays != nil {
+			if *input.Body.MediaCleanupDays < 0 || *input.Body.MediaCleanupDays > 365 {
+				return nil, huma.Error400BadRequest("media_cleanup_days must be between 0 and 365")
+			}
+			workspace.MediaCleanupDays = *input.Body.MediaCleanupDays
+		}
+
+		_, err = h.db.NewUpdate().Model(&workspace).
+			Column("timezone", "week_start", "media_cleanup_days").
+			Where("id = ?", input.PathID).
+			Exec(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to update workspace")
+		}
+
+		if input.Body.MediaCleanupDays != nil {
+			queue.ScheduleMediaCleanup(h.db, input.PathID, workspace.MediaCleanupDays)
+		}
+
+		return &UpdateWorkspaceSettingsOutput{Body: struct {
+			Timezone         string `json:"timezone"`
+			WeekStart        int    `json:"week_start"`
+			MediaCleanupDays int    `json:"media_cleanup_days"`
+		}{
+			Timezone:         workspace.Timezone,
+			WeekStart:        workspace.WeekStart,
+			MediaCleanupDays: workspace.MediaCleanupDays,
+		}}, nil
 	})
 }

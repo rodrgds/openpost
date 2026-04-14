@@ -149,6 +149,8 @@ func main() {
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authService)
 	workspaceHandler.CreateWorkspace(api)
 	workspaceHandler.ListWorkspaces(api)
+	workspaceHandler.GetWorkspaceSettings(api)
+	workspaceHandler.UpdateWorkspaceSettings(api)
 
 	postHandler := handlers.NewPostHandler(db, authService)
 	postHandler.CreatePost(api)

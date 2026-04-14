@@ -11,6 +11,8 @@ type Workspace struct {
 
 	ID               string    `bun:",pk" json:"id"`
 	Name             string    `bun:",notnull" json:"name"`
+	Timezone         string    `bun:",default:'UTC'" json:"timezone"`
+	WeekStart        int       `bun:",default:1" json:"week_start"`         // 0=Sunday, 1=Monday
 	MediaCleanupDays int       `bun:",default:0" json:"media_cleanup_days"` // 0 = disabled
 	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
@@ -90,6 +92,11 @@ type MediaAttachment struct {
 	MimeType         string    `json:"mime_type"`
 	ProcessingStatus string    `bun:",default:'ready'" json:"processing_status"` // 'processing', 'ready', 'failed'
 	Size             int64     `json:"size"`
+	OriginalFilename string    `json:"original_filename"`
+	Width            int       `json:"width"`
+	Height           int       `json:"height"`
+	ThumbnailsJSON   string    `bun:"thumbnails" json:"thumbnails"` // JSON: {"sm": "sm_xxx.jpg", "md": "md_xxx.jpg"}
+	FileHash         string    `bun:",unique" json:"-"`             // SHA-256 for deduplication
 	AltText          string    `json:"alt_text"`
 	IsFavorite       bool      `bun:",default:false" json:"is_favorite"`
 	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`

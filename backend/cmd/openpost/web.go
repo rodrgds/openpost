@@ -20,6 +20,15 @@ func RegisterSpaRoutes(e *echo.Echo) {
 		panic(err)
 	}
 
+	writeHTML := func(c echo.Context, data []byte) error {
+		c.Response().Header().Set("Content-Type", "text/html")
+		c.Response().Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Response().Header().Set("Pragma", "no-cache")
+		c.Response().Header().Set("Expires", "0")
+		_, err := c.Response().Write(data)
+		return err
+	}
+
 	e.GET("/*", func(c echo.Context) error {
 		reqPath := c.Request().URL.Path
 		if reqPath == "" {
@@ -37,17 +46,13 @@ func RegisterSpaRoutes(e *echo.Echo) {
 
 		if relPath == "" {
 			indexData, _ := fs.ReadFile(webFS, "index.html")
-			c.Response().Header().Set("Content-Type", "text/html")
-			c.Response().Write(indexData)
-			return nil
+			return writeHTML(c, indexData)
 		}
 
 		htmlFile := relPath + ".html"
 		if _, err := fs.Stat(webFS, htmlFile); err == nil {
 			data, _ := fs.ReadFile(webFS, htmlFile)
-			c.Response().Header().Set("Content-Type", "text/html")
-			c.Response().Write(data)
-			return nil
+			return writeHTML(c, data)
 		}
 
 		info, err := fs.Stat(webFS, relPath)
@@ -56,15 +61,11 @@ func RegisterSpaRoutes(e *echo.Echo) {
 				indexPath := relPath + "/index.html"
 				if _, err := fs.Stat(webFS, indexPath); err == nil {
 					indexData, _ := fs.ReadFile(webFS, indexPath)
-					c.Response().Header().Set("Content-Type", "text/html")
-					c.Response().Write(indexData)
-					return nil
+					return writeHTML(c, indexData)
 				}
 
 				indexData, _ := fs.ReadFile(webFS, "index.html")
-				c.Response().Header().Set("Content-Type", "text/html")
-				c.Response().Write(indexData)
-				return nil
+				return writeHTML(c, indexData)
 			}
 
 			hfs := http.FS(webFS)
@@ -76,9 +77,7 @@ func RegisterSpaRoutes(e *echo.Echo) {
 
 		if os.IsNotExist(err) {
 			indexData, _ := fs.ReadFile(webFS, "index.html")
-			c.Response().Header().Set("Content-Type", "text/html")
-			c.Response().Write(indexData)
-			return nil
+			return writeHTML(c, indexData)
 		}
 
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/publisher"
@@ -169,5 +170,84 @@ func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload strin
 		log.Printf("Cleaned up media %s for workspace %s", m.ID, cleanupJob.WorkspaceID)
 	}
 
+	var workspace models.Workspace
+	if err := w.db.NewSelect().Model(&workspace).Where("id = ?", cleanupJob.WorkspaceID).Scan(ctx); err == nil && workspace.MediaCleanupDays > 0 {
+		w.scheduleMediaCleanup(ctx, cleanupJob.WorkspaceID, workspace.MediaCleanupDays)
+	}
+
 	return nil
+}
+
+func (w *BackgroundWorker) scheduleMediaCleanup(ctx context.Context, workspaceID string, days int) error {
+	if days <= 0 {
+		return nil
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"workspace_id": workspaceID,
+		"days":         days,
+	})
+	if err != nil {
+		return err
+	}
+
+	job := &models.Job{
+		ID:      uuid.New().String(),
+		Type:    "media_cleanup",
+		Payload: string(payload),
+		Status:  "pending",
+		RunAt:   time.Now().Add(24 * time.Hour),
+	}
+
+	_, err = w.db.NewInsert().Model(job).Exec(ctx)
+	if err != nil {
+		log.Printf("Failed to schedule media cleanup for workspace %s: %v", workspaceID, err)
+	}
+	return err
+}
+
+func (w *BackgroundWorker) CancelMediaCleanup(ctx context.Context, workspaceID string) error {
+	_, err := w.db.NewDelete().Model(&models.Job{}).
+		Where("type = 'media_cleanup' AND payload LIKE ?", "%"+workspaceID+"%").
+		Exec(ctx)
+	return err
+}
+
+func ScheduleMediaCleanup(db *bun.DB, workspaceID string, days int) error {
+	if days <= 0 {
+		_, err := db.NewDelete().Model(&models.Job{}).
+			Where("type = 'media_cleanup' AND payload LIKE ?", "%"+workspaceID+"%").
+			Exec(context.Background())
+		return err
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"workspace_id": workspaceID,
+		"days":         days,
+	})
+	if err != nil {
+		return err
+	}
+
+	var existing models.Job
+	err = db.NewSelect().Model(&existing).
+		Where("type = 'media_cleanup' AND payload LIKE ?", "%"+workspaceID+"%").
+		Scan(context.Background())
+	if err == nil {
+		return nil
+	}
+
+	job := &models.Job{
+		ID:      uuid.New().String(),
+		Type:    "media_cleanup",
+		Payload: string(payload),
+		Status:  "pending",
+		RunAt:   time.Now().Add(24 * time.Hour),
+	}
+
+	_, err = db.NewInsert().Model(job).Exec(context.Background())
+	if err != nil {
+		log.Printf("Failed to schedule media cleanup for workspace %s: %v", workspaceID, err)
+	}
+	return err
 }

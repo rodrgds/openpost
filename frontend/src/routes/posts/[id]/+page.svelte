@@ -5,6 +5,7 @@
 	import { client } from '$lib/api/client';
 	import ComposePost from '$lib/components/compose-post.svelte';
 	import { ui } from '$lib/stores/ui.svelte';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
@@ -111,7 +112,9 @@
 					<span class="capitalize">{post.status}</span>
 					{#if post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z'}
 						<span class="mx-1.5">·</span>
-						Scheduled for {new Date(post.scheduled_at).toLocaleString()}
+						Scheduled for {new Date(post.scheduled_at).toLocaleString('en-US', {
+							timeZone: workspaceCtx.settings.timezone || 'UTC'
+						})}
 					{/if}
 				</p>
 			</div>

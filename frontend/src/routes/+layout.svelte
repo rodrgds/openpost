@@ -12,6 +12,7 @@
 	import { IS_CAPACITOR } from '$lib/env';
 	import { instanceStore, isInstanceConfigured } from '$lib/stores/instance.svelte';
 	import { client } from '$lib/api/client';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 
 	let { children } = $props();
 
@@ -75,6 +76,10 @@
 				needsOnboarding = true;
 			} else {
 				needsOnboarding = !!error;
+				// Initialize workspace context after successful workspace load
+				if (!error && data) {
+					await workspaceCtx.initialize();
+				}
 			}
 		} catch {
 			// Fail safe: if we cannot verify workspace state, keep user in onboarding flow.

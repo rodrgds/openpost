@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
 	import { getApiBase, getMediaBase } from '$lib/stores/instance.svelte';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -930,6 +931,7 @@
 								minValue={today(getLocalTimeZone())}
 								class="bg-transparent p-0 [--cell-size:--spacing(10)]"
 								weekdayFormat="short"
+								weekStartsOn={workspaceCtx.weekStartsOn}
 							/>
 						</div>
 						<div

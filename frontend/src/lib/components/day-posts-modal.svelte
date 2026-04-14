@@ -4,6 +4,7 @@
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { client, type Post } from '$lib/api/client';
 	import { ui } from '$lib/stores/ui.svelte';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { getLocalTimeZone, today, type DateValue } from '@internationalized/date';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
@@ -68,7 +69,12 @@
 
 	function getTime(iso: string): string {
 		const d = new Date(iso);
-		return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+		return d.toLocaleTimeString('en-US', {
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: false,
+			timeZone: workspaceCtx.settings.timezone || 'UTC'
+		});
 	}
 
 	function handleNewPost() {

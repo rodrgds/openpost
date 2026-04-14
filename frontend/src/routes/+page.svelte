@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth';
 	import { client, type Workspace, type Post } from '$lib/api/client';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import { ui } from '$lib/stores/ui.svelte';
@@ -116,16 +117,17 @@
 		const now = new Date();
 		const diffMs = date.getTime() - now.getTime();
 		const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+		const tz = workspaceCtx.settings.timezone || 'UTC';
 
 		if (diffHours < 24 && date.getDate() === now.getDate()) {
-			return `Today at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+			return `Today at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
 		} else if (diffHours < 48) {
-			return `Tomorrow at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+			return `Tomorrow at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
 		} else {
 			return (
-				date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+				date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz }) +
 				' at ' +
-				date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+				date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz })
 			);
 		}
 	}

@@ -16,7 +16,9 @@ export default defineConfig({
 	server: {
 		proxy: {
 			'/api': 'http://localhost:8080',
-			'/media': 'http://localhost:8080'
+			'^/media/[^/]+': {
+				target: 'http://localhost:8080'
+			}
 		}
 	},
 	test: {
