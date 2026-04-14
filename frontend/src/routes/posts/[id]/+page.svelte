@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
+	import PencilIcon from 'lucide-svelte/icons/pencil';
 
 	interface PostMedia {
 		media_id: string;
@@ -88,76 +89,72 @@
 </svelte:head>
 
 {#if loading}
-	<div class="flex justify-center py-12">
+	<div class="flex flex-1 items-center justify-center">
 		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
 	</div>
 {:else if error && !post}
-	<div class="mx-auto max-w-4xl px-4 py-6 lg:px-8">
-		<div class="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-destructive">
-			<p>{error}</p>
-			<Button variant="ghost" size="sm" onclick={() => goto('/')} class="mt-2">
-				Back to Dashboard
-			</Button>
+	<div class="mx-auto w-full max-w-6xl px-6 py-8 lg:px-12">
+		<div class="rounded-lg border border-destructive/20 bg-destructive/10 p-6 text-center">
+			<p class="mb-3 text-destructive">{error}</p>
+			<Button variant="outline" onclick={() => goto('/')}>Back to Dashboard</Button>
 		</div>
 	</div>
 {:else if post}
-	<div class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
+	<div class="mx-auto w-full max-w-6xl px-6 py-8 lg:px-12">
 		<div class="mb-6 flex items-start justify-between">
 			<div>
-				<h1 class="text-2xl font-bold">Edit Post</h1>
-				<p class="text-sm text-muted-foreground">
-					Status: <span class="capitalize">{post.status}</span>
+				<div class="flex items-center gap-2">
+					<PencilIcon class="h-5 w-5 text-primary" />
+					<h1 class="text-2xl font-bold tracking-tight">Edit Post</h1>
+				</div>
+				<p class="mt-1 text-sm text-muted-foreground">
+					<span class="capitalize">{post.status}</span>
 					{#if post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z'}
-						· Scheduled for {new Date(post.scheduled_at).toLocaleString()}
+						<span class="mx-1.5">·</span>
+						Scheduled for {new Date(post.scheduled_at).toLocaleString()}
 					{/if}
 				</p>
 			</div>
 			{#if post.status === 'draft' || post.status === 'scheduled'}
-				<div class="flex gap-2">
+				{#if showDeleteConfirm}
+					<div class="flex items-center gap-2">
+						<span class="text-sm text-destructive">Delete this post?</span>
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => (showDeleteConfirm = false)}
+							disabled={deleting}
+						>
+							Cancel
+						</Button>
+						<Button variant="destructive" size="sm" onclick={handleDelete} disabled={deleting}>
+							{deleting ? 'Deleting...' : 'Confirm'}
+						</Button>
+					</div>
+				{:else}
 					<Button
-						variant="outline"
+						variant="ghost"
 						size="sm"
-						class="gap-2 text-destructive hover:text-destructive"
+						class="gap-1.5 text-muted-foreground hover:text-destructive"
 						onclick={() => (showDeleteConfirm = true)}
 						disabled={deleting}
 					>
 						<TrashIcon class="h-4 w-4" />
 						Delete
 					</Button>
-				</div>
+				{/if}
 			{/if}
 		</div>
 
 		{#if error}
 			<div
-				class="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+				class="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
 			>
 				{error}
 			</div>
 		{/if}
 
-		{#if showDeleteConfirm}
-			<div class="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
-				<p class="mb-3 text-sm">
-					Are you sure you want to delete this post? This action cannot be undone.
-				</p>
-				<div class="flex gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => (showDeleteConfirm = false)}
-						disabled={deleting}
-					>
-						Cancel
-					</Button>
-					<Button variant="destructive" size="sm" onclick={handleDelete} disabled={deleting}>
-						{deleting ? 'Deleting...' : 'Delete Post'}
-					</Button>
-				</div>
-			</div>
-		{/if}
-
-		<div class="rounded-lg border bg-card">
+		<div class="rounded-lg border bg-card p-6 pb-0">
 			<ComposePost
 				isPage={true}
 				initialPost={post}

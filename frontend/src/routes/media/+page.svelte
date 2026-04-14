@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { client, type Workspace } from '$lib/api/client';
+	import { client, type Workspace, getToken } from '$lib/api/client';
+	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Card, CardContent } from '$lib/components/ui/card';
-	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
@@ -58,9 +57,7 @@
 	let mediaUsage = $state<MediaUsage[]>([]);
 	let usageLoading = $state(false);
 
-	let selectedWorkspaceName = $derived(
-		workspaces?.find((w) => w.id === selectedWorkspaceId)?.name || 'Select workspace'
-	);
+	let isDraggingUpload = $state(false);
 
 	async function loadWorkspaces() {
 		try {
@@ -165,8 +162,10 @@
 		formData.append('file', file);
 
 		try {
-			const response = await fetch('/api/v1/media/upload', {
+			const token = getToken();
+			const response = await fetch(`${getApiBase()}/media/upload`, {
 				method: 'POST',
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: formData
 			});
 
@@ -196,15 +195,8 @@
 		const date = new Date(dateStr);
 		return date.toLocaleDateString('en-US', {
 			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
+			day: 'numeric'
 		});
-	}
-
-	function getMediaIcon(mimeType: string) {
-		if (mimeType.startsWith('video/')) return VideoIcon;
-		if (mimeType.startsWith('image/')) return ImageIcon;
-		return FileIcon;
 	}
 
 	function isImage(mimeType: string): boolean {
@@ -220,25 +212,54 @@
 			loadMedia();
 		}
 	});
+
+	const filterTabs = [
+		{ value: 'all', label: 'All' },
+		{ value: 'used', label: 'Used' },
+		{ value: 'unused', label: 'Unused' },
+		{ value: 'favorites', label: 'Favorites' }
+	];
 </script>
 
-<div class="flex flex-1 flex-col gap-4 p-4">
-	<div class="flex items-center justify-between">
+<div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
+	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-bold tracking-tight">Media Library</h1>
-			<p class="text-sm text-muted-foreground">Manage your media attachments</p>
+			<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
+				<ImageIcon class="h-6 w-6 text-primary" />
+				Media Library
+			</h1>
+			<p class="mt-1 text-sm text-muted-foreground">
+				{#if totalCount > 0}
+					{totalCount} file{totalCount !== 1 ? 's' : ''}
+				{:else}
+					Manage your media attachments
+				{/if}
+			</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<Button variant="outline" onclick={() => (uploadDialogOpen = true)}>
-				<UploadIcon class="mr-2 size-4" />
+			{#if workspaces && workspaces.length > 1}
+				<Select.Root type="single" bind:value={selectedWorkspaceId}>
+					<Select.Trigger class="w-[160px]">
+						{workspaces.find((w) => w.id === selectedWorkspaceId)?.name || 'Workspace'}
+					</Select.Trigger>
+					<Select.Content>
+						{#each workspaces as workspace (workspace.id)}
+							<Select.Item value={workspace.id}>{workspace.name}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			{/if}
+			<Button onclick={() => (uploadDialogOpen = true)} class="gap-2">
+				<UploadIcon class="h-4 w-4" />
 				Upload
 			</Button>
 		</div>
 	</div>
 
 	{#if error}
-		<div class="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-			<XIcon class="size-4" />
+		<div
+			class="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+		>
 			{error}
 			<button class="ml-auto" onclick={() => (error = '')}>
 				<XIcon class="size-4" />
@@ -246,46 +267,24 @@
 		</div>
 	{/if}
 
-	<div class="flex flex-wrap items-center gap-4">
-		<div class="flex items-center gap-2">
-			<label class="text-sm font-medium">Workspace:</label>
-			<Select.Root type="single" bind:value={selectedWorkspaceId}>
-				<Select.Trigger class="w-[200px]">
-					{workspaces?.find((w) => w.id === selectedWorkspaceId)?.name || 'Select workspace'}
-				</Select.Trigger>
-				<Select.Content>
-					{#each workspaces ?? [] as workspace}
-						<Select.Item value={workspace.id}>{workspace.name}</Select.Item>
-					{/each}
-				</Select.Content>
-			</Select.Root>
+	<!-- Filter Tabs + Sort -->
+	<div class="mb-6 flex flex-wrap items-center gap-4">
+		<div class="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-1">
+			{#each filterTabs as tab}
+				<button
+					class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {filter === tab.value
+						? 'bg-background text-foreground shadow-sm'
+						: 'text-muted-foreground hover:text-foreground'}"
+					onclick={() => (filter = tab.value)}
+				>
+					{tab.label}
+				</button>
+			{/each}
 		</div>
 
-		<div class="flex items-center gap-2">
-			<label class="text-sm font-medium">Filter:</label>
-			<Select.Root type="single" bind:value={filter}>
-				<Select.Trigger class="w-[140px]">
-					{filter === 'all'
-						? 'All'
-						: filter === 'used'
-							? 'Used'
-							: filter === 'unused'
-								? 'Unused'
-								: 'Favorites'}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="all">All</Select.Item>
-					<Select.Item value="used">Used</Select.Item>
-					<Select.Item value="unused">Unused</Select.Item>
-					<Select.Item value="favorites">Favorites</Select.Item>
-				</Select.Content>
-			</Select.Root>
-		</div>
-
-		<div class="flex items-center gap-2">
-			<label class="text-sm font-medium">Sort:</label>
+		<div class="ml-auto flex items-center gap-2">
 			<Select.Root type="single" bind:value={sort}>
-				<Select.Trigger class="w-[140px]">
+				<Select.Trigger class="h-8 w-[120px] text-xs">
 					{sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : 'Size'}
 				</Select.Trigger>
 				<Select.Content>
@@ -295,59 +294,76 @@
 				</Select.Content>
 			</Select.Root>
 		</div>
-
-		{#if totalCount > 0}
-			<span class="text-sm text-muted-foreground">{totalCount} files</span>
-		{/if}
 	</div>
 
+	<!-- Media Grid -->
 	{#if mediaLoading}
-		<div class="flex items-center justify-center py-12">
+		<div class="flex items-center justify-center py-16">
 			<LoaderIcon class="size-8 animate-spin text-muted-foreground" />
 		</div>
 	{:else if mediaItems.length === 0}
-		<div class="flex flex-col items-center justify-center py-12 text-center">
-			<ImageIcon class="mb-4 size-12 text-muted-foreground/50" />
-			<p class="text-lg font-medium text-muted-foreground">No media found</p>
-			<p class="text-sm text-muted-foreground">
-				{#if filter !== 'all' || sort !== 'newest'}
-					Try changing your filters or
+		<div
+			class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center"
+		>
+			<ImageIcon class="mb-4 size-12 text-muted-foreground/40" />
+			<p class="mb-1 text-base font-medium">No media found</p>
+			<p class="mb-4 text-sm text-muted-foreground">
+				{#if filter !== 'all'}
+					Try changing your filters
+				{:else}
+					Upload some files to get started
 				{/if}
-				upload some files to get started
 			</p>
+			{#if filter !== 'all'}
+				<Button variant="outline" size="sm" onclick={() => (filter = 'all')}>Show All</Button>
+			{:else}
+				<Button variant="outline" size="sm" onclick={() => (uploadDialogOpen = true)}>Upload</Button
+				>
+			{/if}
 		</div>
 	{:else}
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each mediaItems as media (media.id)}
-				{@const MediaIcon = getMediaIcon(media.mime_type)}
-				<Card class="group relative overflow-hidden">
-					<div class="relative flex aspect-square items-center justify-center bg-muted/50">
+				<div
+					class="group relative overflow-hidden rounded-lg border bg-card transition-all hover:shadow-sm"
+				>
+					<div class="relative aspect-square overflow-hidden bg-muted/30">
 						{#if isImage(media.mime_type)}
-							<img src={media.url} alt={media.alt_text || 'Media'} class="size-full object-cover" />
+							<img
+								src={media.url}
+								alt={media.alt_text || 'Media'}
+								class="size-full object-cover transition-transform group-hover:scale-105"
+							/>
 						{:else}
-							<MediaIcon class="size-12 text-muted-foreground" />
+							<div class="flex size-full items-center justify-center">
+								<VideoIcon class="size-10 text-muted-foreground/40" />
+							</div>
 						{/if}
 
+						<!-- Hover Actions -->
 						<div
-							class="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+							class="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
 						>
 							<button
-								class="rounded-full bg-white/20 p-2 transition-colors hover:bg-white/30"
+								class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-white/30"
 								onclick={() => showUsage(media)}
 								title="View usage"
 							>
 								<ExternalLinkIcon class="size-4 text-white" />
 							</button>
 							<button
-								class="rounded-full bg-white/20 p-2 transition-colors hover:bg-white/30"
+								class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-white/30"
 								onclick={() => toggleFavorite(media.id)}
-								title={media.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+								title={media.is_favorite ? 'Unfavorite' : 'Favorite'}
 							>
-								<HeartIcon class="size-4" fill={media.is_favorite ? 'currentColor' : 'none'} />
+								<HeartIcon
+									class="size-4 text-white"
+									fill={media.is_favorite ? 'currentColor' : 'none'}
+								/>
 							</button>
 							{#if media.usage_count === 0}
 								<button
-									class="rounded-full bg-white/20 p-2 transition-colors hover:bg-destructive/80"
+									class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-red-500/80"
 									onclick={() => deleteMedia(media.id)}
 									title="Delete"
 								>
@@ -358,43 +374,39 @@
 
 						{#if media.is_favorite}
 							<div class="absolute top-2 right-2">
-								<HeartIcon class="size-5 fill-red-500 text-red-500" />
+								<HeartIcon class="size-4 fill-red-500 text-red-500 drop-shadow-sm" />
 							</div>
 						{/if}
 					</div>
 
-					<CardContent class="p-3">
-						<div class="flex items-start justify-between gap-2">
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{media.mime_type}</p>
-								<p class="text-xs text-muted-foreground">
-									{formatSize(media.size)} · {formatDate(media.created_at)}
-								</p>
-							</div>
-						</div>
-						<div class="mt-2 flex items-center gap-2">
+					<div class="p-2.5">
+						<p class="truncate text-xs text-muted-foreground">
+							{formatSize(media.size)} · {formatDate(media.created_at)}
+						</p>
+						<div class="mt-1.5">
 							{#if media.usage_count > 0}
 								<span
-									class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
 								>
 									Used in {media.usage_count}
 									{media.usage_count === 1 ? 'post' : 'posts'}
 								</span>
 							{:else}
 								<span
-									class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
 								>
 									Unused
 								</span>
 							{/if}
 						</div>
-					</CardContent>
-				</Card>
+					</div>
+				</div>
 			{/each}
 		</div>
 	{/if}
 </div>
 
+<!-- Upload Dialog -->
 <Dialog.Root bind:open={uploadDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
@@ -403,10 +415,15 @@
 		</Dialog.Header>
 
 		<div class="space-y-4 py-4">
-			<div class="space-y-2">
-				<label for="file-upload" class="text-sm font-medium">File</label>
-				<Input id="file-upload" type="file" accept="image/*,video/*" />
-			</div>
+			<label
+				class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-primary/50"
+				for="file-upload"
+			>
+				<UploadIcon class="mb-2 h-8 w-8 text-muted-foreground/40" />
+				<p class="text-sm font-medium">Click to select a file</p>
+				<p class="text-xs text-muted-foreground">Image or video</p>
+			</label>
+			<input id="file-upload" type="file" accept="image/*,video/*" class="hidden" />
 
 			{#if uploadError}
 				<p class="text-sm text-destructive">{uploadError}</p>
@@ -429,6 +446,7 @@
 	</Dialog.Content>
 </Dialog.Root>
 
+<!-- Usage Dialog -->
 <Dialog.Root bind:open={usageDialogOpen}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
@@ -441,23 +459,23 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="max-h-[400px] space-y-3 overflow-y-auto py-4">
+		<div class="max-h-[400px] space-y-2 overflow-y-auto py-4">
 			{#if usageLoading}
 				<div class="flex items-center justify-center py-8">
 					<LoaderIcon class="size-6 animate-spin text-muted-foreground" />
 				</div>
 			{:else if mediaUsage.length === 0}
 				<p class="py-8 text-center text-sm text-muted-foreground">
-					This media is not used in any posts
+					This media is not used in any posts.
 				</p>
 			{:else}
-				{#each mediaUsage as usage}
-					<div class="rounded-md border p-3">
+				{#each mediaUsage as usage (usage.post_id)}
+					<div class="rounded-lg border p-3">
 						<p class="line-clamp-2 text-sm">{usage.content}</p>
 						<div class="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
 							<span class="rounded-full bg-muted px-2 py-0.5">{usage.status}</span>
 							{#if usage.scheduled}
-								<span>Scheduled: {new Date(usage.scheduled).toLocaleString()}</span>
+								<span>{new Date(usage.scheduled).toLocaleString()}</span>
 							{/if}
 						</div>
 					</div>

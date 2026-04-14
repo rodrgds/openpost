@@ -300,9 +300,11 @@
 					body: formData
 				});
 
+				const data = await resp.json();
 				if (resp.ok) {
-					const data = await resp.json();
 					mediaIds = [...mediaIds, data.id];
+				} else {
+					error = data.error || 'Failed to upload media';
 				}
 			}
 		} catch (e) {

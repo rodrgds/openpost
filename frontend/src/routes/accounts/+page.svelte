@@ -3,20 +3,12 @@
 	import { auth } from '$lib/stores/auth';
 	import { client, type Workspace, type SocialAccount } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		Card,
-		CardContent,
-		CardHeader,
-		CardTitle,
-		CardDescription
-	} from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { goto } from '$app/navigation';
-	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
 	import LayersIcon from 'lucide-svelte/icons/layers';
 	import PlusIcon from 'lucide-svelte/icons/plus';
@@ -25,6 +17,7 @@
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
+	import UsersIcon from 'lucide-svelte/icons/users';
 
 	interface MastodonServer {
 		name: string;
@@ -409,52 +402,57 @@
 </svelte:head>
 
 {#if loading}
-	<div class="flex justify-center py-12">
-		<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+	<div class="flex flex-1 items-center justify-center">
+		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
 	</div>
 {:else if !workspaces || workspaces.length === 0}
-	<div class="mx-auto max-w-4xl px-4 py-8">
-		<Card class="text-center">
-			<CardContent class="pt-6">
-				<CardTitle class="mb-2">No Workspaces Found</CardTitle>
-				<CardDescription class="mb-4"
-					>You need to create a workspace before connecting social accounts.</CardDescription
-				>
-				<Button href="/">Create Workspace</Button>
-			</CardContent>
-		</Card>
+	<div class="mx-auto max-w-md px-4 py-16 text-center">
+		<h2 class="mb-2 text-xl font-bold">No Workspaces Found</h2>
+		<p class="mb-4 text-sm text-muted-foreground">
+			Create a workspace first before connecting social accounts.
+		</p>
+		<Button href="/">Create Workspace</Button>
 	</div>
 {:else}
-	<div class="mx-auto max-w-4xl px-4 py-8">
-		<h1 class="mb-6 text-2xl font-bold">Accounts & Sets</h1>
+	<div class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
+		<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
+					<UsersIcon class="h-6 w-6 text-primary" />
+					Accounts
+				</h1>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Connect and manage your social accounts and sets.
+				</p>
+			</div>
+		</div>
 
 		{#if error}
 			<div
-				class="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-destructive"
+				class="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
 			>
 				{error}
 				<Button variant="ghost" size="sm" onclick={() => (error = '')}>Dismiss</Button>
 			</div>
 		{/if}
 
+		<!-- Workspace Selector -->
 		<div class="mb-6">
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} variant="outline" class="w-full max-w-sm justify-between">
-							<span class="flex items-center gap-2 truncate">
-								<span
-									class="inline-flex size-6 items-center justify-center rounded-md border border-border bg-muted/50"
-								>
-									<FolderOpenIcon class="size-3.5" />
-								</span>
-								<span class="truncate">{selectedWorkspaceName}</span>
+						<Button {...props} variant="outline" class="gap-2">
+							<span
+								class="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-[0.6rem] font-bold text-primary"
+							>
+								{selectedWorkspaceName.slice(0, 2).toUpperCase()}
 							</span>
-							<ChevronDownIcon class="size-4 opacity-70" />
+							<span class="truncate">{selectedWorkspaceName}</span>
+							<ChevronDownIcon class="size-3.5 opacity-50" />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content class="w-72 rounded-lg" align="start" side="bottom" sideOffset={6}>
+				<DropdownMenu.Content class="w-56 rounded-lg" align="start" side="bottom" sideOffset={6}>
 					<DropdownMenu.Label class="text-xs text-muted-foreground">Workspaces</DropdownMenu.Label>
 					{#each workspaces as workspace (workspace.id)}
 						<DropdownMenu.Item
@@ -462,9 +460,9 @@
 							class="gap-2 p-2"
 						>
 							<span
-								class="inline-flex size-6 items-center justify-center rounded-md border border-border text-[0.625rem] font-semibold"
+								class="flex size-6 items-center justify-center rounded-md bg-primary/10 text-[0.6rem] font-bold text-primary"
 							>
-								{workspace.name.slice(0, 1).toUpperCase()}
+								{workspace.name.slice(0, 2).toUpperCase()}
 							</span>
 							<span class="truncate">{workspace.name}</span>
 						</DropdownMenu.Item>
@@ -473,266 +471,266 @@
 			</DropdownMenu.Root>
 		</div>
 
-		<div class="mb-8 space-y-4">
-			<div class="flex items-center justify-between">
-				<h2 class="text-lg font-medium">Social Media Sets</h2>
-				<Button onclick={() => (createSetDialogOpen = true)} size="sm" class="gap-1">
-					<PlusIcon class="h-4 w-4" />
+		<!-- Social Media Sets -->
+		<div class="mb-8">
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="text-lg font-semibold">Social Media Sets</h2>
+				<Button onclick={() => (createSetDialogOpen = true)} size="sm" class="gap-1.5">
+					<PlusIcon class="h-3.5 w-3.5" />
 					New Set
 				</Button>
 			</div>
 
 			{#if setsLoading}
-				<div class="flex justify-center py-4">
+				<div class="flex justify-center py-6">
 					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
 				</div>
 			{:else if sets.length === 0}
-				<div class="rounded-md border border-dashed bg-muted/50 p-6 text-center">
-					<LayersIcon class="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+				<div class="rounded-lg border border-dashed bg-muted/30 p-8 text-center">
+					<LayersIcon class="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
 					<p class="mb-1 text-sm font-medium">No sets yet</p>
-					<p class="mb-3 text-xs text-muted-foreground">
-						Create sets to group accounts for quick posting
+					<p class="mb-4 text-xs text-muted-foreground">
+						Group accounts together for quick posting
 					</p>
-					<Button onclick={() => (createSetDialogOpen = true)} size="sm">
+					<Button onclick={() => (createSetDialogOpen = true)} size="sm" variant="outline">
 						Create your first set
 					</Button>
 				</div>
 			{:else}
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					{#each sets as set}
-						<Card class="relative">
-							<CardContent class="p-4">
-								<div class="mb-3 flex items-start justify-between">
-									<div class="flex items-center gap-2">
-										<div
-											class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10"
-										>
-											<LayersIcon class="h-5 w-5 text-primary" />
-										</div>
-										<div>
-											<h3 class="font-medium">{set.name}</h3>
-											<p class="text-xs text-muted-foreground">
-												{set.accounts.length} account{set.accounts.length !== 1 ? 's' : ''}
-											</p>
-										</div>
-									</div>
-									<div class="flex items-center gap-1">
-										{#if set.is_default}
-											<span class="rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
-												Default
-											</span>
-										{/if}
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-8 w-8"
-											onclick={() => openEditSet(set)}
-										>
-											<SettingsIcon class="h-4 w-4" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											class="h-8 w-8 text-destructive hover:text-destructive"
-											onclick={() => deleteSet(set.id)}
-										>
-											<TrashIcon class="h-4 w-4" />
-										</Button>
-									</div>
-								</div>
-								{#if set.accounts.length > 0}
-									<div class="flex flex-wrap gap-1">
-										{#each set.accounts as acc}
-											<span
-												class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
-											>
-												<PlatformIcon platform={acc.platform} class="h-3 w-3" />
-												{acc.account_username || acc.platform}
-											</span>
-										{/each}
-									</div>
-								{:else}
-									<p class="text-xs text-muted-foreground">No accounts in this set</p>
-								{/if}
-							</CardContent>
-						</Card>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		<div class="mb-8">
-			<h2 class="mb-4 text-lg font-medium">Connected Accounts</h2>
-
-			{#if accountsLoading}
-				<div class="flex justify-center py-4">
-					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
-				</div>
-			{:else if !accounts || accounts.length === 0}
-				<div class="rounded-md border bg-muted/50 p-4 text-center text-muted-foreground">
-					No accounts connected yet. Connect a platform below to get started.
-				</div>
-			{:else}
-				<div class="space-y-4">
-					{#each [...accountsByPlatform.entries()] as [platform, platformAccounts]}
-						<Card>
-							<CardContent class="p-4">
-								<div class="mb-3 flex items-center gap-3">
-									<div
-										class="h-10 w-10 {getPlatformColor(
-											platform
-										)} flex items-center justify-center rounded-full"
-									>
-										<PlatformIcon {platform} class="h-5 w-5 text-white" />
+					{#each sets as set (set.id)}
+						<div class="group rounded-lg border bg-card p-4 transition-all hover:shadow-sm">
+							<div class="mb-3 flex items-start justify-between">
+								<div class="flex items-center gap-3">
+									<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+										<LayersIcon class="h-5 w-5 text-primary" />
 									</div>
 									<div>
-										<h3 class="font-medium capitalize">{getPlatformName(platform)}</h3>
-										<p class="text-sm text-muted-foreground">
-											{platformAccounts.length} account{platformAccounts.length !== 1 ? 's' : ''}
+										<h3 class="text-sm font-medium">{set.name}</h3>
+										<p class="text-xs text-muted-foreground">
+											{set.accounts.length} account{set.accounts.length !== 1 ? 's' : ''}
 										</p>
 									</div>
 								</div>
-								<div class="space-y-2">
-									{#each platformAccounts as account}
-										<div class="flex items-center justify-between rounded-md border p-3">
-											<div class="flex items-center gap-3">
-												<div class="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-													<PlatformIcon platform={account.platform} class="h-4 w-4" />
-												</div>
-												<div>
-													<p class="font-medium">
-														{#if account.account_username}
-															@{account.account_username}
-														{:else if account.instance_url}
-															{account.instance_url.replace('https://', '')}
-														{:else}
-															{account.account_id}
-														{/if}
-													</p>
-													<p class="text-xs text-muted-foreground">
-														{account.is_active ? 'Connected' : 'Disconnected'}
-													</p>
-												</div>
-											</div>
-											<Button
-												variant="outline"
-												size="sm"
-												onclick={() => disconnectAccount(account.id)}
-											>
-												Disconnect
-											</Button>
-										</div>
+								<div
+									class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+								>
+									{#if set.is_default}
+										<span
+											class="mr-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+										>
+											Default
+										</span>
+									{/if}
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7"
+										onclick={() => openEditSet(set)}
+									>
+										<SettingsIcon class="h-3.5 w-3.5" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7 text-destructive hover:text-destructive"
+										onclick={() => deleteSet(set.id)}
+									>
+										<TrashIcon class="h-3.5 w-3.5" />
+									</Button>
+								</div>
+							</div>
+							{#if set.accounts.length > 0}
+								<div class="flex flex-wrap gap-1.5">
+									{#each set.accounts as acc (acc.social_account_id)}
+										<span
+											class="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs"
+										>
+											<PlatformIcon platform={acc.platform} class="h-3 w-3" />
+											{acc.account_username || acc.platform}
+										</span>
 									{/each}
 								</div>
-							</CardContent>
-						</Card>
+							{:else}
+								<p class="text-xs text-muted-foreground">No accounts in this set</p>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}
 		</div>
 
-		<div class="space-y-4">
-			<h2 class="text-lg font-medium">Connect a Platform</h2>
+		<!-- Connected Accounts -->
+		<div class="mb-8">
+			<h2 class="mb-4 text-lg font-semibold">Connected Accounts</h2>
 
-			<Card>
-				<CardContent class="flex items-center justify-between p-4">
-					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-black">
-							<PlatformIcon platform="x" class="h-4 w-4 text-white" />
-						</div>
-						<div>
-							<h3 class="font-medium">X (Twitter)</h3>
-							<p class="text-sm text-muted-foreground">Connect your X account to post tweets</p>
-						</div>
-					</div>
-					<Button onclick={connectTwitter}>Connect</Button>
-				</CardContent>
-			</Card>
-
-			{#if mastodonServers.length > 0}
-				{#each mastodonServers as server}
-					<Card>
-						<CardContent class="flex items-center justify-between p-4">
-							<div class="flex items-center gap-3">
-								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-									<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
+			{#if accountsLoading}
+				<div class="flex justify-center py-6">
+					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
+				</div>
+			{:else if !accounts || accounts.length === 0}
+				<div class="rounded-lg border border-dashed bg-muted/30 p-8 text-center">
+					<UsersIcon class="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+					<p class="mb-1 text-sm font-medium">No accounts connected</p>
+					<p class="text-xs text-muted-foreground">Connect a platform below to get started.</p>
+				</div>
+			{:else}
+				<div class="space-y-3">
+					{#each [...accountsByPlatform.entries()] as [platform, platformAccounts] (platform)}
+						<div class="rounded-lg border bg-card">
+							<div class="flex items-center gap-3 border-b px-4 py-3">
+								<div
+									class="flex h-9 w-9 items-center justify-center rounded-full {getPlatformColor(
+										platform
+									)}"
+								>
+									<PlatformIcon {platform} class="h-4 w-4 text-white" />
 								</div>
-								<div>
-									<h3 class="font-medium">{server.name}</h3>
-									<p class="text-sm text-muted-foreground">
-										{server.instance_url.replace('https://', '')}
+								<div class="flex-1">
+									<h3 class="text-sm font-medium">{getPlatformName(platform)}</h3>
+									<p class="text-xs text-muted-foreground">
+										{platformAccounts.length} account{platformAccounts.length !== 1 ? 's' : ''}
 									</p>
 								</div>
 							</div>
-							<div class="flex gap-2">
-								<Button href="/accounts/mastodon/callback" variant="outline">Enter Code</Button>
-								<Button onclick={() => connectMastodon(server.name)}>Connect</Button>
+							<div class="divide-y">
+								{#each platformAccounts as account (account.id)}
+									<div class="flex items-center justify-between px-4 py-3">
+										<div class="flex items-center gap-3">
+											<div class="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+												<PlatformIcon platform={account.platform} class="h-3.5 w-3.5" />
+											</div>
+											<div>
+												<p class="text-sm font-medium">
+													{#if account.account_username}
+														@{account.account_username}
+													{:else if account.instance_url}
+														{account.instance_url.replace('https://', '')}
+													{:else}
+														{account.account_id}
+													{/if}
+												</p>
+												<p class="text-xs text-muted-foreground">
+													{account.is_active ? 'Connected' : 'Disconnected'}
+												</p>
+											</div>
+										</div>
+										<Button
+											variant="ghost"
+											size="sm"
+											onclick={() => disconnectAccount(account.id)}
+											class="text-xs text-muted-foreground hover:text-destructive"
+										>
+											Disconnect
+										</Button>
+									</div>
+								{/each}
 							</div>
-						</CardContent>
-					</Card>
-				{/each}
-			{:else}
-				<Card>
-					<CardContent class="flex items-center justify-between p-4">
-						<div class="flex items-center gap-3">
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
+		<!-- Connect a Platform -->
+		<div>
+			<h2 class="mb-4 text-lg font-semibold">Connect a Platform</h2>
+
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<!-- X / Twitter -->
+				<div
+					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+				>
+					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-black">
+						<PlatformIcon platform="x" class="h-4 w-4 text-white" />
+					</div>
+					<div class="min-w-0 flex-1">
+						<h3 class="text-sm font-medium">X (Twitter)</h3>
+						<p class="text-xs text-muted-foreground">Post tweets</p>
+					</div>
+					<Button onclick={connectTwitter} size="sm">Connect</Button>
+				</div>
+
+				<!-- Mastodon -->
+				{#if mastodonServers.length > 0}
+					{#each mastodonServers as server (server.name)}
+						<div
+							class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+						>
 							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-								<PlatformIcon platform="mastodon" class="h-5 w-5 text-white" />
+								<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
 							</div>
-							<div>
-								<h3 class="font-medium">Mastodon</h3>
-								<p class="text-sm text-muted-foreground">
-									No Mastodon servers configured. Add MASTODON_SERVERS to your .env file.
+							<div class="min-w-0 flex-1">
+								<h3 class="text-sm font-medium">{server.name}</h3>
+								<p class="truncate text-xs text-muted-foreground">
+									{server.instance_url.replace('https://', '')}
 								</p>
 							</div>
+							<div class="flex gap-1.5">
+								<Button
+									href="/accounts/mastodon/callback"
+									variant="outline"
+									size="sm"
+									class="text-xs">Code</Button
+								>
+								<Button onclick={() => connectMastodon(server.name)} size="sm">Connect</Button>
+							</div>
 						</div>
-					</CardContent>
-				</Card>
-			{/if}
-
-			<Card>
-				<CardContent class="flex items-center justify-between p-4">
-					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
-							<PlatformIcon platform="threads" class="h-5 w-5 text-white" />
+					{/each}
+				{:else}
+					<div class="group flex items-center gap-3 rounded-lg border bg-card p-4 opacity-60">
+						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
+							<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
 						</div>
-						<div>
-							<h3 class="font-medium">Threads</h3>
-							<p class="text-sm text-muted-foreground">Connect your Threads account</p>
-						</div>
-					</div>
-					<Button onclick={connectThreads}>Connect</Button>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardContent class="flex items-center justify-between p-4">
-					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500">
-							<PlatformIcon platform="bluesky" class="h-5 w-5 text-white" />
-						</div>
-						<div>
-							<h3 class="font-medium">Bluesky</h3>
-							<p class="text-sm text-muted-foreground">Connect your Bluesky account</p>
+						<div class="min-w-0 flex-1">
+							<h3 class="text-sm font-medium">Mastodon</h3>
+							<p class="text-xs text-muted-foreground">Not configured</p>
 						</div>
 					</div>
-					<Button onclick={connectBluesky}>Connect</Button>
-				</CardContent>
-			</Card>
+				{/if}
 
-			<Card>
-				<CardContent class="flex items-center justify-between p-4">
-					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600">
-							<PlatformIcon platform="linkedin" class="h-5 w-5 text-white" />
-						</div>
-						<div>
-							<h3 class="font-medium">LinkedIn</h3>
-							<p class="text-sm text-muted-foreground">Connect your LinkedIn account</p>
-						</div>
+				<!-- Threads -->
+				<div
+					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+				>
+					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
+						<PlatformIcon platform="threads" class="h-4 w-4 text-white" />
 					</div>
-					<Button onclick={connectLinkedIn}>Connect</Button>
-				</CardContent>
-			</Card>
+					<div class="min-w-0 flex-1">
+						<h3 class="text-sm font-medium">Threads</h3>
+						<p class="text-xs text-muted-foreground">Post to Threads</p>
+					</div>
+					<Button onclick={connectThreads} size="sm">Connect</Button>
+				</div>
+
+				<!-- Bluesky -->
+				<div
+					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+				>
+					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500">
+						<PlatformIcon platform="bluesky" class="h-4 w-4 text-white" />
+					</div>
+					<div class="min-w-0 flex-1">
+						<h3 class="text-sm font-medium">Bluesky</h3>
+						<p class="text-xs text-muted-foreground">Post to Bluesky</p>
+					</div>
+					<Button onclick={connectBluesky} size="sm">Connect</Button>
+				</div>
+
+				<!-- LinkedIn -->
+				<div
+					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+				>
+					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600">
+						<PlatformIcon platform="linkedin" class="h-4 w-4 text-white" />
+					</div>
+					<div class="min-w-0 flex-1">
+						<h3 class="text-sm font-medium">LinkedIn</h3>
+						<p class="text-xs text-muted-foreground">Post to LinkedIn</p>
+					</div>
+					<Button onclick={connectLinkedIn} size="sm">Connect</Button>
+				</div>
+			</div>
 		</div>
 	</div>
 {/if}

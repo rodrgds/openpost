@@ -12,6 +12,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import Logo from '$lib/components/Logo.svelte';
+	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import CheckCircleIcon from 'lucide-svelte/icons/check-circle-2';
 
 	let email = $state('');
 	let password = $state('');
@@ -40,9 +42,7 @@
 
 		if (result.success) {
 			registrationSuccess = true;
-			setTimeout(() => {
-				goto('/');
-			}, 100);
+			goto('/onboarding');
 		} else {
 			error = result.error || 'Registration failed';
 			isLoading = false;
@@ -51,31 +51,24 @@
 </script>
 
 <svelte:head>
-	<title>Register - OpenPost</title>
+	<title>Create Account - OpenPost</title>
 </svelte:head>
 
 {#if registrationSuccess}
-	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6">
-		<div class="flex justify-center">
-			<a href="/">
-				<Logo width={80} height={23} />
-			</a>
+	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6 px-4">
+		<Logo width={80} height={23} />
+		<div class="w-full max-w-md text-center">
+			<div
+				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10"
+			>
+				<CheckCircleIcon class="h-8 w-8 text-emerald-500" />
+			</div>
+			<h2 class="mb-2 text-2xl font-bold tracking-tight">You're in!</h2>
+			<p class="text-muted-foreground">Setting up your workspace...</p>
 		</div>
-		<Card class="w-full max-w-md">
-			<CardContent class="pt-6 text-center">
-				<div class="mb-4 text-green-600">
-					<svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"
-						></path>
-					</svg>
-				</div>
-				<h2 class="mb-2 text-xl font-bold text-foreground">Account Created!</h2>
-				<p class="text-muted-foreground">Redirecting to dashboard...</p>
-			</CardContent>
-		</Card>
 	</div>
 {:else}
-	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6">
+	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6 px-4">
 		<div class="flex justify-center">
 			<a href="/">
 				<Logo width={80} height={23} />
@@ -114,9 +107,8 @@
 							id="password"
 							bind:value={password}
 							required
-							placeholder="••••••••"
+							placeholder="Minimum 8 characters"
 						/>
-						<p class="text-xs text-muted-foreground">At least 8 characters</p>
 					</div>
 
 					<div class="space-y-2">
@@ -126,12 +118,17 @@
 							id="confirmPassword"
 							bind:value={confirmPassword}
 							required
-							placeholder="••••••••"
+							placeholder="Re-enter your password"
 						/>
 					</div>
 
 					<Button type="submit" disabled={isLoading} class="w-full">
-						{isLoading ? 'Creating account...' : 'Create Account'}
+						{#if isLoading}
+							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+							Creating account...
+						{:else}
+							Create Account
+						{/if}
 					</Button>
 				</form>
 

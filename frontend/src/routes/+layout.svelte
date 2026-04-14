@@ -11,6 +11,7 @@
 	import Logo from '$lib/components/Logo.svelte';
 	import { IS_CAPACITOR } from '$lib/env';
 	import { instanceStore, isInstanceConfigured } from '$lib/stores/instance.svelte';
+	import { client } from '$lib/api/client';
 
 	let { children } = $props();
 
@@ -27,6 +28,10 @@
 		'/accounts/mastodon/callback'
 	];
 
+	let needsOnboarding = $state(false);
+	let onboardingChecked = $state(false);
+	let lastOnboardingCheckedPath = $state('');
+
 	onMount(() => {
 		instance.initialize();
 		auth.initialize();
@@ -35,7 +40,6 @@
 	$effect(() => {
 		if (instance.isLoading) return;
 
-		// Capacitor-only: redirect to connect if no instance configured
 		if (IS_CAPACITOR && !isInstanceConfigured() && currentPath !== '/connect') {
 			goto('/connect');
 			return;
@@ -44,14 +48,51 @@
 		if (authState.isLoading) return;
 
 		const isPublicRoute = publicRoutes.some((route) => currentPath.startsWith(route));
-		const isLandingPage = currentPath === '/';
+		const isOnboardingPage = currentPath === '/onboarding';
 
-		if (!authState.isAuthenticated && !isPublicRoute && !isLandingPage) {
+		if (!authState.isAuthenticated && !isPublicRoute && !isOnboardingPage) {
 			goto('/login');
 		}
 
-		if (authState.isAuthenticated && (currentPath === '/login' || currentPath === '/register')) {
-			goto('/');
+		if (authState.isAuthenticated) {
+			if (!onboardingChecked) return;
+
+			if (needsOnboarding) {
+				if (!isOnboardingPage) {
+					goto('/onboarding');
+				}
+			} else if (currentPath === '/login' || currentPath === '/register') {
+				goto('/');
+			}
+		}
+	});
+
+	async function checkOnboarding() {
+		if (!authState.isAuthenticated || authState.isLoading) return;
+		try {
+			const { data, error } = await client.GET('/workspaces');
+			if (!error && data && data.length === 0) {
+				needsOnboarding = true;
+			} else {
+				needsOnboarding = !!error;
+			}
+		} catch {
+			// Fail safe: if we cannot verify workspace state, keep user in onboarding flow.
+			needsOnboarding = true;
+		}
+		onboardingChecked = true;
+	}
+
+	$effect(() => {
+		if (authState.isLoading || !authState.isAuthenticated) {
+			onboardingChecked = false;
+			lastOnboardingCheckedPath = '';
+			return;
+		}
+
+		if (currentPath !== lastOnboardingCheckedPath || !onboardingChecked) {
+			lastOnboardingCheckedPath = currentPath;
+			checkOnboarding();
 		}
 	});
 </script>
@@ -61,7 +102,7 @@
 </svelte:head>
 
 <ModeWatcher />
-{#if instance.isLoading || authState.isLoading}
+{#if instance.isLoading || authState.isLoading || (authState.isAuthenticated && !onboardingChecked)}
 	<div class="flex min-h-screen items-center justify-center">
 		<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
 	</div>
@@ -90,6 +131,8 @@
 	{:else}
 		{@render children()}
 	{/if}
+{:else if currentPath === '/onboarding' || currentPath === '/connect'}
+	{@render children()}
 {:else}
 	<Sidebar.Provider>
 		<SidebarLeft />
