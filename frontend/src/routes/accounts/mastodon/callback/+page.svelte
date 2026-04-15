@@ -12,6 +12,8 @@
 	} from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import PageContainer from '$lib/components/page-container.svelte';
+	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 
 	let code = $state('');
 	let serverName = $state('');
@@ -19,6 +21,7 @@
 	let loading = $state(false);
 	let error = $state('');
 	let success = $state(false);
+	let pageLoading = $state(true);
 
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -32,6 +35,7 @@
 		if (codeFromUrl) {
 			code = codeFromUrl;
 		}
+		pageLoading = false;
 	});
 
 	async function submitCode() {
@@ -72,33 +76,38 @@
 	<title>Mastodon Callback - OpenPost</title>
 </svelte:head>
 
-<div class="mx-auto max-w-md px-4 py-12">
-	{#if success}
+{#if pageLoading}
+	<div class="flex flex-1 items-center justify-center">
+		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
+	</div>
+{:else if success}
+	<PageContainer title="Account Connected!">
 		<Card>
 			<CardContent class="pt-6 text-center">
 				<div class="mb-4 text-5xl text-green-600">✓</div>
-				<CardTitle class="mb-2">Account Connected!</CardTitle>
+				<CardTitle class="mb-2">Success</CardTitle>
 				<CardDescription>Redirecting to accounts...</CardDescription>
 			</CardContent>
 		</Card>
-	{:else}
+	</PageContainer>
+{:else}
+	<PageContainer
+		title="Connect Mastodon Account"
+		description="Paste the authorization code from Mastodon below"
+	>
 		<Card>
-			<CardHeader>
-				<CardTitle>Connect Mastodon Account</CardTitle>
-				<CardDescription>Paste the authorization code from Mastodon below:</CardDescription>
-			</CardHeader>
-			<CardContent>
+			<CardContent class="pt-6">
 				{#if serverName}
 					<p class="mb-4 text-sm text-muted-foreground">
 						Connecting to server: <strong>{serverName}</strong>
 					</p>
 				{/if}
 				<form
-					onsubmit={(e) => {
+					class="space-y-4"
+					onsubmit={(e: SubmitEvent) => {
 						e.preventDefault();
 						submitCode();
 					}}
-					class="space-y-4"
 				>
 					<div class="space-y-2">
 						<Label for="code">Authorization Code</Label>
@@ -130,5 +139,5 @@
 				</div>
 			</CardContent>
 		</Card>
-	{/if}
-</div>
+	</PageContainer>
+{/if}

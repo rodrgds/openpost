@@ -7,6 +7,8 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import PageContainer from '$lib/components/page-container.svelte';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import ImageIcon from 'lucide-svelte/icons/image';
 	import VideoIcon from 'lucide-svelte/icons/video';
@@ -86,6 +88,8 @@
 			}
 		} catch (e) {
 			console.error('Failed to load workspaces:', e);
+		} finally {
+			loading = false;
 		}
 	}
 
@@ -378,37 +382,42 @@
 
 	const totalPages = $derived(Math.ceil(totalCount / pageSize));
 	const unusedCount = $derived(mediaItems.filter((m) => m.usage_count === 0).length);
+
+	const descriptionText = $derived.by(() => {
+		if (totalCount > 0) {
+			let text = `${totalCount} file${totalCount !== 1 ? 's' : ''}`;
+			if (filter === 'unused') {
+				text += ` (${unusedCount} unused)`;
+			}
+			return text;
+		}
+		return 'Manage your media attachments';
+	});
 </script>
 
-<div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
-	{#if toastMessage}
-		<div
-			class="pointer-events-auto fixed right-4 bottom-4 z-50 mb-4 flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg"
-		>
-			<span class="text-sm">{toastMessage}</span>
-			<button onclick={() => (toastMessage = '')}>
-				<XIcon class="size-4" />
-			</button>
-		</div>
-	{/if}
+<svelte:head>
+	<title>Media Library - OpenPost</title>
+</svelte:head>
 
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-		<div>
-			<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
-				<ImageIcon class="h-6 w-6 text-primary" />
-				Media Library
-			</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				{#if totalCount > 0}
-					{totalCount} file{totalCount !== 1 ? 's' : ''}
-					{#if filter === 'unused'}
-						({unusedCount} unused)
-					{/if}
-				{:else}
-					Manage your media attachments
-				{/if}
-			</p>
-		</div>
+{#if toastMessage}
+	<div
+		class="pointer-events-auto fixed right-4 bottom-4 z-50 mb-4 flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg"
+	>
+		<span class="text-sm">{toastMessage}</span>
+		<button onclick={() => (toastMessage = '')}>
+			<XIcon class="size-4" />
+		</button>
+	</div>
+{/if}
+
+<PageContainer
+	title="Media Library"
+	description={descriptionText}
+	icon={ImageIcon}
+	{loading}
+	loadingMessage="Loading media library..."
+>
+	{#snippet actions()}
 		<div class="flex items-center gap-2">
 			{#if workspaces && workspaces.length > 1}
 				<Select.Root type="single" bind:value={selectedWorkspaceId}>
@@ -427,7 +436,7 @@
 				Upload
 			</Button>
 		</div>
-	</div>
+	{/snippet}
 
 	{#if error}
 		<div
@@ -500,25 +509,27 @@
 			<LoaderIcon class="size-8 animate-spin text-muted-foreground" />
 		</div>
 	{:else if mediaItems.length === 0}
-		<div
-			class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center"
-		>
-			<ImageIcon class="mb-4 size-12 text-muted-foreground/40" />
-			<p class="mb-1 text-base font-medium">No media found</p>
-			<p class="mb-4 text-sm text-muted-foreground">
-				{#if filter !== 'all'}
-					Try changing your filters
-				{:else}
-					Upload some files to get started
-				{/if}
-			</p>
-			{#if filter !== 'all'}
-				<Button variant="outline" size="sm" onclick={() => (filter = 'all')}>Show All</Button>
-			{:else}
-				<Button variant="outline" size="sm" onclick={() => (uploadDialogOpen = true)}>Upload</Button
-				>
-			{/if}
-		</div>
+		{#if filter !== 'all'}
+			<EmptyState
+				icon={ImageIcon}
+				title="No media found"
+				description="Try changing your filters"
+				actionLabel="Show All"
+				onAction={() => (filter = 'all')}
+				variant="dashed"
+				size="lg"
+			/>
+		{:else}
+			<EmptyState
+				icon={ImageIcon}
+				title="No media found"
+				description="Upload some files to get started"
+				actionLabel="Upload"
+				onAction={() => (uploadDialogOpen = true)}
+				variant="dashed"
+				size="lg"
+			/>
+		{/if}
 	{:else}
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each mediaItems as media (media.id)}
@@ -654,7 +665,7 @@
 			</div>
 		{/if}
 	{/if}
-</div>
+</PageContainer>
 
 <!-- Upload Dialog -->
 <Dialog.Root bind:open={uploadDialogOpen}>

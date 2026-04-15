@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { client } from '$lib/api/client';
 	import ComposePost from '$lib/components/compose-post.svelte';
+	import PageContainer from '$lib/components/page-container.svelte';
 	import { ui } from '$lib/stores/ui.svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -83,6 +84,19 @@
 	function handleCancel() {
 		goto('/');
 	}
+
+	const descriptionText = $derived.by(() => {
+		if (post) {
+			const status = post.status.charAt(0).toUpperCase() + post.status.slice(1);
+			if (post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z') {
+				return `${status} · Scheduled for ${new Date(post.scheduled_at).toLocaleString('en-US', {
+					timeZone: workspaceCtx.settings.timezone || 'UTC'
+				})}`;
+			}
+			return status;
+		}
+		return '';
+	});
 </script>
 
 <svelte:head>
@@ -94,31 +108,16 @@
 		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
 	</div>
 {:else if error && !post}
-	<div class="mx-auto w-full max-w-6xl px-6 py-8 lg:px-12">
+	<div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
 		<div class="rounded-lg border border-destructive/20 bg-destructive/10 p-6 text-center">
 			<p class="mb-3 text-destructive">{error}</p>
 			<Button variant="outline" onclick={() => goto('/')}>Back to Dashboard</Button>
 		</div>
 	</div>
 {:else if post}
-	<div class="mx-auto w-full max-w-6xl px-6 py-8 lg:px-12">
-		<div class="mb-6 flex items-start justify-between">
-			<div>
-				<div class="flex items-center gap-2">
-					<PencilIcon class="h-5 w-5 text-primary" />
-					<h1 class="text-2xl font-bold tracking-tight">Edit Post</h1>
-				</div>
-				<p class="mt-1 text-sm text-muted-foreground">
-					<span class="capitalize">{post.status}</span>
-					{#if post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z'}
-						<span class="mx-1.5">·</span>
-						Scheduled for {new Date(post.scheduled_at).toLocaleString('en-US', {
-							timeZone: workspaceCtx.settings.timezone || 'UTC'
-						})}
-					{/if}
-				</p>
-			</div>
-			{#if post.status === 'draft' || post.status === 'scheduled'}
+	<PageContainer title="Edit Post" description={descriptionText} icon={PencilIcon}>
+		{#snippet actions()}
+			{#if post && (post.status === 'draft' || post.status === 'scheduled')}
 				{#if showDeleteConfirm}
 					<div class="flex items-center gap-2">
 						<span class="text-sm text-destructive">Delete this post?</span>
@@ -147,7 +146,7 @@
 					</Button>
 				{/if}
 			{/if}
-		</div>
+		{/snippet}
 
 		{#if error}
 			<div
@@ -165,5 +164,5 @@
 				onCancel={handleCancel}
 			/>
 		</div>
-	</div>
+	</PageContainer>
 {/if}

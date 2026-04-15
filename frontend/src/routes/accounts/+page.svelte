@@ -9,6 +9,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { goto } from '$app/navigation';
+	import PageContainer from '$lib/components/page-container.svelte';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
 	import LayersIcon from 'lucide-svelte/icons/layers';
 	import PlusIcon from 'lucide-svelte/icons/plus';
@@ -414,19 +416,11 @@
 		<Button href="/">Create Workspace</Button>
 	</div>
 {:else}
-	<div class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
-		<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
-					<UsersIcon class="h-6 w-6 text-primary" />
-					Accounts
-				</h1>
-				<p class="mt-1 text-sm text-muted-foreground">
-					Connect and manage your social accounts and sets.
-				</p>
-			</div>
-		</div>
-
+	<PageContainer
+		title="Accounts"
+		description="Connect and manage your social accounts and sets."
+		icon={UsersIcon}
+	>
 		{#if error}
 			<div
 				class="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
@@ -486,16 +480,15 @@
 					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
 				</div>
 			{:else if sets.length === 0}
-				<div class="rounded-lg border border-dashed bg-muted/30 p-8 text-center">
-					<LayersIcon class="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-					<p class="mb-1 text-sm font-medium">No sets yet</p>
-					<p class="mb-4 text-xs text-muted-foreground">
-						Group accounts together for quick posting
-					</p>
-					<Button onclick={() => (createSetDialogOpen = true)} size="sm" variant="outline">
-						Create your first set
-					</Button>
-				</div>
+				<EmptyState
+					icon={LayersIcon}
+					title="No sets yet"
+					description="Group accounts together for quick posting"
+					actionLabel="Create your first set"
+					onAction={() => (createSetDialogOpen = true)}
+					variant="muted"
+					size="md"
+				/>
 			{:else}
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					{#each sets as set (set.id)}
@@ -569,11 +562,13 @@
 					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
 				</div>
 			{:else if !accounts || accounts.length === 0}
-				<div class="rounded-lg border border-dashed bg-muted/30 p-8 text-center">
-					<UsersIcon class="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-					<p class="mb-1 text-sm font-medium">No accounts connected</p>
-					<p class="text-xs text-muted-foreground">Connect a platform below to get started.</p>
-				</div>
+				<EmptyState
+					icon={UsersIcon}
+					title="No accounts connected"
+					description="Connect a platform below to get started"
+					variant="muted"
+					size="md"
+				/>
 			{:else}
 				<div class="space-y-3">
 					{#each [...accountsByPlatform.entries()] as [platform, platformAccounts] (platform)}
@@ -732,7 +727,7 @@
 				</div>
 			</div>
 		</div>
-	</div>
+	</PageContainer>
 {/if}
 
 <Dialog.Root bind:open={blueskyModalOpen}>
@@ -745,11 +740,11 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
+			class="space-y-4"
 			onsubmit={(e) => {
 				e.preventDefault();
 				submitBlueskyLogin();
 			}}
-			class="space-y-4"
 		>
 			<div class="space-y-2">
 				<Label for="bluesky-handle">Handle</Label>
@@ -799,11 +794,11 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
+			class="space-y-4"
 			onsubmit={(e) => {
 				e.preventDefault();
 				createSet();
 			}}
-			class="space-y-4"
 		>
 			<div class="space-y-2">
 				<Label for="set-name">Set Name</Label>
@@ -865,11 +860,11 @@
 		</Dialog.Header>
 		{#if editingSet}
 			<form
+				class="space-y-4"
 				onsubmit={(e) => {
 					e.preventDefault();
 					updateSet();
 				}}
-				class="space-y-4"
 			>
 				<div class="space-y-2">
 					<Label for="edit-set-name">Set Name</Label>

@@ -3,6 +3,7 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import PageContainer from '$lib/components/page-container.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import SaveIcon from 'lucide-svelte/icons/save';
@@ -142,142 +143,135 @@
 	}
 </script>
 
-<div class="mx-auto w-full max-w-2xl px-4 py-6 lg:px-8">
-	{#if toastMessage}
-		<div
-			class="pointer-events-auto fixed right-4 bottom-4 z-50 mb-4 flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg"
-		>
-			<span class="text-sm">{toastMessage}</span>
-			<button onclick={() => (toastMessage = '')}>
-				<XIcon class="size-4" />
-			</button>
-		</div>
-	{/if}
+<svelte:head>
+	<title>Settings - OpenPost</title>
+</svelte:head>
 
-	<div class="mb-6">
-		<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight">
-			<SettingsIcon class="h-6 w-6 text-primary" />
-			Settings
-		</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Manage your workspace preferences</p>
+{#if toastMessage}
+	<div
+		class="pointer-events-auto fixed right-4 bottom-4 z-50 mb-4 flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg"
+	>
+		<span class="text-sm">{toastMessage}</span>
+		<button onclick={() => (toastMessage = '')}>
+			<XIcon class="size-4" />
+		</button>
 	</div>
+{/if}
 
-	{#if !workspaceCtx.currentWorkspace}
-		<div class="flex items-center justify-center py-16">
-			<LoaderIcon class="size-8 animate-spin text-muted-foreground" />
-		</div>
-	{:else}
-		<div class="space-y-8">
-			<!-- Workspace Info -->
-			<section class="rounded-lg border p-6">
-				<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
-				<div class="space-y-4">
-					<div class="flex items-center gap-4">
-						<span class="text-sm font-medium">Current Workspace</span>
-						<span class="text-sm text-muted-foreground">{workspaceCtx.currentWorkspace.name}</span>
-					</div>
+<PageContainer
+	title="Settings"
+	description="Manage your workspace preferences"
+	icon={SettingsIcon}
+	loading={!workspaceCtx.currentWorkspace}
+	loadingMessage="Loading workspace..."
+>
+	<div class="space-y-8">
+		<!-- Workspace Info -->
+		<section class="rounded-lg border p-6">
+			<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
+			<div class="space-y-4">
+				<div class="flex items-center gap-4">
+					<span class="text-sm font-medium">Current Workspace</span>
+					<span class="text-sm text-muted-foreground">{workspaceCtx.currentWorkspace?.name}</span>
 				</div>
-			</section>
+			</div>
+		</section>
 
-			<!-- Date & Time Settings -->
-			<section class="rounded-lg border p-6">
-				<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
-					<ClockIcon class="h-5 w-5 text-muted-foreground" />
-					Date & Time
-				</h2>
-				<div class="space-y-4">
-					<div class="grid gap-4 sm:grid-cols-2">
-						<div class="space-y-2">
-							<label class="text-sm font-medium" for="timezone-select">Timezone</label>
-							<Select.Root
-								type="single"
-								value={workspaceCtx.settings.timezone}
-								onValueChange={handleTimezoneChange}
-							>
-								<Select.Trigger id="timezone-select" class="w-full">
-									{getTimezoneLabel(workspaceCtx.settings.timezone)}
-								</Select.Trigger>
-								<Select.Content class="max-h-80 overflow-y-auto">
-									{#each Object.entries(groupedTimezones()) as [group, tzs]}
-										<Select.Group>
-											<Select.GroupHeading class="text-xs">{group}</Select.GroupHeading>
-											{#each tzs as tz}
-												<Select.Item value={tz.value}>{tz.label}</Select.Item>
-											{/each}
-										</Select.Group>
-									{/each}
-								</Select.Content>
-							</Select.Root>
-							<p class="text-xs text-muted-foreground">Used for displaying scheduled post times</p>
-						</div>
-
-						<div class="space-y-2">
-							<label class="text-sm font-medium" for="week-start-select">Week Starts On</label>
-							<Select.Root
-								type="single"
-								value={String(workspaceCtx.settings.week_start)}
-								onValueChange={(v) => handleWeekStartChange(Number(v))}
-							>
-								<Select.Trigger id="week-start-select" class="w-full">
-									{workspaceCtx.settings.week_start === 0 ? 'Sunday' : 'Monday'}
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="0">Sunday</Select.Item>
-									<Select.Item value="1">Monday</Select.Item>
-								</Select.Content>
-							</Select.Root>
-							<p class="text-xs text-muted-foreground">
-								Affects the calendar display in the sidebar
-							</p>
-						</div>
-					</div>
-				</div>
-			</section>
-
-			<!-- Media Cleanup Settings -->
-			<section class="rounded-lg border p-6">
-				<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
-					<ImageIcon class="h-5 w-5 text-muted-foreground" />
-					Media Cleanup
-				</h2>
-				<div class="space-y-4">
+		<!-- Date & Time Settings -->
+		<section class="rounded-lg border p-6">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ClockIcon class="h-5 w-5 text-muted-foreground" />
+				Date & Time
+			</h2>
+			<div class="space-y-4">
+				<div class="grid gap-4 sm:grid-cols-2">
 					<div class="space-y-2">
-						<label class="text-sm font-medium" for="cleanup-select">Auto-delete unused media</label>
+						<label class="text-sm font-medium" for="timezone-select">Timezone</label>
 						<Select.Root
 							type="single"
-							value={String(workspaceCtx.settings.media_cleanup_days)}
-							onValueChange={(v) => handleCleanupDaysChange(Number(v))}
+							value={workspaceCtx.settings.timezone}
+							onValueChange={handleTimezoneChange}
 						>
-							<Select.Trigger id="cleanup-select" class="w-full">
-								{cleanupDaysOptions.find(
-									(o) => o.value === workspaceCtx.settings.media_cleanup_days
-								)?.label || 'Disabled'}
+							<Select.Trigger id="timezone-select" class="w-full">
+								{getTimezoneLabel(workspaceCtx.settings.timezone)}
 							</Select.Trigger>
-							<Select.Content>
-								{#each cleanupDaysOptions as option}
-									<Select.Item value={String(option.value)}>{option.label}</Select.Item>
+							<Select.Content class="max-h-80 overflow-y-auto">
+								{#each Object.entries(groupedTimezones()) as [group, tzs]}
+									<Select.Group>
+										<Select.GroupHeading class="text-xs">{group}</Select.GroupHeading>
+										{#each tzs as tz}
+											<Select.Item value={tz.value}>{tz.label}</Select.Item>
+										{/each}
+									</Select.Group>
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<p class="text-xs text-muted-foreground">
-							Automatically delete unused, non-favorited media after this period. Favorited media is
-							always kept.
-						</p>
+						<p class="text-xs text-muted-foreground">Used for displaying scheduled post times</p>
+					</div>
+
+					<div class="space-y-2">
+						<label class="text-sm font-medium" for="week-start-select">Week Starts On</label>
+						<Select.Root
+							type="single"
+							value={String(workspaceCtx.settings.week_start)}
+							onValueChange={(v) => handleWeekStartChange(Number(v))}
+						>
+							<Select.Trigger id="week-start-select" class="w-full">
+								{workspaceCtx.settings.week_start === 0 ? 'Sunday' : 'Monday'}
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="0">Sunday</Select.Item>
+								<Select.Item value="1">Monday</Select.Item>
+							</Select.Content>
+						</Select.Root>
+						<p class="text-xs text-muted-foreground">Affects the calendar display in the sidebar</p>
 					</div>
 				</div>
-			</section>
-
-			<!-- Save Button -->
-			<div class="flex justify-end">
-				<Button onclick={saveSettings} disabled={saving}>
-					{#if saving}
-						<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
-					{:else}
-						<SaveIcon class="mr-2 h-4 w-4" />
-					{/if}
-					Save Changes
-				</Button>
 			</div>
+		</section>
+
+		<!-- Media Cleanup Settings -->
+		<section class="rounded-lg border p-6">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ImageIcon class="h-5 w-5 text-muted-foreground" />
+				Media Cleanup
+			</h2>
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<label class="text-sm font-medium" for="cleanup-select">Auto-delete unused media</label>
+					<Select.Root
+						type="single"
+						value={String(workspaceCtx.settings.media_cleanup_days)}
+						onValueChange={(v) => handleCleanupDaysChange(Number(v))}
+					>
+						<Select.Trigger id="cleanup-select" class="w-full">
+							{cleanupDaysOptions.find((o) => o.value === workspaceCtx.settings.media_cleanup_days)
+								?.label || 'Disabled'}
+						</Select.Trigger>
+						<Select.Content>
+							{#each cleanupDaysOptions as option}
+								<Select.Item value={String(option.value)}>{option.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+					<p class="text-xs text-muted-foreground">
+						Automatically delete unused, non-favorited media after this period. Favorited media is
+						always kept.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- Save Button -->
+		<div class="flex justify-end">
+			<Button onclick={saveSettings} disabled={saving}>
+				{#if saving}
+					<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+				{:else}
+					<SaveIcon class="mr-2 h-4 w-4" />
+				{/if}
+				Save Changes
+			</Button>
 		</div>
-	{/if}
-</div>
+	</div>
+</PageContainer>
