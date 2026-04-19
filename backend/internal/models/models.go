@@ -54,6 +54,15 @@ type SocialAccount struct {
 	CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+type XOAuthRequestToken struct {
+	bun.BaseModel `bun:"table:x_oauth_request_tokens"`
+
+	RequestToken  string    `bun:",pk" json:"request_token"`
+	RequestSecret string    `bun:",notnull" json:"-"`
+	WorkspaceID   string    `bun:",notnull" json:"workspace_id"`
+	CreatedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type Post struct {
 	bun.BaseModel `bun:"table:posts"`
 

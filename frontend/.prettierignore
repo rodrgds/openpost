@@ -8,3 +8,6 @@ bun.lockb
 # Miscellaneous
 /static/
 /android/
+
+# Generated files
+src/lib/api/types.d.ts

@@ -21,7 +21,7 @@
 	import SendIcon from 'lucide-svelte/icons/send';
 	import LightbulbIcon from 'lucide-svelte/icons/lightbulb';
 
-	let workspaces = $state<Workspace[] | null>(null);
+	let workspaces = $state<Workspace[]>([]);
 	let upcomingPosts = $state<Post[]>([]);
 	let draftPosts = $state<Post[]>([]);
 	let recentPosts = $state<Post[]>([]);

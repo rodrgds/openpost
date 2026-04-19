@@ -1,0 +1,2321 @@
+{
+	"components": {
+		"schemas": {
+			"AccountResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"account_id": { "description": "Platform-specific account ID", "type": "string" },
+					"account_username": { "description": "Account username", "type": "string" },
+					"id": { "description": "Account ID", "type": "string" },
+					"instance_url": { "description": "Instance URL (Mastodon/Bluesky)", "type": "string" },
+					"is_active": { "description": "Whether the account is active", "type": "boolean" },
+					"platform": { "description": "Platform name", "type": "string" },
+					"thread_replies_supported": {
+						"description": "Whether this account supports thread replies in current server config",
+						"type": "boolean"
+					}
+				},
+				"required": [
+					"id",
+					"platform",
+					"account_id",
+					"account_username",
+					"instance_url",
+					"is_active",
+					"thread_replies_supported"
+				],
+				"type": "object"
+			},
+			"AddSetAccountsInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/AddSetAccountsInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"account_ids": {
+						"description": "Account IDs to add",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"is_main": { "description": "Mark as main platform", "type": "boolean" }
+				},
+				"required": ["account_ids"],
+				"type": "object"
+			},
+			"AuthOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/AuthOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"token": { "description": "JWT authentication token", "type": "string" },
+					"user": { "$ref": "#/components/schemas/UserProfile" }
+				},
+				"required": ["token", "user"],
+				"type": "object"
+			},
+			"BlueskyLoginInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/BlueskyLoginInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"app_password": {
+						"description": "Bluesky app password (Settings \u003e App Passwords)",
+						"type": "string"
+					},
+					"handle": { "description": "Bluesky handle (e.g. user.bsky.social)", "type": "string" },
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "handle", "app_password"],
+				"type": "object"
+			},
+			"CreatePostInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreatePostInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"content": { "description": "Post content", "minLength": 1, "type": "string" },
+					"media_ids": {
+						"description": "Media attachment IDs to include",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"scheduled_at": {
+						"description": "Schedule time (ISO 8601). Omit for draft.",
+						"format": "date-time",
+						"type": "string"
+					},
+					"social_account_ids": {
+						"description": "Social account IDs to publish to",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "content", "social_account_ids"],
+				"type": "object"
+			},
+			"CreateSetInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateSetInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"account_ids": {
+						"description": "Initial account IDs to include in the set",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"is_default": {
+						"description": "Set as the default set for this workspace",
+						"type": "boolean"
+					},
+					"name": { "description": "Set name", "minLength": 1, "type": "string" },
+					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "name", "is_default", "account_ids"],
+				"type": "object"
+			},
+			"CreateThreadInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateThreadInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"posts": {
+						"description": "Thread posts in order",
+						"items": { "$ref": "#/components/schemas/ThreadPostInput" },
+						"minItems": 2,
+						"type": ["array", "null"]
+					},
+					"scheduled_at": {
+						"description": "Schedule time (ISO 8601). Omit for draft.",
+						"format": "date-time",
+						"type": "string"
+					},
+					"social_account_ids": {
+						"description": "Social account IDs to publish to",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "social_account_ids", "posts"],
+				"type": "object"
+			},
+			"CreateThreadOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateThreadOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"post_ids": {
+						"description": "Created post IDs in order",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["post_ids"],
+				"type": "object"
+			},
+			"CreateWorkspaceInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateWorkspaceInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"name": {
+						"description": "Workspace name",
+						"maxLength": 100,
+						"minLength": 1,
+						"type": "string"
+					}
+				},
+				"required": ["name"],
+				"type": "object"
+			},
+			"CreateWorkspaceOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateWorkspaceOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"created_at": { "type": "string" },
+					"id": { "type": "string" },
+					"name": { "type": "string" }
+				},
+				"required": ["id", "name", "created_at"],
+				"type": "object"
+			},
+			"DeletePostOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/DeletePostOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"message": { "description": "Success message", "type": "string" }
+				},
+				"required": ["message"],
+				"type": "object"
+			},
+			"DeleteSetOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/DeleteSetOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"message": { "description": "Success message", "type": "string" }
+				},
+				"required": ["message"],
+				"type": "object"
+			},
+			"DeleteVariantsOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/DeleteVariantsOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"message": { "description": "Success message", "type": "string" }
+				},
+				"required": ["message"],
+				"type": "object"
+			},
+			"ErrorDetail": {
+				"additionalProperties": false,
+				"properties": {
+					"location": {
+						"description": "Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'",
+						"type": "string"
+					},
+					"message": { "description": "Error message text", "type": "string" },
+					"value": { "description": "The value at the given location" }
+				},
+				"type": "object"
+			},
+			"ErrorModel": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/ErrorModel.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"detail": {
+						"description": "A human-readable explanation specific to this occurrence of the problem.",
+						"examples": ["Property foo is required but is missing."],
+						"type": "string"
+					},
+					"errors": {
+						"description": "Optional list of individual error details",
+						"items": { "$ref": "#/components/schemas/ErrorDetail" },
+						"type": ["array", "null"]
+					},
+					"instance": {
+						"description": "A URI reference that identifies the specific occurrence of the problem.",
+						"examples": ["https://example.com/error-log/abc123"],
+						"format": "uri",
+						"type": "string"
+					},
+					"status": {
+						"description": "HTTP status code",
+						"examples": [400],
+						"format": "int64",
+						"type": "integer"
+					},
+					"title": {
+						"description": "A short, human-readable summary of the problem type. This value should not change between occurrences of the error.",
+						"examples": ["Bad Request"],
+						"type": "string"
+					},
+					"type": {
+						"default": "about:blank",
+						"description": "A URI reference to human-readable documentation for the error.",
+						"examples": ["https://example.com/errors/example"],
+						"format": "uri",
+						"type": "string"
+					}
+				},
+				"type": "object"
+			},
+			"ExchangeCodeInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/ExchangeCodeInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"code": { "description": "Authorization code from OAuth flow", "type": "string" },
+					"server_name": { "description": "Mastodon server name from config", "type": "string" },
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "server_name", "code"],
+				"type": "object"
+			},
+			"GetAuthURLOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/GetAuthURLOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"url": { "description": "OAuth authorization URL", "type": "string" }
+				},
+				"required": ["url"],
+				"type": "object"
+			},
+			"GetVariantsOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/GetVariantsOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"variants": {
+						"description": "Post variants",
+						"items": { "$ref": "#/components/schemas/VariantResponse" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["variants"],
+				"type": "object"
+			},
+			"Health-checkResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/Health-checkResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"status": { "description": "Health status", "type": "string" }
+				},
+				"required": ["status"],
+				"type": "object"
+			},
+			"Item": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": { "type": "string" },
+					"id": { "type": "string" },
+					"name": { "type": "string" }
+				},
+				"required": ["id", "name", "created_at"],
+				"type": "object"
+			},
+			"LoginInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/LoginInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"email": { "description": "User email address", "format": "email", "type": "string" },
+					"password": { "description": "User password", "type": "string" }
+				},
+				"required": ["email", "password"],
+				"type": "object"
+			},
+			"MastodonServerInfo": {
+				"additionalProperties": false,
+				"properties": {
+					"instance_url": { "description": "Mastodon instance URL", "type": "string" },
+					"name": { "description": "Server configuration name", "type": "string" }
+				},
+				"required": ["name", "instance_url"],
+				"type": "object"
+			},
+			"PostDestinationResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"platform": { "description": "Platform name", "type": "string" },
+					"social_account_id": { "description": "Social account ID", "type": "string" },
+					"status": { "description": "Destination status", "type": "string" }
+				},
+				"required": ["social_account_id", "platform", "status"],
+				"type": "object"
+			},
+			"PostDetailResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/PostDetailResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"content": { "description": "Post content", "type": "string" },
+					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
+					"created_by": { "description": "Creator user ID", "type": "string" },
+					"destinations": {
+						"description": "Post destinations",
+						"items": { "$ref": "#/components/schemas/PostDestinationResponse" },
+						"type": ["array", "null"]
+					},
+					"id": { "description": "Post ID", "type": "string" },
+					"media": {
+						"description": "Attached media",
+						"items": { "$ref": "#/components/schemas/PostMediaResponse" },
+						"type": ["array", "null"]
+					},
+					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
+					"status": { "description": "Post status", "type": "string" },
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": [
+					"id",
+					"workspace_id",
+					"created_by",
+					"content",
+					"status",
+					"scheduled_at",
+					"created_at"
+				],
+				"type": "object"
+			},
+			"PostMediaResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"display_order": { "description": "Display order", "format": "int64", "type": "integer" },
+					"file_path": { "description": "File path for media URL", "type": "string" },
+					"media_id": { "description": "Media ID", "type": "string" },
+					"mime_type": { "description": "Media MIME type", "type": "string" }
+				},
+				"required": ["media_id", "display_order", "file_path", "mime_type"],
+				"type": "object"
+			},
+			"PostResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/PostResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"content": { "description": "Post content", "type": "string" },
+					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
+					"created_by": { "description": "Creator user ID", "type": "string" },
+					"destinations": {
+						"description": "Post destinations",
+						"items": { "$ref": "#/components/schemas/PostDestinationResponse" },
+						"type": ["array", "null"]
+					},
+					"id": { "description": "Post ID", "type": "string" },
+					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
+					"status": {
+						"description": "Post status (draft, scheduled, publishing, published, failed)",
+						"type": "string"
+					},
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": [
+					"id",
+					"workspace_id",
+					"created_by",
+					"content",
+					"status",
+					"scheduled_at",
+					"created_at"
+				],
+				"type": "object"
+			},
+			"RegisterInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/RegisterInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"email": { "description": "User email address", "format": "email", "type": "string" },
+					"password": {
+						"description": "User password (min 8 characters)",
+						"minLength": 8,
+						"type": "string"
+					}
+				},
+				"required": ["email", "password"],
+				"type": "object"
+			},
+			"ScheduleDay": {
+				"additionalProperties": false,
+				"properties": {
+					"count": {
+						"description": "Number of scheduled posts",
+						"format": "int64",
+						"type": "integer"
+					},
+					"date": { "description": "Date in YYYY-MM-DD format", "type": "string" },
+					"platforms": {
+						"description": "Per-platform breakdown",
+						"items": { "$ref": "#/components/schemas/ScheduleDayPlatform" },
+						"type": ["array", "null"]
+					},
+					"workspaces": {
+						"description": "Per-workspace breakdown",
+						"items": { "$ref": "#/components/schemas/ScheduleDayWorkspace" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["date", "count", "platforms", "workspaces"],
+				"type": "object"
+			},
+			"ScheduleDayPlatform": {
+				"additionalProperties": false,
+				"properties": {
+					"count": {
+						"description": "Count for this platform on this day",
+						"format": "int64",
+						"type": "integer"
+					},
+					"platform": { "description": "Platform name", "type": "string" }
+				},
+				"required": ["platform", "count"],
+				"type": "object"
+			},
+			"ScheduleDayWorkspace": {
+				"additionalProperties": false,
+				"properties": {
+					"count": {
+						"description": "Count for this workspace on this day",
+						"format": "int64",
+						"type": "integer"
+					},
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": ["workspace_id", "count"],
+				"type": "object"
+			},
+			"ScheduleOverviewOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/ScheduleOverviewOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"days": {
+						"description": "Daily schedule data",
+						"items": { "$ref": "#/components/schemas/ScheduleDay" },
+						"type": ["array", "null"]
+					},
+					"month": {
+						"description": "Month of the overview (1-12)",
+						"format": "int64",
+						"type": "integer"
+					},
+					"platforms": {
+						"description": "Available platforms",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"selected_platform": {
+						"description": "Currently selected platform filter",
+						"type": "string"
+					},
+					"selected_workspace_id": {
+						"description": "Currently selected workspace",
+						"type": "string"
+					},
+					"workspaces": {
+						"description": "Available workspaces",
+						"items": { "$ref": "#/components/schemas/WorkspaceResp" },
+						"type": ["array", "null"]
+					},
+					"year": { "description": "Year of the overview", "format": "int64", "type": "integer" }
+				},
+				"required": [
+					"year",
+					"month",
+					"selected_workspace_id",
+					"selected_platform",
+					"workspaces",
+					"platforms",
+					"days"
+				],
+				"type": "object"
+			},
+			"SetAccountResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"account_username": { "description": "Account username", "type": "string" },
+					"is_main": {
+						"description": "Whether this is the main platform in the set",
+						"type": "boolean"
+					},
+					"platform": { "description": "Platform name", "type": "string" },
+					"social_account_id": { "description": "Social account ID", "type": "string" }
+				},
+				"required": ["social_account_id", "platform", "account_username", "is_main"],
+				"type": "object"
+			},
+			"SetResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SetResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"accounts": {
+						"description": "Accounts in this set",
+						"items": { "$ref": "#/components/schemas/SetAccountResponse" },
+						"type": ["array", "null"]
+					},
+					"created_at": { "description": "Creation time", "type": "string" },
+					"id": { "description": "Set ID", "type": "string" },
+					"is_default": { "description": "Is default set", "type": "boolean" },
+					"name": { "description": "Set name", "type": "string" },
+					"workspace_id": { "description": "Workspace ID", "type": "string" }
+				},
+				"required": ["id", "workspace_id", "name", "is_default", "created_at"],
+				"type": "object"
+			},
+			"ThreadPostInput": {
+				"additionalProperties": false,
+				"properties": {
+					"content": { "description": "Post content", "minLength": 1, "type": "string" },
+					"media_ids": {
+						"description": "Media attachment IDs",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["content"],
+				"type": "object"
+			},
+			"UpdatePostInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/UpdatePostInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"content": { "description": "Post content", "type": "string" },
+					"media_ids": {
+						"description": "Media attachment IDs to include (replace all)",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"scheduled_at": {
+						"description": "Schedule time (ISO 8601). Set to empty string to unschedule (make draft).",
+						"type": "string"
+					},
+					"social_account_ids": {
+						"description": "Social account IDs to publish to (replace all)",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					}
+				},
+				"type": "object"
+			},
+			"UpdateSetInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/UpdateSetInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"is_default": { "description": "Set as default", "type": "boolean" },
+					"name": { "description": "Set name", "type": "string" }
+				},
+				"type": "object"
+			},
+			"UpsertVariantsInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/UpsertVariantsInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"variants": {
+						"description": "Variant overrides per social account",
+						"items": { "$ref": "#/components/schemas/VariantInput" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["variants"],
+				"type": "object"
+			},
+			"UpsertVariantsOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/UpsertVariantsOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"variants": {
+						"description": "Updated variants",
+						"items": { "$ref": "#/components/schemas/VariantResponse" },
+						"type": ["array", "null"]
+					}
+				},
+				"required": ["variants"],
+				"type": "object"
+			},
+			"UserProfile": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/UserProfile.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"created_at": {
+						"description": "Account creation time",
+						"format": "date-time",
+						"type": "string"
+					},
+					"email": { "description": "User email address", "type": "string" },
+					"id": { "description": "User ID", "type": "string" }
+				},
+				"required": ["id", "email", "created_at"],
+				"type": "object"
+			},
+			"VariantInput": {
+				"additionalProperties": false,
+				"properties": {
+					"content": {
+						"description": "Custom content for this platform (empty = use parent content)",
+						"type": "string"
+					},
+					"is_unsynced": {
+						"description": "Whether this variant has diverged from parent",
+						"type": "boolean"
+					},
+					"media_ids": { "description": "JSON array of media IDs override", "type": "string" },
+					"social_account_id": { "description": "Social account ID", "type": "string" }
+				},
+				"required": ["social_account_id", "is_unsynced"],
+				"type": "object"
+			},
+			"VariantResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"content": { "description": "Variant content (empty = use parent)", "type": "string" },
+					"created_at": { "description": "Creation time", "type": "string" },
+					"id": { "description": "Variant ID", "type": "string" },
+					"is_unsynced": {
+						"description": "Whether this variant has diverged from parent",
+						"type": "boolean"
+					},
+					"media_ids": { "description": "JSON array of media IDs override", "type": "string" },
+					"post_id": { "description": "Post ID", "type": "string" },
+					"social_account_id": { "description": "Social account ID", "type": "string" },
+					"updated_at": { "description": "Last update time", "type": "string" }
+				},
+				"required": [
+					"id",
+					"post_id",
+					"social_account_id",
+					"content",
+					"media_ids",
+					"is_unsynced",
+					"created_at",
+					"updated_at"
+				],
+				"type": "object"
+			},
+			"WorkspaceResp": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
+					"id": { "description": "Workspace ID", "type": "string" },
+					"name": { "description": "Workspace name", "type": "string" }
+				},
+				"required": ["id", "name", "created_at"],
+				"type": "object"
+			}
+		}
+	},
+	"info": { "title": "OpenPost API", "version": "1.0.0" },
+	"openapi": "3.1.0",
+	"paths": {
+		"/accounts": {
+			"get": {
+				"operationId": "list-accounts",
+				"parameters": [
+					{
+						"description": "Filter by workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": { "$ref": "#/components/schemas/AccountResponse" },
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List connected social accounts for a workspace",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/bluesky/login": {
+			"post": {
+				"operationId": "bluesky-login",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/BlueskyLoginInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": { "description": "No Content" },
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Connect Bluesky account using app password",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/mastodon/exchange": {
+			"post": {
+				"operationId": "exchange-mastodon-code",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/ExchangeCodeInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": { "description": "No Content" },
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Exchange Mastodon OOB authorization code",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/mastodon/servers": {
+			"get": {
+				"operationId": "list-mastodon-servers",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": { "$ref": "#/components/schemas/MastodonServerInfo" },
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List configured Mastodon servers",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/{account_id}": {
+			"delete": {
+				"operationId": "disconnect-account",
+				"parameters": [
+					{ "in": "path", "name": "account_id", "required": true, "schema": { "type": "string" } }
+				],
+				"responses": {
+					"204": { "description": "No Content" },
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Disconnect a social account",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/{platform}/auth-url": {
+			"get": {
+				"operationId": "get-auth-url",
+				"parameters": [
+					{
+						"description": "Social platform (x, mastodon, bluesky, linkedin, threads)",
+						"in": "path",
+						"name": "platform",
+						"required": true,
+						"schema": {
+							"description": "Social platform (x, mastodon, bluesky, linkedin, threads)",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Workspace ID to link account to",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Workspace ID to link account to", "type": "string" }
+					},
+					{
+						"description": "Mastodon server name from config (required for mastodon)",
+						"explode": false,
+						"in": "query",
+						"name": "server_name",
+						"schema": {
+							"description": "Mastodon server name from config (required for mastodon)",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/GetAuthURLOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get OAuth authorization URL for a platform",
+				"tags": ["Accounts"]
+			}
+		},
+		"/auth/login": {
+			"post": {
+				"operationId": "login",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/LoginInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+						},
+						"description": "OK"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Login with email and password",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/me": {
+			"get": {
+				"operationId": "get-me",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } }
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Get current authenticated user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/register": {
+			"post": {
+				"operationId": "register",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/RegisterInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Conflict"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Register a new user",
+				"tags": ["Auth"]
+			}
+		},
+		"/health": {
+			"get": {
+				"operationId": "health-check",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/Health-checkResponse" }
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Health check",
+				"tags": ["System"]
+			}
+		},
+		"/posts": {
+			"get": {
+				"operationId": "list-posts",
+				"parameters": [
+					{
+						"description": "Filter by workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
+					},
+					{
+						"description": "Filter by date (YYYY-MM-DD)",
+						"explode": false,
+						"in": "query",
+						"name": "date",
+						"schema": { "description": "Filter by date (YYYY-MM-DD)", "type": "string" }
+					},
+					{
+						"description": "Filter by status (draft, scheduled, published, failed)",
+						"explode": false,
+						"in": "query",
+						"name": "status",
+						"schema": {
+							"description": "Filter by status (draft, scheduled, published, failed)",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Limit number of results (default 50, max 200)",
+						"explode": false,
+						"in": "query",
+						"name": "limit",
+						"schema": {
+							"description": "Limit number of results (default 50, max 200)",
+							"format": "int64",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": { "$ref": "#/components/schemas/PostResponse" },
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List posts for a workspace",
+				"tags": ["Posts"]
+			},
+			"post": {
+				"operationId": "create-post",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/CreatePostInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/PostResponse" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create a new post",
+				"tags": ["Posts"]
+			}
+		},
+		"/posts/schedule-overview": {
+			"get": {
+				"operationId": "get-schedule-overview",
+				"parameters": [
+					{
+						"description": "Filter by workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
+					},
+					{
+						"description": "Filter by platform",
+						"explode": false,
+						"in": "query",
+						"name": "platform",
+						"schema": { "description": "Filter by platform", "type": "string" }
+					},
+					{
+						"description": "Month in YYYY-MM format (defaults to current month)",
+						"explode": false,
+						"in": "query",
+						"name": "month",
+						"schema": {
+							"description": "Month in YYYY-MM format (defaults to current month)",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ScheduleOverviewOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get monthly schedule overview",
+				"tags": ["Posts"]
+			}
+		},
+		"/posts/thread": {
+			"post": {
+				"operationId": "create-thread",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/CreateThreadInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/CreateThreadOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create a thread of posts",
+				"tags": ["Posts"]
+			}
+		},
+		"/posts/{id}": {
+			"delete": {
+				"operationId": "delete-post",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/DeletePostOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Delete a post",
+				"tags": ["Posts"]
+			},
+			"get": {
+				"operationId": "get-post",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/PostDetailResponse" }
+							}
+						},
+						"description": "OK"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get a single post",
+				"tags": ["Posts"]
+			},
+			"patch": {
+				"operationId": "update-post",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/UpdatePostInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/PostDetailResponse" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Update a post",
+				"tags": ["Posts"]
+			}
+		},
+		"/posts/{id}/variants": {
+			"delete": {
+				"operationId": "delete-post-variants",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/DeleteVariantsOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Delete all variants for a post (reset to unified content)",
+				"tags": ["Posts"]
+			},
+			"get": {
+				"operationId": "get-post-variants",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/GetVariantsOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get per-platform content variants for a post",
+				"tags": ["Posts"]
+			},
+			"put": {
+				"operationId": "upsert-post-variants",
+				"parameters": [
+					{
+						"description": "Post ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Post ID", "type": "string" }
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/UpsertVariantsInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/UpsertVariantsOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Upsert per-platform content variants for a post",
+				"tags": ["Posts"]
+			}
+		},
+		"/sets": {
+			"get": {
+				"operationId": "list-sets",
+				"parameters": [
+					{
+						"description": "Filter by workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": { "$ref": "#/components/schemas/SetResponse" },
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List social media sets for a workspace",
+				"tags": ["Sets"]
+			},
+			"post": {
+				"operationId": "create-set",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/CreateSetInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create a social media set",
+				"tags": ["Sets"]
+			}
+		},
+		"/sets/{id}": {
+			"delete": {
+				"operationId": "delete-set",
+				"parameters": [
+					{
+						"description": "Set ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Set ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/DeleteSetOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Delete a social media set",
+				"tags": ["Sets"]
+			},
+			"get": {
+				"operationId": "get-set",
+				"parameters": [
+					{
+						"description": "Set ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Set ID", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+						},
+						"description": "OK"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get a single social media set",
+				"tags": ["Sets"]
+			},
+			"patch": {
+				"operationId": "update-set",
+				"parameters": [
+					{
+						"description": "Set ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Set ID", "type": "string" }
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/UpdateSetInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Update a social media set",
+				"tags": ["Sets"]
+			}
+		},
+		"/sets/{id}/accounts": {
+			"post": {
+				"operationId": "add-set-accounts",
+				"parameters": [
+					{
+						"description": "Set ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Set ID", "type": "string" }
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/AddSetAccountsInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Add accounts to a social media set",
+				"tags": ["Sets"]
+			}
+		},
+		"/sets/{id}/accounts/{account_id}": {
+			"delete": {
+				"operationId": "remove-set-account",
+				"parameters": [
+					{
+						"description": "Set ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": { "description": "Set ID", "type": "string" }
+					},
+					{
+						"description": "Account ID to remove",
+						"in": "path",
+						"name": "account_id",
+						"required": true,
+						"schema": { "description": "Account ID to remove", "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Remove an account from a social media set",
+				"tags": ["Sets"]
+			}
+		},
+		"/workspaces": {
+			"get": {
+				"operationId": "list-workspaces",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": { "$ref": "#/components/schemas/Item" },
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List workspaces for the current user",
+				"tags": ["Workspaces"]
+			},
+			"post": {
+				"operationId": "create-workspace",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/CreateWorkspaceInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/CreateWorkspaceOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Create a new workspace",
+				"tags": ["Workspaces"]
+			}
+		}
+	}
+}

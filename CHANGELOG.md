@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.4] - 2026-04-19
+
+Changes since `v0.4.3`.
+
+### Added
+- X OAuth request store handler for temporary request-state persistence.
+- Frontend OpenAPI snapshot and generated API TypeScript declarations tracked in-repo for CI consistency.
+- Placeholder file in embedded web public directory to keep `go:embed` stable in clean checkouts.
+
+### Changed
+- X OAuth handler and platform integration flow refinements.
+- Backend model and database updates supporting the latest auth/request-state behavior.
+- Frontend pre-commit/devenv validation flow now runs deterministic generation/check steps for i18n and OpenAPI types.
+- Frontend dashboard and media routes fixed strict TypeScript nullability errors found in CI.
+- Frontend ignore/format rules adjusted to avoid generated-file drift during hooks.
+
 ## [0.4.3] - 2026-04-19
 
 Changes since `v0.4.2`.

@@ -21,11 +21,17 @@ type XAdapter struct {
 	consumerKey    string
 	consumerSecret string
 	redirectURI    string
+	requestStore   XRequestStore
 	requestMeta    sync.Map
 	cleanupDone    chan struct{}
 }
 
-type xRequestMeta struct {
+type XRequestStore interface {
+	Save(requestToken, requestSecret, workspaceID string, createdAt time.Time) error
+	Consume(requestToken string, maxAge time.Duration) (XRequestMeta, bool, error)
+}
+
+type XRequestMeta struct {
 	Secret      string
 	WorkspaceID string
 	CreatedAt   time.Time
@@ -40,6 +46,10 @@ func NewXAdapter(clientID, clientSecret, redirectURI string) *XAdapter {
 	}
 	go x.cleanupLoop()
 	return x
+}
+
+func (x *XAdapter) SetRequestStore(store XRequestStore) {
+	x.requestStore = store
 }
 
 func (x *XAdapter) cleanupLoop() {
@@ -60,7 +70,7 @@ func (x *XAdapter) purgeOldEntries() {
 	now := time.Now()
 
 	x.requestMeta.Range(func(key, value any) bool {
-		meta, ok := value.(xRequestMeta)
+		meta, ok := value.(XRequestMeta)
 		if !ok {
 			return true
 		}
@@ -97,7 +107,14 @@ func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("x oauth1 request token failed: %w", err)
 	}
-	x.requestMeta.Store(requestToken, xRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID, CreatedAt: time.Now()})
+	meta := XRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID, CreatedAt: time.Now().UTC()}
+	if x.requestStore != nil {
+		if err := x.requestStore.Save(requestToken, meta.Secret, meta.WorkspaceID, meta.CreatedAt); err != nil {
+			return "", fmt.Errorf("x oauth1 request token persist failed: %w", err)
+		}
+	} else {
+		x.requestMeta.Store(requestToken, meta)
+	}
 
 	authURL, err := config.AuthorizationURL(requestToken)
 	if err != nil {
@@ -108,11 +125,21 @@ func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) 
 }
 
 func (x *XAdapter) GetWorkspaceIDForRequestToken(requestToken string) (string, bool) {
+	if x.requestStore != nil {
+		meta, ok, err := x.requestStore.Consume(requestToken, 10*time.Minute)
+		if err != nil || !ok {
+			return "", false
+		}
+		// Re-store for subsequent token exchange call in same request path.
+		x.requestMeta.Store(requestToken, meta)
+		return meta.WorkspaceID, true
+	}
+
 	metaRaw, ok := x.requestMeta.Load(requestToken)
 	if !ok {
 		return "", false
 	}
-	meta := metaRaw.(xRequestMeta)
+	meta := metaRaw.(XRequestMeta)
 	return meta.WorkspaceID, true
 }
 
@@ -123,12 +150,34 @@ func (x *XAdapter) ExchangeCode(ctx context.Context, code string, extra map[stri
 		return nil, fmt.Errorf("missing oauth_token or oauth_verifier for X token exchange")
 	}
 
-	metaRaw, ok := x.requestMeta.Load(oauthToken)
+	var (
+		meta XRequestMeta
+		ok   bool
+	)
+
+	if x.requestStore != nil {
+		consumed, found, err := x.requestStore.Consume(oauthToken, 10*time.Minute)
+		if err != nil {
+			return nil, fmt.Errorf("x oauth1 request token lookup failed: %w", err)
+		}
+		if !found {
+			return nil, fmt.Errorf("missing request token secret for oauth_token")
+		}
+		meta = consumed
+		ok = true
+	} else {
+		metaRaw, found := x.requestMeta.Load(oauthToken)
+		if !found {
+			return nil, fmt.Errorf("missing request token secret for oauth_token")
+		}
+		meta = metaRaw.(XRequestMeta)
+		x.requestMeta.Delete(oauthToken)
+		ok = true
+	}
+
 	if !ok {
 		return nil, fmt.Errorf("missing request token secret for oauth_token")
 	}
-	meta := metaRaw.(xRequestMeta)
-	x.requestMeta.Delete(oauthToken)
 	requestSecret := meta.Secret
 
 	config := oauth1.Config{
@@ -147,9 +196,15 @@ func (x *XAdapter) ExchangeCode(ctx context.Context, code string, extra map[stri
 	}
 
 	combined := accessToken + "|" + accessSecret
+	resultExtra := map[string]string{}
+	if meta.WorkspaceID != "" {
+		resultExtra["_workspace_id"] = meta.WorkspaceID
+	}
+
 	return &TokenResult{
 		AccessToken: combined,
 		TokenType:   "OAuth1",
+		Extra:       resultExtra,
 	}, nil
 }
 

@@ -36,6 +36,12 @@ func NewOAuthHandler(
 	authService *auth.Service,
 	disableLinkedInThreadReplies bool,
 ) *OAuthHandler {
+	if xProvider, ok := providers["x"]; ok {
+		if xAdapter, castOk := xProvider.(*platform.XAdapter); castOk {
+			xAdapter.SetRequestStore(newXRequestStore(db))
+		}
+	}
+
 	return &OAuthHandler{
 		db:                           db,
 		crypto:                       encryptor,
@@ -239,12 +245,6 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		if input.Platform == "x" {
 			extra["oauth_token"] = input.OAuthToken
 			extra["oauth_verifier"] = input.Verifier
-			if xAdapter, ok := adapter.(*platform.XAdapter); ok {
-				workspaceID, ok := xAdapter.GetWorkspaceIDForRequestToken(input.OAuthToken)
-				if ok {
-					extra["_workspace_id"] = workspaceID
-				}
-			}
 		}
 
 		if input.Platform == "threads" {
@@ -273,6 +273,11 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		if ws, ok := extra["_workspace_id"]; ok {
 			workspaceID = ws
+		}
+		if tokenResp.Extra != nil {
+			if ws, ok := tokenResp.Extra["_workspace_id"]; ok && ws != "" {
+				workspaceID = ws
+			}
 		}
 
 		instanceRef := ""

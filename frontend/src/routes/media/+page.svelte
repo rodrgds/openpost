@@ -51,7 +51,7 @@
 		failed_ids: string[];
 	}
 
-	let workspaces = $state<Workspace[] | null>(null);
+	let workspaces = $state<Workspace[]>([]);
 	let selectedWorkspaceId = $state('');
 	let loading = $state(true);
 	let error = $state('');
