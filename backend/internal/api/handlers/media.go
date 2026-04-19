@@ -130,6 +130,19 @@ type UpdateMediaFavoriteOutput struct {
 	}
 }
 
+type UpdateMediaInput struct {
+	PathID string `path:"id" doc:"Media ID"`
+	Body   struct {
+		AltText string `json:"alt_text" doc:"Alt text for accessibility"`
+	}
+}
+
+type UpdateMediaOutput struct {
+	Body struct {
+		Message string `json:"message" doc:"Success message"`
+	}
+}
+
 func (h *MediaHandler) RegisterRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-media",
@@ -455,6 +468,45 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		return &UpdateMediaFavoriteOutput{Body: struct {
 			IsFavorite bool `json:"is_favorite" doc:"Updated favorite status"`
 		}{IsFavorite: media.IsFavorite}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-media",
+		Method:      http.MethodPatch,
+		Path:        "/media/{id}",
+		Summary:     "Update media metadata (alt text)",
+		Tags:        []string{"Media"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *UpdateMediaInput) (*UpdateMediaOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		var media models.MediaAttachment
+		err := h.db.NewSelect().Model(&media).Where("id = ?", input.PathID).Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("media not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch media")
+		}
+
+		var memberCount int
+		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
+			Count(ctx)
+		if err != nil || memberCount == 0 {
+			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+		}
+
+		media.AltText = input.Body.AltText
+		_, err = h.db.NewUpdate().Model(&media).Column("alt_text").Where("id = ?", input.PathID).Exec(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to update media")
+		}
+
+		return &UpdateMediaOutput{Body: struct {
+			Message string `json:"message" doc:"Success message"`
+		}{Message: "media updated successfully"}}, nil
 	})
 }
 

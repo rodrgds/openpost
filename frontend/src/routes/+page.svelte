@@ -19,6 +19,7 @@
 	import CalendarDaysIcon from 'lucide-svelte/icons/calendar-days';
 	import LayoutDashboardIcon from 'lucide-svelte/icons/layout-dashboard';
 	import SendIcon from 'lucide-svelte/icons/send';
+	import LightbulbIcon from 'lucide-svelte/icons/lightbulb';
 
 	let workspaces = $state<Workspace[] | null>(null);
 	let upcomingPosts = $state<Post[]>([]);
@@ -26,6 +27,8 @@
 	let recentPosts = $state<Post[]>([]);
 	let loading = $state(true);
 	let activeTab = $state<'upcoming' | 'drafts' | 'all'>('upcoming');
+	let weeklyPrompt = $state<{ text: string; category: string } | null>(null);
+	let loadingPrompt = $state(false);
 
 	let isAuthenticated = $state(false);
 	let userName = $state('');
@@ -104,6 +107,7 @@
 			console.error('Failed to load dashboard:', e);
 		} finally {
 			loading = false;
+			loadWeeklyPrompt();
 		}
 	}
 
@@ -147,6 +151,30 @@
 			ui.triggerRefresh();
 		} catch (e) {
 			console.error('Failed to delete post:', e);
+		}
+	}
+
+	async function loadWeeklyPrompt() {
+		if (!workspaces || workspaces.length === 0) return;
+		loadingPrompt = true;
+		try {
+			const { data, error: err } = await (client as any).GET('/prompts/random', {
+				params: { query: { workspace_id: workspaces[0].id } }
+			});
+			if (!err && data) {
+				weeklyPrompt = { text: data.text, category: data.category };
+			}
+		} catch (e) {
+			console.error('Failed to load weekly prompt:', e);
+		} finally {
+			loadingPrompt = false;
+		}
+	}
+
+	function usePrompt() {
+		if (weeklyPrompt) {
+			const promptText = encodeURIComponent(weeklyPrompt.text);
+			goto(`/posts/new?prompt=${promptText}`);
 		}
 	}
 </script>
@@ -468,6 +496,29 @@
 					Create Post
 				</Button>
 			</div>
+
+			<!-- Weekly Prompt Card -->
+			{#if weeklyPrompt}
+				<div
+					class="rounded-lg border border-amber-200/50 bg-amber-50/30 p-4 dark:border-amber-800/30 dark:bg-amber-950/10"
+				>
+					<div class="mb-2 flex items-center gap-1.5">
+						<LightbulbIcon class="h-3.5 w-3.5 text-amber-500" />
+						<h3 class="text-xs font-medium text-amber-700 dark:text-amber-400">
+							Need inspiration?
+						</h3>
+					</div>
+					<span
+						class="mb-2 inline-block rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-amber-600 uppercase"
+					>
+						{weeklyPrompt.category}
+					</span>
+					<p class="mb-3 text-xs leading-relaxed text-foreground/80">{weeklyPrompt.text}</p>
+					<Button onclick={usePrompt} variant="outline" size="sm" class="w-full text-xs">
+						Write About This
+					</Button>
+				</div>
+			{/if}
 
 			<!-- Workspaces -->
 			<div class="rounded-lg border bg-card">

@@ -29,11 +29,12 @@ func NewPostHandler(db *bun.DB, authService *auth.Service) *PostHandler {
 
 type CreatePostInput struct {
 	Body struct {
-		WorkspaceID      string     `json:"workspace_id" doc:"Target workspace ID"`
-		Content          string     `json:"content" minLength:"1" doc:"Post content"`
-		ScheduledAt      *time.Time `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
-		SocialAccountIDs []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
-		MediaIDs         []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
+		WorkspaceID        string     `json:"workspace_id" doc:"Target workspace ID"`
+		Content            string     `json:"content" minLength:"1" doc:"Post content"`
+		ScheduledAt        *time.Time `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
+		SocialAccountIDs   []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
+		MediaIDs           []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
+		RandomDelayMinutes int        `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 	}
 }
 
@@ -48,14 +49,16 @@ type PostDestinationResponse struct {
 }
 
 type PostResponse struct {
-	ID           string                    `json:"id" doc:"Post ID"`
-	WorkspaceID  string                    `json:"workspace_id" doc:"Workspace ID"`
-	CreatedByID  string                    `json:"created_by" doc:"Creator user ID"`
-	Content      string                    `json:"content" doc:"Post content"`
-	Status       string                    `json:"status" doc:"Post status (draft, scheduled, publishing, published, failed)"`
-	ScheduledAt  string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
-	CreatedAt    string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
-	Destinations []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
+	ID                 string                    `json:"id" doc:"Post ID"`
+	WorkspaceID        string                    `json:"workspace_id" doc:"Workspace ID"`
+	CreatedByID        string                    `json:"created_by" doc:"Creator user ID"`
+	Content            string                    `json:"content" doc:"Post content"`
+	Status             string                    `json:"status" doc:"Post status (draft, scheduled, publishing, published, failed)"`
+	ScheduledAt        string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
+	RandomDelayMinutes int                       `json:"random_delay_minutes" doc:"Random delay in minutes (±N)"`
+	ActualRunAt        string                    `json:"actual_run_at,omitempty" doc:"Actual run time after random delay (ISO 8601)"`
+	CreatedAt          string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
+	Destinations       []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
 }
 
 type ListPostsInput struct {
@@ -110,6 +113,16 @@ type WorkspaceResp struct {
 	WorkspaceCreatedAt string `json:"created_at" doc:"Creation time (ISO 8601)"`
 }
 
+// applyRandomDelay applies a random delay of ±N minutes to the scheduled time
+func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
+	if randomDelayMinutes <= 0 {
+		return scheduledAt
+	}
+	// Generate random offset between -N and +N minutes
+	offset := uuid.New().ID()%uint32(2*randomDelayMinutes+1) - uint32(randomDelayMinutes)
+	return scheduledAt.Add(time.Duration(offset) * time.Minute)
+}
+
 func (h *PostHandler) CreatePost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-post",
@@ -128,12 +141,13 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		}
 
 		post := &models.Post{
-			ID:          uuid.New().String(),
-			WorkspaceID: input.Body.WorkspaceID,
-			CreatedByID: userID,
-			Content:     input.Body.Content,
-			Status:      status,
-			CreatedAt:   time.Now().UTC(),
+			ID:                 uuid.New().String(),
+			WorkspaceID:        input.Body.WorkspaceID,
+			CreatedByID:        userID,
+			Content:            input.Body.Content,
+			Status:             status,
+			RandomDelayMinutes: input.Body.RandomDelayMinutes,
+			CreatedAt:          time.Now().UTC(),
 		}
 		if input.Body.ScheduledAt != nil {
 			post.ScheduledAt = *input.Body.ScheduledAt
@@ -177,13 +191,20 @@ func (h *PostHandler) CreatePost(api huma.API) {
 				if err != nil {
 					return fmt.Errorf("failed to marshal job payload: %w", err)
 				}
+				// Apply random delay to job run time
+				jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
+				post.ActualRunAt = jobRunAt
 				job := &models.Job{
 					ID:      uuid.New().String(),
 					Type:    "publish_post",
 					Payload: string(payload),
-					RunAt:   post.ScheduledAt,
+					RunAt:   jobRunAt,
 				}
 				if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+					return err
+				}
+				// Update post with actual_run_at
+				if _, err := tx.NewUpdate().Model(post).Column("actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 					return err
 				}
 			}
@@ -195,13 +216,17 @@ func (h *PostHandler) CreatePost(api huma.API) {
 
 		resp := &CreatePostOutput{}
 		resp.Body = &PostResponse{
-			ID:          post.ID,
-			WorkspaceID: post.WorkspaceID,
-			CreatedByID: post.CreatedByID,
-			Content:     post.Content,
-			Status:      post.Status,
-			ScheduledAt: post.ScheduledAt.Format(time.RFC3339),
-			CreatedAt:   post.CreatedAt.Format(time.RFC3339),
+			ID:                 post.ID,
+			WorkspaceID:        post.WorkspaceID,
+			CreatedByID:        post.CreatedByID,
+			Content:            post.Content,
+			Status:             post.Status,
+			ScheduledAt:        post.ScheduledAt.Format(time.RFC3339),
+			RandomDelayMinutes: post.RandomDelayMinutes,
+			CreatedAt:          post.CreatedAt.Format(time.RFC3339),
+		}
+		if !post.ActualRunAt.IsZero() {
+			resp.Body.ActualRunAt = post.ActualRunAt.Format(time.RFC3339)
 		}
 		return resp, nil
 	})
@@ -303,14 +328,18 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		result := make([]PostResponse, len(posts))
 		for i, p := range posts {
 			result[i] = PostResponse{
-				ID:           p.ID,
-				WorkspaceID:  p.WorkspaceID,
-				CreatedByID:  p.CreatedByID,
-				Content:      p.Content,
-				Status:       p.Status,
-				ScheduledAt:  p.ScheduledAt.Format(time.RFC3339),
-				CreatedAt:    p.CreatedAt.Format(time.RFC3339),
-				Destinations: destByPost[p.ID],
+				ID:                 p.ID,
+				WorkspaceID:        p.WorkspaceID,
+				CreatedByID:        p.CreatedByID,
+				Content:            p.Content,
+				Status:             p.Status,
+				ScheduledAt:        p.ScheduledAt.Format(time.RFC3339),
+				RandomDelayMinutes: p.RandomDelayMinutes,
+				CreatedAt:          p.CreatedAt.Format(time.RFC3339),
+				Destinations:       destByPost[p.ID],
+			}
+			if !p.ActualRunAt.IsZero() {
+				result[i].ActualRunAt = p.ActualRunAt.Format(time.RFC3339)
 			}
 		}
 		return &ListPostsOutput{Body: result}, nil
@@ -568,10 +597,11 @@ type ThreadPostInput struct {
 
 type CreateThreadInput struct {
 	Body struct {
-		WorkspaceID      string            `json:"workspace_id" doc:"Target workspace ID"`
-		ScheduledAt      *time.Time        `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
-		SocialAccountIDs []string          `json:"social_account_ids" doc:"Social account IDs to publish to"`
-		Posts            []ThreadPostInput `json:"posts" minItems:"2" doc:"Thread posts in order"`
+		WorkspaceID        string            `json:"workspace_id" doc:"Target workspace ID"`
+		ScheduledAt        *time.Time        `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
+		SocialAccountIDs   []string          `json:"social_account_ids" doc:"Social account IDs to publish to"`
+		Posts              []ThreadPostInput `json:"posts" minItems:"2" doc:"Thread posts in order"`
+		RandomDelayMinutes int               `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 	}
 }
 
@@ -608,13 +638,14 @@ func (h *PostHandler) CreateThread(api huma.API) {
 
 		for i, threadPost := range input.Body.Posts {
 			post := &models.Post{
-				ID:             uuid.New().String(),
-				WorkspaceID:    input.Body.WorkspaceID,
-				CreatedByID:    userID,
-				Content:        threadPost.Content,
-				Status:         status,
-				ThreadSequence: i,
-				CreatedAt:      time.Now().UTC(),
+				ID:                 uuid.New().String(),
+				WorkspaceID:        input.Body.WorkspaceID,
+				CreatedByID:        userID,
+				Content:            threadPost.Content,
+				Status:             status,
+				ThreadSequence:     i,
+				RandomDelayMinutes: input.Body.RandomDelayMinutes,
+				CreatedAt:          time.Now().UTC(),
 			}
 			if input.Body.ScheduledAt != nil {
 				post.ScheduledAt = *input.Body.ScheduledAt
@@ -660,14 +691,26 @@ func (h *PostHandler) CreateThread(api huma.API) {
 			}
 			if status == "scheduled" {
 				payload, _ := json.Marshal(map[string]string{"post_id": posts[0].ID})
+				// Apply random delay to job run time (using first post's delay setting)
+				jobRunAt := applyRandomDelay(*input.Body.ScheduledAt, input.Body.RandomDelayMinutes)
+				// Update all posts with actual_run_at
+				for _, post := range posts {
+					post.ActualRunAt = jobRunAt
+				}
 				job := &models.Job{
 					ID:      uuid.New().String(),
 					Type:    "publish_post",
 					Payload: string(payload),
-					RunAt:   *input.Body.ScheduledAt,
+					RunAt:   jobRunAt,
 				}
 				if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
 					return err
+				}
+				// Update all posts with actual_run_at
+				for _, post := range posts {
+					if _, err := tx.NewUpdate().Model(post).Column("actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+						return err
+					}
 				}
 			}
 			return nil
@@ -703,15 +746,17 @@ type PostMediaResponse struct {
 }
 
 type PostDetailResponse struct {
-	ID           string                    `json:"id" doc:"Post ID"`
-	WorkspaceID  string                    `json:"workspace_id" doc:"Workspace ID"`
-	CreatedByID  string                    `json:"created_by" doc:"Creator user ID"`
-	Content      string                    `json:"content" doc:"Post content"`
-	Status       string                    `json:"status" doc:"Post status"`
-	ScheduledAt  string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
-	CreatedAt    string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
-	Media        []PostMediaResponse       `json:"media,omitempty" doc:"Attached media"`
-	Destinations []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
+	ID                 string                    `json:"id" doc:"Post ID"`
+	WorkspaceID        string                    `json:"workspace_id" doc:"Workspace ID"`
+	CreatedByID        string                    `json:"created_by" doc:"Creator user ID"`
+	Content            string                    `json:"content" doc:"Post content"`
+	Status             string                    `json:"status" doc:"Post status"`
+	ScheduledAt        string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
+	RandomDelayMinutes int                       `json:"random_delay_minutes" doc:"Random delay in minutes (±N)"`
+	ActualRunAt        string                    `json:"actual_run_at,omitempty" doc:"Actual run time after random delay (ISO 8601)"`
+	CreatedAt          string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
+	Media              []PostMediaResponse       `json:"media,omitempty" doc:"Attached media"`
+	Destinations       []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
 }
 
 func (h *PostHandler) GetPost(api huma.API) {
@@ -794,27 +839,33 @@ func (h *PostHandler) GetPost(api huma.API) {
 			}
 		}
 
-		return &GetPostOutput{Body: &PostDetailResponse{
-			ID:           post.ID,
-			WorkspaceID:  post.WorkspaceID,
-			CreatedByID:  post.CreatedByID,
-			Content:      post.Content,
-			Status:       post.Status,
-			ScheduledAt:  post.ScheduledAt.Format(time.RFC3339),
-			CreatedAt:    post.CreatedAt.Format(time.RFC3339),
-			Media:        mediaResp,
-			Destinations: destResp,
-		}}, nil
+		resp := &GetPostOutput{Body: &PostDetailResponse{
+			ID:                 post.ID,
+			WorkspaceID:        post.WorkspaceID,
+			CreatedByID:        post.CreatedByID,
+			Content:            post.Content,
+			Status:             post.Status,
+			ScheduledAt:        post.ScheduledAt.Format(time.RFC3339),
+			RandomDelayMinutes: post.RandomDelayMinutes,
+			CreatedAt:          post.CreatedAt.Format(time.RFC3339),
+			Media:              mediaResp,
+			Destinations:       destResp,
+		}}
+		if !post.ActualRunAt.IsZero() {
+			resp.Body.ActualRunAt = post.ActualRunAt.Format(time.RFC3339)
+		}
+		return resp, nil
 	})
 }
 
 type UpdatePostInput struct {
 	PathID string `path:"id" doc:"Post ID"`
 	Body   struct {
-		Content          *string  `json:"content,omitempty" doc:"Post content"`
-		ScheduledAt      *string  `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Set to empty string to unschedule (make draft)."`
-		SocialAccountIDs []string `json:"social_account_ids,omitempty" doc:"Social account IDs to publish to (replace all)"`
-		MediaIDs         []string `json:"media_ids,omitempty" doc:"Media attachment IDs to include (replace all)"`
+		Content            *string  `json:"content,omitempty" doc:"Post content"`
+		ScheduledAt        *string  `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Set to empty string to unschedule (make draft)."`
+		SocialAccountIDs   []string `json:"social_account_ids,omitempty" doc:"Social account IDs to publish to (replace all)"`
+		MediaIDs           []string `json:"media_ids,omitempty" doc:"Media attachment IDs to include (replace all)"`
+		RandomDelayMinutes *int     `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 	}
 }
 
@@ -863,7 +914,9 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				if *input.Body.ScheduledAt == "" {
 					post.Status = "draft"
 					post.ScheduledAt = time.Time{}
-					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+					post.RandomDelayMinutes = 0
+					post.ActualRunAt = time.Time{}
+					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at", "random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to unschedule post: %w", err)
 					}
 					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
@@ -877,7 +930,14 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					oldScheduledAt := post.ScheduledAt
 					post.ScheduledAt = parsed
 					post.Status = "scheduled"
-					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+					// Update random delay minutes if provided
+					if input.Body.RandomDelayMinutes != nil {
+						post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
+					}
+					// Apply random delay
+					jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
+					post.ActualRunAt = jobRunAt
+					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at", "random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to update post: %w", err)
 					}
 					if !oldScheduledAt.IsZero() {
@@ -890,7 +950,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						ID:      uuid.New().String(),
 						Type:    "publish_post",
 						Payload: string(payload),
-						RunAt:   post.ScheduledAt,
+						RunAt:   jobRunAt,
 					}
 					if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to create job: %w", err)
@@ -902,6 +962,30 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			if input.Body.Content != nil {
 				if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 					return fmt.Errorf("failed to update content: %w", err)
+				}
+			}
+
+			// Handle random delay update when not rescheduling
+			if input.Body.RandomDelayMinutes != nil && input.Body.ScheduledAt == nil && post.Status == "scheduled" {
+				post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
+				jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
+				post.ActualRunAt = jobRunAt
+				if _, err := tx.NewUpdate().Model(&post).Column("random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to update random delay: %w", err)
+				}
+				// Delete old job and create new one with updated run time
+				if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to cancel old job: %w", err)
+				}
+				payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+				job := &models.Job{
+					ID:      uuid.New().String(),
+					Type:    "publish_post",
+					Payload: string(payload),
+					RunAt:   jobRunAt,
+				}
+				if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to create job: %w", err)
 				}
 			}
 
@@ -995,17 +1079,22 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			}
 		}
 
-		return &UpdatePostOutput{Body: &PostDetailResponse{
-			ID:           respPost.ID,
-			WorkspaceID:  respPost.WorkspaceID,
-			CreatedByID:  respPost.CreatedByID,
-			Content:      respPost.Content,
-			Status:       respPost.Status,
-			ScheduledAt:  respPost.ScheduledAt.Format(time.RFC3339),
-			CreatedAt:    respPost.CreatedAt.Format(time.RFC3339),
-			Media:        mediaResp,
-			Destinations: destResp,
-		}}, nil
+		resp := &UpdatePostOutput{Body: &PostDetailResponse{
+			ID:                 respPost.ID,
+			WorkspaceID:        respPost.WorkspaceID,
+			CreatedByID:        respPost.CreatedByID,
+			Content:            respPost.Content,
+			Status:             respPost.Status,
+			ScheduledAt:        respPost.ScheduledAt.Format(time.RFC3339),
+			RandomDelayMinutes: respPost.RandomDelayMinutes,
+			CreatedAt:          respPost.CreatedAt.Format(time.RFC3339),
+			Media:              mediaResp,
+			Destinations:       destResp,
+		}}
+		if !respPost.ActualRunAt.IsZero() {
+			resp.Body.ActualRunAt = respPost.ActualRunAt.Format(time.RFC3339)
+		}
+		return resp, nil
 	})
 }
 

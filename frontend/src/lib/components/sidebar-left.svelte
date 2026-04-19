@@ -18,6 +18,7 @@
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
 	import CircleDotIcon from 'lucide-svelte/icons/circle-dot';
+	import LightbulbIcon from 'lucide-svelte/icons/lightbulb';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
@@ -70,6 +71,12 @@
 
 	const navItems = [
 		{ title: 'Dashboard', url: '/', icon: HouseIcon, isActive: () => pathname === '/' },
+		{
+			title: 'Prompts',
+			url: '/prompts',
+			icon: LightbulbIcon,
+			isActive: () => pathname.startsWith('/prompts')
+		},
 		{
 			title: 'Accounts',
 			url: '/accounts',

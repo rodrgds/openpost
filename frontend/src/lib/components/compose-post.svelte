@@ -21,6 +21,9 @@
 	import LayersIcon from 'lucide-svelte/icons/layers';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import XIcon from 'lucide-svelte/icons/x';
+	import ClockIcon from 'lucide-svelte/icons/clock';
+	import LightbulbIcon from 'lucide-svelte/icons/lightbulb';
+	import ShuffleIcon from 'lucide-svelte/icons/shuffle';
 	import { getPlatformKey, getPlatformName } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -78,18 +81,27 @@
 	interface Props {
 		initialDate?: DateValue;
 		initialPost?: InitialPost;
+		initialPrompt?: string;
 		onSuccess?: () => void;
 		onCancel?: () => void;
 		isPage?: boolean;
 	}
 
-	let { initialDate, initialPost, onSuccess, onCancel, isPage = false }: Props = $props();
+	let {
+		initialDate,
+		initialPost,
+		initialPrompt,
+		onSuccess,
+		onCancel,
+		isPage = false
+	}: Props = $props();
 
 	let isEditMode = $derived(!!initialPost);
 	let editingPostId = $state<string | null>(initialPost?.id ?? null);
 
 	let content = $state(initialPost?.content ?? '');
 	let mediaIds = $state<string[]>(initialPost?.media?.map((m) => m.media_id) ?? []);
+	let activePrompt = $state<string | null>(initialPrompt ?? null);
 	let isThreadMode = $state(false);
 	let threadPosts = $state<Array<{ content: string; mediaIds: string[] }>>([
 		{ content: '', mediaIds: [] }
@@ -115,6 +127,14 @@
 
 	let selectedDate = $state<CalendarDate | undefined>(undefined);
 	let selectedTime = $state<string | null>(null);
+	let randomDelayMinutes = $state<number>(0);
+	let enableRandomDelay = $state(false);
+	let suggestingSlot = $state(false);
+
+	// Prompt picker
+	let showPromptPicker = $state(false);
+	let currentPrompt = $state<{ text: string; category: string } | null>(null);
+	let loadingPrompt = $state(false);
 
 	const allTimeSlots = Array.from({ length: 37 }, (_, i) => {
 		const totalMinutes = i * 15;
@@ -376,6 +396,8 @@
 			scheduledAt = getScheduledAt();
 		}
 
+		const delayMinutes = enableRandomDelay && !publishNow && !saveAsDraft ? randomDelayMinutes : 0;
+
 		isSubmitting = true;
 
 		try {
@@ -386,7 +408,8 @@
 						content,
 						scheduled_at: scheduledAt ?? '',
 						social_account_ids: selectedAccountIds,
-						media_ids: mediaIds
+						media_ids: mediaIds,
+						random_delay_minutes: delayMinutes
 					}
 				});
 				if (err) throw new Error((err as any)?.detail || 'Failed to update post');
@@ -417,6 +440,7 @@
 						workspace_id: selectedWorkspaceId,
 						social_account_ids: selectedAccountIds,
 						scheduled_at: scheduledAt,
+						random_delay_minutes: delayMinutes,
 						posts: validPosts.map((p) => ({
 							content: p.content,
 							media_ids: p.mediaIds
@@ -446,7 +470,8 @@
 						content,
 						social_account_ids: selectedAccountIds,
 						scheduled_at: scheduledAt,
-						media_ids: mediaIds
+						media_ids: mediaIds,
+						random_delay_minutes: delayMinutes
 					}
 				});
 				if (err) throw new Error(err.detail || 'Failed to create post');
@@ -554,6 +579,63 @@
 	}
 
 	const hasVariants = $derived(variants.size > 0);
+
+	async function suggestNextSlot() {
+		if (!selectedWorkspaceId) return;
+		suggestingSlot = true;
+		try {
+			const { data, error: err } = await (client as any).GET('/posting-schedules/next-slot', {
+				params: { query: { workspace_id: selectedWorkspaceId } }
+			});
+			if (err) throw err;
+			if (data?.slot_time) {
+				const slotDate = new Date(data.slot_time);
+				selectedDate = new CalendarDate(
+					slotDate.getFullYear(),
+					slotDate.getMonth() + 1,
+					slotDate.getDate()
+				);
+				const hours = slotDate.getHours().toString().padStart(2, '0');
+				const minutes = slotDate.getMinutes().toString().padStart(2, '0');
+				selectedTime = `${hours}:${minutes}`;
+			}
+		} catch (e) {
+			console.error('Failed to get next available slot:', e);
+		} finally {
+			suggestingSlot = false;
+		}
+	}
+
+	async function fetchRandomPrompt() {
+		if (!selectedWorkspaceId) return;
+		loadingPrompt = true;
+		try {
+			const { data, error: err } = await (client as any).GET('/prompts/random', {
+				params: { query: { workspace_id: selectedWorkspaceId } }
+			});
+			if (err) throw err;
+			if (data) {
+				currentPrompt = { text: data.text, category: data.category };
+			}
+		} catch (e) {
+			console.error('Failed to fetch prompt:', e);
+		} finally {
+			loadingPrompt = false;
+		}
+	}
+
+	function applyPrompt() {
+		if (currentPrompt) {
+			activePrompt = currentPrompt.text;
+			showPromptPicker = false;
+			currentPrompt = null;
+		}
+	}
+
+	function openPromptPicker() {
+		showPromptPicker = true;
+		fetchRandomPrompt();
+	}
 </script>
 
 <div class="space-y-6">
@@ -644,17 +726,48 @@
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
 							<Label for="content">Post Content</Label>
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								onclick={toggleThreadMode}
-								class="gap-1 text-xs text-muted-foreground"
-							>
-								<LayersIcon class="h-3.5 w-3.5" />
-								Thread
-							</Button>
+							<div class="flex items-center gap-1">
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onclick={openPromptPicker}
+									class="gap-1 text-xs text-muted-foreground"
+								>
+									<LightbulbIcon class="h-3.5 w-3.5" />
+									Need inspiration?
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onclick={toggleThreadMode}
+									class="gap-1 text-xs text-muted-foreground"
+								>
+									<LayersIcon class="h-3.5 w-3.5" />
+									Thread
+								</Button>
+							</div>
 						</div>
+
+						{#if activePrompt}
+							<div
+								class="flex items-start gap-2 rounded-md border border-amber-200/50 bg-amber-50/50 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/20"
+							>
+								<LightbulbIcon class="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+								<p class="flex-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+									{activePrompt}
+								</p>
+								<button
+									type="button"
+									class="shrink-0 rounded p-0.5 text-amber-400 hover:bg-amber-100 hover:text-amber-600 dark:hover:bg-amber-900/30 dark:hover:text-amber-300"
+									onclick={() => (activePrompt = null)}
+								>
+									<XIcon class="h-3 w-3" />
+								</button>
+							</div>
+						{/if}
+
 						<div
 							class="relative rounded-md border transition-colors {isDraggingFile
 								? 'border-primary bg-primary/5'
@@ -921,7 +1034,26 @@
 			</div>
 
 			<div class="space-y-2">
-				<Label>Schedule Date & Time</Label>
+				<div class="flex items-center justify-between">
+					<Label>Schedule Date & Time</Label>
+					{#if !isEditMode}
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onclick={suggestNextSlot}
+							disabled={suggestingSlot}
+							class="h-7 gap-1 text-xs"
+						>
+							{#if suggestingSlot}
+								<LoaderIcon class="h-3 w-3 animate-spin" />
+							{:else}
+								<ClockIcon class="h-3 w-3" />
+							{/if}
+							Suggest Time
+						</Button>
+					{/if}
+				</div>
 				<Card class="gap-0 overflow-hidden border p-0 shadow-none">
 					<CardContent class="relative p-0 sm:pe-40">
 						<div class="p-4">
@@ -950,8 +1082,10 @@
 							</div>
 						</div>
 					</CardContent>
-					<div class="flex flex-col gap-4 border-t bg-muted/30 px-4 py-3 md:flex-row">
-						<div class="text-xs text-muted-foreground">
+					<div
+						class="flex flex-col gap-4 border-t bg-muted/30 px-4 py-3 md:flex-row md:items-center"
+					>
+						<div class="flex-1 text-xs text-muted-foreground">
 							{#if selectedDate && selectedTime}
 								Scheduled for <span class="font-medium text-foreground">
 									{selectedDate.toDate(getLocalTimeZone()).toLocaleDateString('en-US', {
@@ -962,6 +1096,29 @@
 								at <span class="font-medium text-foreground">{selectedTime}</span>.
 							{:else}
 								Select a date and time.
+							{/if}
+						</div>
+						<div class="flex items-center gap-3">
+							<label class="flex items-center gap-2 text-xs">
+								<Checkbox bind:checked={enableRandomDelay} />
+								<span>Add random delay</span>
+							</label>
+							{#if enableRandomDelay}
+								<Select.Root
+									type="single"
+									value={String(randomDelayMinutes)}
+									onValueChange={(v) => (randomDelayMinutes = Number(v))}
+								>
+									<Select.Trigger class="h-7 w-24 text-xs">
+										±{randomDelayMinutes} min
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="5">±5 minutes</Select.Item>
+										<Select.Item value="10">±10 minutes</Select.Item>
+										<Select.Item value="15">±15 minutes</Select.Item>
+										<Select.Item value="30">±30 minutes</Select.Item>
+									</Select.Content>
+								</Select.Root>
 							{/if}
 						</div>
 					</div>
@@ -1000,4 +1157,69 @@
 			{/if}
 		</div>
 	</form>
+
+	<!-- Prompt Picker Modal -->
+	{#if showPromptPicker}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+			onclick={(e) => {
+				if (e.target === e.currentTarget) showPromptPicker = false;
+			}}
+			onkeydown={(e) => e.key === 'Escape' && (showPromptPicker = false)}
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+		>
+			<div class="w-full max-w-md rounded-lg border bg-background shadow-xl">
+				<div class="flex items-center justify-between border-b px-4 py-3">
+					<div class="flex items-center gap-2">
+						<LightbulbIcon class="h-4 w-4 text-amber-500" />
+						<h3 class="text-sm font-medium">Need inspiration?</h3>
+					</div>
+					<button
+						type="button"
+						class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+						onclick={() => (showPromptPicker = false)}
+					>
+						<XIcon class="h-4 w-4" />
+					</button>
+				</div>
+
+				<div class="p-4">
+					{#if loadingPrompt}
+						<div class="flex justify-center py-8">
+							<LoaderIcon class="h-5 w-5 animate-spin text-primary" />
+						</div>
+					{:else if currentPrompt}
+						<div>
+							<span
+								class="mb-3 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wider text-amber-600 uppercase"
+							>
+								{currentPrompt.category}
+							</span>
+							<p class="text-sm leading-relaxed text-foreground/90">{currentPrompt.text}</p>
+						</div>
+					{:else}
+						<p class="py-8 text-center text-xs text-muted-foreground">No prompts available.</p>
+					{/if}
+				</div>
+
+				<div class="flex justify-end gap-2 border-t px-4 py-3">
+					<Button
+						onclick={fetchRandomPrompt}
+						variant="ghost"
+						size="sm"
+						disabled={loadingPrompt}
+						class="gap-1.5 text-xs"
+					>
+						<ShuffleIcon class="h-3.5 w-3.5" />
+						Shuffle
+					</Button>
+					<Button onclick={applyPrompt} size="sm" disabled={!currentPrompt || loadingPrompt}>
+						Use
+					</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>

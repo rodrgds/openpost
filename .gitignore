@@ -58,6 +58,7 @@ openpost-release.jks
 # Data directories
 data/
 /media/
+backend/media/
 
 # devenv
 .devenv/

@@ -65,10 +65,12 @@ type Post struct {
 	ParentPostID   string `json:"parent_post_id"`
 	ThreadSequence int    `bun:",default:0" json:"thread_sequence"`
 
-	Status      string    `bun:",notnull" json:"status"` // 'draft', 'scheduled', 'publishing', 'published', 'failed'
-	ScheduledAt time.Time `json:"scheduled_at"`
-	PublishedAt time.Time `json:"published_at"`
-	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	Status             string    `bun:",notnull" json:"status"` // 'draft', 'scheduled', 'publishing', 'published', 'failed'
+	ScheduledAt        time.Time `json:"scheduled_at"`
+	PublishedAt        time.Time `json:"published_at"`
+	RandomDelayMinutes int       `bun:",default:0" json:"random_delay_minutes"`
+	ActualRunAt        time.Time `bun:",nullzero" json:"actual_run_at"` // Set by worker, differs from ScheduledAt if randomized
+	CreatedAt          time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type PostDestination struct {
@@ -154,4 +156,37 @@ type PostVariant struct {
 	IsUnsynced      bool      `bun:",default:false" json:"is_unsynced"`
 	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// PostingSchedule defines preferred time slots for posting per workspace
+type PostingSchedule struct {
+	bun.BaseModel `bun:"table:posting_schedules"`
+
+	ID          string `bun:",pk" json:"id"`
+	WorkspaceID string `bun:",notnull" json:"workspace_id"`
+	SetID       string `json:"set_id"` // Optional: per-set schedules
+
+	// Store times in UTC for consistency, convert on read using workspace timezone
+	UTCHour   int `bun:",notnull" json:"utc_hour"`    // 0-23 UTC
+	UTCMinute int `bun:",notnull" json:"utc_minute"`  // 0-59 UTC
+	DayOfWeek int `bun:",notnull" json:"day_of_week"` // 0=Sunday, 6=Saturday (in UTC)
+
+	// Display/helpers
+	Label    string `json:"label"` // e.g., "Morning", "Lunch", "Evening"
+	IsActive bool   `bun:",default:true" json:"is_active"`
+
+	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// Prompt represents a writing prompt for content inspiration
+type Prompt struct {
+	bun.BaseModel `bun:"table:prompts"`
+
+	ID          string    `bun:",pk" json:"id"`
+	WorkspaceID string    `json:"workspace_id"` // null = global prompt
+	UserID      string    `json:"user_id"`      // null = workspace/global prompt
+	Text        string    `bun:",notnull" json:"text"`
+	Category    string    `bun:",notnull" json:"category"`
+	IsBuiltIn   bool      `bun:",default:false" json:"is_built_in"`
+	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }

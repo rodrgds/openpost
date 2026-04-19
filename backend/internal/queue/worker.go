@@ -164,6 +164,26 @@ func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload strin
 		if err := w.storage.Delete(filepath.Base(m.FilePath)); err != nil {
 			log.Printf("Failed to delete media file %s: %v", m.ID, err)
 		}
+
+		var thumbs struct {
+			SM string `json:"sm,omitempty"`
+			MD string `json:"md,omitempty"`
+		}
+		if m.ThumbnailsJSON != "" {
+			if err := json.Unmarshal([]byte(m.ThumbnailsJSON), &thumbs); err == nil {
+				if thumbs.SM != "" {
+					if err := w.storage.Delete(thumbs.SM); err != nil {
+						log.Printf("Failed to delete thumbnail %s: %v", thumbs.SM, err)
+					}
+				}
+				if thumbs.MD != "" {
+					if err := w.storage.Delete(thumbs.MD); err != nil {
+						log.Printf("Failed to delete thumbnail %s: %v", thumbs.MD, err)
+					}
+				}
+			}
+		}
+
 		if _, err := w.db.NewDelete().Model(&m).Where("id = ?", m.ID).Exec(ctx); err != nil {
 			log.Printf("Failed to delete media record %s: %v", m.ID, err)
 		}

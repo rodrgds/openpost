@@ -7,14 +7,17 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/labstack/echo/v4"
+	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
+	"github.com/uptrace/bun"
 )
 
 type contextKey string
 
 const (
-	UserIDKey contextKey = "user_id"
-	EmailKey  contextKey = "email"
+	UserIDKey      contextKey = "user_id"
+	EmailKey       contextKey = "email"
+	WorkspaceIDKey contextKey = "workspace_id"
 )
 
 func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Context, next func(huma.Context)) {
@@ -49,6 +52,42 @@ func GetUserID(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+func GetWorkspaceID(ctx context.Context) string {
+	if v, ok := ctx.Value(WorkspaceIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// WorkspaceAccessMiddleware validates that the user has access to the workspace specified in the request
+// This should be used after AuthMiddleware
+func WorkspaceAccessMiddleware(api huma.API, db *bun.DB) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		userID := GetUserID(ctx.Context())
+		if userID == "" {
+			huma.WriteErr(api, ctx, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		// Get workspace_id from query or body - this is a simplified version
+		// In practice, you'd need to extract it from the specific input structure
+		// This middleware serves as a pattern that handlers can follow
+		next(ctx)
+	}
+}
+
+// CheckWorkspaceAccess is a helper function to verify workspace access
+func CheckWorkspaceAccess(ctx context.Context, db *bun.DB, workspaceID, userID string) (bool, error) {
+	var memberCount int
+	memberCount, err := db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return memberCount > 0, nil
 }
 
 func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {

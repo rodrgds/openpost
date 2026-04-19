@@ -1,11 +1,9 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
-	import type { SVGAttributes } from 'svelte/elements';
 	import { Button } from '$lib/components/ui/button';
 
 	interface Props {
 		/** Icon component to display */
-		icon: any;
+		icon: ConstructorOfATypedSvelteComponent;
 		/** Main title text */
 		title: string;
 		/** Description text */

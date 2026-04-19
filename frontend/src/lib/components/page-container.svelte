@@ -5,7 +5,7 @@
 		/** Page title displayed in the header */
 		title: string;
 		/** Optional icon component to display before title */
-		icon?: any;
+		icon?: ConstructorOfATypedSvelteComponent;
 		/** Optional description text below title - can be HTML string */
 		description?: string;
 		/** Optional header actions (buttons, etc.) */

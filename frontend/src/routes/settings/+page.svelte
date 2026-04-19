@@ -10,6 +10,10 @@
 	import XIcon from 'lucide-svelte/icons/x';
 	import ClockIcon from 'lucide-svelte/icons/clock';
 	import ImageIcon from 'lucide-svelte/icons/image';
+	import CalendarIcon from 'lucide-svelte/icons/calendar';
+	import PlusIcon from 'lucide-svelte/icons/plus';
+	import TrashIcon from 'lucide-svelte/icons/trash';
+	import { client } from '$lib/api/client';
 
 	const timezones = [
 		{ group: 'Americas', value: 'America/New_York', label: 'New York (ET)' },
@@ -129,6 +133,107 @@
 			saving = false;
 		}
 	}
+
+	// Posting schedules
+	interface PostingSchedule {
+		id: string;
+		workspace_id: string;
+		set_id: string;
+		utc_hour: number;
+		utc_minute: number;
+		day_of_week: number;
+		label: string;
+		is_active: boolean;
+		created_at: string;
+	}
+
+	let schedules = $state<PostingSchedule[]>([]);
+	let loadingSchedules = $state(false);
+	let showAddSchedule = $state(false);
+	let newSchedule = $state({
+		day_of_week: 1,
+		utc_hour: 9,
+		utc_minute: 0,
+		label: ''
+	});
+
+	const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+	async function loadSchedules() {
+		if (!workspaceCtx.currentWorkspace) return;
+		loadingSchedules = true;
+		try {
+			const { data, error: err } = await (client as any).GET('/posting-schedules', {
+				params: { query: { workspace_id: workspaceCtx.currentWorkspace.id } }
+			});
+			if (!err && data) {
+				schedules = data;
+			}
+		} catch (e) {
+			console.error('Failed to load schedules:', e);
+		} finally {
+			loadingSchedules = false;
+		}
+	}
+
+	async function addSchedule() {
+		if (!workspaceCtx.currentWorkspace) return;
+		try {
+			const { error: err } = await (client as any).POST('/posting-schedules', {
+				body: {
+					workspace_id: workspaceCtx.currentWorkspace.id,
+					day_of_week: newSchedule.day_of_week,
+					utc_hour: newSchedule.utc_hour,
+					utc_minute: newSchedule.utc_minute,
+					label: newSchedule.label
+				}
+			});
+			if (err) throw err;
+			showAddSchedule = false;
+			newSchedule = { day_of_week: 1, utc_hour: 9, utc_minute: 0, label: '' };
+			await loadSchedules();
+			toastMessage = 'Schedule added successfully';
+		} catch (e) {
+			toastMessage = (e as Error).message || 'Failed to add schedule';
+		}
+	}
+
+	async function deleteSchedule(id: string) {
+		try {
+			const { error: err } = await (client as any).DELETE('/posting-schedules/{id}', {
+				params: { path: { id } }
+			});
+			if (err) throw err;
+			await loadSchedules();
+			toastMessage = 'Schedule deleted successfully';
+		} catch (e) {
+			toastMessage = (e as Error).message || 'Failed to delete schedule';
+		}
+	}
+
+	function formatTime(hour: number, minute: number): string {
+		const h = hour.toString().padStart(2, '0');
+		const m = minute.toString().padStart(2, '0');
+		return `${h}:${m}`;
+	}
+
+	function formatLocalTime(hour: number, minute: number): string {
+		// Create a date in UTC with the given time
+		const utcDate = new Date();
+		utcDate.setUTCHours(hour, minute, 0, 0);
+		// Format in local timezone
+		return utcDate.toLocaleTimeString('en-US', {
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: false
+		});
+	}
+
+	$effect(() => {
+		if (workspaceCtx.currentWorkspace) {
+			loadSchedules();
+		}
+	});
 
 	function handleTimezoneChange(value: string) {
 		workspaceCtx.settings.timezone = value;
@@ -260,6 +365,142 @@
 					</p>
 				</div>
 			</div>
+		</section>
+
+		<!-- Posting Schedule Settings -->
+		<section class="rounded-lg border p-6">
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="flex items-center gap-2 text-lg font-semibold">
+					<CalendarIcon class="h-5 w-5 text-muted-foreground" />
+					Posting Schedule
+				</h2>
+				<Button onclick={() => (showAddSchedule = true)} variant="outline" size="sm">
+					<PlusIcon class="mr-2 h-4 w-4" />
+					Add Time Slot
+				</Button>
+			</div>
+			<p class="mb-4 text-xs text-muted-foreground">
+				Define your preferred posting times. The "Suggest Time" button in the compose page will use
+				these slots.
+			</p>
+
+			{#if loadingSchedules}
+				<div class="flex justify-center py-8">
+					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
+				</div>
+			{:else if schedules.length === 0}
+				<div class="rounded-md border border-dashed p-8 text-center text-muted-foreground">
+					<p class="text-sm">No posting schedules configured.</p>
+					<p class="mt-1 text-xs">Add time slots to enable the "Suggest Time" feature.</p>
+				</div>
+			{:else}
+				<div class="space-y-2">
+					{#each dayNames as dayName, dayIndex}
+						{@const daySchedules = schedules.filter((s) => s.day_of_week === dayIndex)}
+						{#if daySchedules.length > 0}
+							<div class="rounded-md border p-3">
+								<div class="mb-2 text-sm font-medium">{dayName}</div>
+								<div class="flex flex-wrap gap-2">
+									{#each daySchedules as schedule}
+										<div class="flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 text-sm">
+											<span class="font-medium">
+												{formatLocalTime(schedule.utc_hour, schedule.utc_minute)}
+											</span>
+											{#if schedule.label}
+												<span class="text-xs text-muted-foreground">({schedule.label})</span>
+											{/if}
+											<button
+												onclick={() => deleteSchedule(schedule.id)}
+												class="ml-1 text-muted-foreground hover:text-destructive"
+											>
+												<TrashIcon class="h-3.5 w-3.5" />
+											</button>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					{/each}
+				</div>
+			{/if}
+
+			{#if showAddSchedule}
+				<div class="mt-4 rounded-md border bg-muted/30 p-4">
+					<h3 class="mb-3 text-sm font-medium">Add New Time Slot</h3>
+					<div class="grid gap-4 sm:grid-cols-4">
+						<div class="space-y-2">
+							<label class="text-xs">Day</label>
+							<Select.Root
+								type="single"
+								value={String(newSchedule.day_of_week)}
+								onValueChange={(v) => (newSchedule.day_of_week = Number(v))}
+							>
+								<Select.Trigger class="w-full">
+									{dayNames[newSchedule.day_of_week]}
+								</Select.Trigger>
+								<Select.Content>
+									{#each dayNames as name, idx}
+										<Select.Item value={String(idx)}>{name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="space-y-2">
+							<label class="text-xs">Hour (UTC)</label>
+							<Select.Root
+								type="single"
+								value={String(newSchedule.utc_hour)}
+								onValueChange={(v) => (newSchedule.utc_hour = Number(v))}
+							>
+								<Select.Trigger class="w-full">
+									{newSchedule.utc_hour.toString().padStart(2, '0')}:00
+								</Select.Trigger>
+								<Select.Content class="max-h-60 overflow-y-auto">
+									{#each Array.from({ length: 24 }, (_, i) => i) as hour}
+										<Select.Item value={String(hour)}>
+											{hour.toString().padStart(2, '0')}:00
+										</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="space-y-2">
+							<label class="text-xs">Minute</label>
+							<Select.Root
+								type="single"
+								value={String(newSchedule.utc_minute)}
+								onValueChange={(v) => (newSchedule.utc_minute = Number(v))}
+							>
+								<Select.Trigger class="w-full">
+									{newSchedule.utc_minute.toString().padStart(2, '0')}
+								</Select.Trigger>
+								<Select.Content>
+									{#each [0, 15, 30, 45] as minute}
+										<Select.Item value={String(minute)}>
+											{minute.toString().padStart(2, '0')}
+										</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="space-y-2">
+							<label class="text-xs">Label (optional)</label>
+							<input
+								type="text"
+								bind:value={newSchedule.label}
+								placeholder="e.g., Morning"
+								class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+							/>
+						</div>
+					</div>
+					<div class="mt-4 flex justify-end gap-2">
+						<Button onclick={() => (showAddSchedule = false)} variant="outline" size="sm">
+							Cancel
+						</Button>
+						<Button onclick={addSchedule} size="sm">Add Slot</Button>
+					</div>
+				</div>
+			{/if}
 		</section>
 
 		<!-- Save Button -->

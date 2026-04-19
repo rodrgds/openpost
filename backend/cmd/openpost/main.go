@@ -173,6 +173,20 @@ func main() {
 	setHandler.AddSetAccounts(api)
 	setHandler.RemoveSetAccount(api)
 
+	postingScheduleHandler := handlers.NewPostingScheduleHandler(db, authService)
+	postingScheduleHandler.ListSchedules(api)
+	postingScheduleHandler.CreateSchedule(api)
+	postingScheduleHandler.UpdateSchedule(api)
+	postingScheduleHandler.DeleteSchedule(api)
+	postingScheduleHandler.GetNextAvailableSlot(api)
+
+	promptHandler := handlers.NewPromptHandler(db, authService)
+	promptHandler.ListPrompts(api)
+	promptHandler.CreatePrompt(api)
+	promptHandler.DeletePrompt(api)
+	promptHandler.GetRandomPrompt(api)
+	promptHandler.GetCategories(api)
+
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
