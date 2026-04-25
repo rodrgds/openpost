@@ -193,6 +193,12 @@ services:
       - "8080:8080"
 ```
 
+## 🐧 How I Self-Host (NixOS + Docker)
+
+I personally run OpenPost on my own NixOS server using Docker (via Podman OCI containers). I wrote a custom Nix module that sets up the container with persistent storage, health checks, SOPS secret management, and a Caddy reverse proxy. If you're also on NixOS, feel free to use it as a reference:
+
+🔗 **[My Nix module for OpenPost](https://github.com/rodrgds/nix-config/blob/main/modules/services/openpost/default.nix)**
+
 ## ⚙️ Configuration
 
 All configuration is done via environment variables or a `.env` file:
