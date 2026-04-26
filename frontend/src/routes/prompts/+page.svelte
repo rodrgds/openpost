@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { client } from '$lib/api/client';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
+	import { ui } from '$lib/stores/ui.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
 	import PageContainer from '$lib/components/page-container.svelte';
@@ -10,6 +11,7 @@
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import TrashIcon from 'lucide-svelte/icons/trash';
 	import ShuffleIcon from 'lucide-svelte/icons/shuffle';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { goto } from '$app/navigation';
 
 	interface Prompt {
@@ -123,9 +125,8 @@
 				params: { query: params }
 			});
 			if (!err && data) {
-				// Navigate to compose with the prompt
-				const promptText = encodeURIComponent(data.text);
-				goto(`/posts/new?prompt=${promptText}`);
+				ui.setPrompt(data.text);
+				goto('/');
 			}
 		} catch (e) {
 			console.error('Failed to get random prompt:', e);
@@ -133,8 +134,8 @@
 	}
 
 	function usePrompt(text: string) {
-		const promptText = encodeURIComponent(text);
-		goto(`/posts/new?prompt=${promptText}`);
+		ui.setPrompt(text);
+		goto('/');
 	}
 
 	$effect(() => {
@@ -213,13 +214,15 @@
 		{#if loading}
 			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				{#each Array(6) as _}
-					<div class="h-32 animate-pulse rounded-lg bg-muted"></div>
+					<div class="h-32 rounded-lg bg-muted">
+						<Skeleton class="h-full w-full" />
+					</div>
 				{/each}
 			</div>
 		{:else if prompts.length === 0}
 			<div class="rounded-lg border border-dashed p-12 text-center">
 				<LightbulbIcon class="mx-auto h-12 w-12 text-muted-foreground" />
-				<h3 class="mt-4 text-lg font-semibold">No prompts found</h3>
+				<h3 class="mt-4 text-base font-semibold">No prompts found</h3>
 				<p class="mt-2 text-sm text-muted-foreground">
 					Get started by adding your first writing prompt.
 				</p>
@@ -237,7 +240,7 @@
 			<div class="space-y-6">
 				{#each Object.entries(groupedPrompts) as [category, categoryPrompts]}
 					<section>
-						<h2 class="mb-3 text-sm font-medium tracking-wider text-muted-foreground uppercase">
+						<h2 class="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 							{category}
 						</h2>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -247,15 +250,15 @@
 									class="group relative flex flex-col items-start rounded-md border bg-card p-3 text-left transition-all hover:border-accent hover:bg-accent"
 									onclick={() => usePrompt(prompt.text)}
 								>
-									<p
-										class="line-clamp-4 text-xs leading-relaxed text-foreground/80 group-hover:text-foreground"
-									>
+								<p
+									class="line-clamp-4 text-sm leading-relaxed text-foreground/80 group-hover:text-foreground"
+								>
 										{prompt.text}
 									</p>
 									<div class="mt-2 flex w-full items-center justify-between">
-										<span class="text-[10px] text-muted-foreground">
-											{prompt.is_built_in ? 'Built-in' : 'Custom'}
-										</span>
+									<span class="text-xs text-muted-foreground">
+										{prompt.is_built_in ? 'Built-in' : 'Custom'}
+									</span>
 										{#if !prompt.is_built_in}
 											<button
 												type="button"

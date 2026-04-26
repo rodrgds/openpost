@@ -1,24 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
-	import { client, type ScheduleOverview } from '$lib/api/client';
+	import { client, type ScheduleOverview, type Post } from '$lib/api/client';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as CalendarUi from '$lib/components/ui/calendar';
-	import { Button } from '$lib/components/ui/button';
 	import Logo from './Logo.svelte';
-	import ComposeModal from './compose-modal.svelte';
 	import DayPostsModal from './day-posts-modal.svelte';
-	import HouseIcon from 'lucide-svelte/icons/home';
-	import UsersIcon from 'lucide-svelte/icons/users';
-	import ImageIcon from 'lucide-svelte/icons/image';
-	import SettingsIcon from 'lucide-svelte/icons/settings';
-	import PlusIcon from 'lucide-svelte/icons/plus';
+	import FileTextIcon from 'lucide-svelte/icons/file-text';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import ChevronsUpDownIcon from 'lucide-svelte/icons/chevrons-up-down';
 	import CircleDotIcon from 'lucide-svelte/icons/circle-dot';
 	import LightbulbIcon from 'lucide-svelte/icons/lightbulb';
+	import UsersIcon from 'lucide-svelte/icons/users';
+	import ImageIcon from 'lucide-svelte/icons/image';
+	import SettingsIcon from 'lucide-svelte/icons/settings';
+	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
@@ -32,16 +29,20 @@
 	import { getLocalTimeZone, today } from '@internationalized/date';
 	import { ui } from '$lib/stores/ui.svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 
 	let authState = $derived($auth);
 	const sidebar = Sidebar.useSidebar();
-	let pathname = $derived($page.url.pathname);
 
 	// Calendar state
 	let selectedDate = $state<DateValue | undefined>(undefined);
 	let calendarPlaceholder = $state<DateValue>(today(getLocalTimeZone()));
 	let overview = $state<ScheduleOverview | null>(null);
 	let loadingSchedule = $state(true);
+
+	// Drafts state
+	let drafts = $state<Post[]>([]);
+	let loadingDrafts = $state(false);
 
 	const monthString = $derived.by(() => {
 		const jsDate = calendarPlaceholder.toDate(getLocalTimeZone());
@@ -69,34 +70,6 @@
 		return map;
 	});
 
-	const navItems = [
-		{ title: 'Dashboard', url: '/', icon: HouseIcon, isActive: () => pathname === '/' },
-		{
-			title: 'Prompts',
-			url: '/prompts',
-			icon: LightbulbIcon,
-			isActive: () => pathname.startsWith('/prompts')
-		},
-		{
-			title: 'Accounts',
-			url: '/accounts',
-			icon: UsersIcon,
-			isActive: () => pathname.startsWith('/accounts')
-		},
-		{
-			title: 'Media',
-			url: '/media',
-			icon: ImageIcon,
-			isActive: () => pathname.startsWith('/media')
-		},
-		{
-			title: 'Settings',
-			url: '/settings',
-			icon: SettingsIcon,
-			isActive: () => pathname.startsWith('/settings')
-		}
-	];
-
 	const workspaceColors = [
 		'bg-blue-500',
 		'bg-emerald-500',
@@ -119,17 +92,21 @@
 	onMount(async () => {
 		loadOverview();
 		await workspaceCtx.initialize();
+		loadDrafts();
 	});
 
 	// Track previous month to detect actual changes
 	let previousMonth = $state('');
+	let previousWorkspaceId = $state('');
 
 	$effect(() => {
 		const currentMonth = monthString;
-		if (previousMonth && previousMonth !== currentMonth) {
+		const currentWorkspaceId = workspaceCtx.currentWorkspace?.id ?? '';
+		if ((previousMonth && previousMonth !== currentMonth) || (previousWorkspaceId && previousWorkspaceId !== currentWorkspaceId)) {
 			loadOverview();
 		}
 		previousMonth = currentMonth;
+		previousWorkspaceId = currentWorkspaceId;
 	});
 
 	// Trigger day-posts modal on date selection
@@ -143,13 +120,23 @@
 		}
 	});
 
+	// Refresh drafts when ui.refreshCounter changes
+	$effect(() => {
+		if (ui.refreshCounter > 0) {
+			loadDrafts();
+			loadOverview();
+		}
+	});
+
 	async function loadOverview() {
 		loadingSchedule = true;
 		try {
+			const workspaceId = workspaceCtx.currentWorkspace?.id;
 			const { data, error: err } = await client.GET('/posts/schedule-overview', {
 				params: {
 					query: {
-						month: monthString
+						month: monthString,
+						...(workspaceId ? { workspace_id: workspaceId } : {})
 					}
 				}
 			});
@@ -159,6 +146,45 @@
 			overview = null;
 		} finally {
 			loadingSchedule = false;
+		}
+	}
+
+	async function loadDrafts() {
+		loadingDrafts = true;
+		try {
+			const workspaceId = workspaceCtx.currentWorkspace?.id;
+			if (!workspaceId) {
+				drafts = [];
+				return;
+			}
+			const { data, error: err } = await client.GET('/posts', {
+				params: {
+					query: {
+						workspace_id: workspaceId,
+						status: 'draft',
+						limit: 20
+					}
+				}
+			});
+			if (err || !data) throw new Error('Failed to load drafts');
+			drafts = data;
+		} catch {
+			drafts = [];
+		} finally {
+			loadingDrafts = false;
+		}
+	}
+
+	async function deleteDraft(postId: string) {
+		if (!confirm('Delete this draft?')) return;
+		try {
+			const { error: err } = await (client as any).DELETE('/posts/{id}', {
+				params: { path: { id: postId } }
+			});
+			if (err) throw new Error((err as any)?.detail || 'Failed to delete');
+			loadDrafts();
+		} catch (e) {
+			console.error('Failed to delete draft:', e);
 		}
 	}
 
@@ -178,6 +204,11 @@
 		day: DateValue;
 		outsideMonth: boolean;
 	};
+
+	function truncate(text: string, max: number = 40): string {
+		if (text.length <= max) return text;
+		return text.slice(0, max).trim() + '...';
+	}
 </script>
 
 {#snippet dayMarker({ day, outsideMonth }: DayMarkerArgs)}
@@ -206,37 +237,12 @@
 			</a>
 		</div>
 
-		<!-- New Post Button -->
-		<div class="px-2 pb-2">
-			<Button class="w-full justify-start gap-2" onclick={() => goto('/posts/new')}>
-				<PlusIcon class="size-4" />
-				<span>New Post</span>
-			</Button>
-		</div>
-
 		<Sidebar.Separator />
-
-		<!-- Main Navigation -->
-		<Sidebar.Menu>
-			{#each navItems as item (item.title)}
-				<Sidebar.MenuItem>
-					<Sidebar.MenuButton isActive={item.isActive()}>
-						{#snippet child({ props })}
-							<a href={item.url} {...props}>
-								<item.icon class="text-sidebar-foreground" />
-								<span class="text-sidebar-foreground">{item.title}</span>
-							</a>
-						{/snippet}
-					</Sidebar.MenuButton>
-				</Sidebar.MenuItem>
-			{/each}
-		</Sidebar.Menu>
 	</Sidebar.Header>
 
 	<Sidebar.Content>
-		<Sidebar.Separator />
 		<!-- Calendar Section -->
-		<Sidebar.Group class="px-0 pt-4">
+		<Sidebar.Group class="px-0 pt-2">
 			<Sidebar.GroupLabel
 				class="px-4 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
 				>Schedule</Sidebar.GroupLabel
@@ -266,7 +272,7 @@
 								<CircleDotIcon class="size-3.5" />
 								<span
 									>{loadingSchedule
-										? 'Loading...'
+										? ''
 										: `${overview.days.reduce((s: number, d: { count: number }) => s + d.count, 0)} scheduled posts`}</span
 								>
 							</Sidebar.MenuButton>
@@ -275,6 +281,60 @@
 				</Sidebar.GroupContent>
 			</Sidebar.Group>
 		{/if}
+
+		<Sidebar.Separator />
+
+		<!-- Drafts Section -->
+		<Sidebar.Group class="flex-1 overflow-hidden">
+			<Sidebar.GroupLabel
+				class="px-4 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
+			>
+				Drafts
+				{#if drafts.length > 0}
+					<span class="ml-1 text-sidebar-foreground/40">({drafts.length})</span>
+				{/if}
+			</Sidebar.GroupLabel>
+			<Sidebar.GroupContent class="max-h-64 overflow-y-auto">
+				{#if loadingDrafts}
+					<div class="space-y-2 px-2 py-2">
+						{#each Array(4) as _}
+							<div class="flex items-center gap-2 px-2 py-1.5">
+								<Skeleton class="h-3.5 w-3.5 rounded-sm" />
+								<Skeleton class="h-3.5 w-full" />
+							</div>
+						{/each}
+					</div>
+				{:else if drafts.length === 0}
+					<div class="px-4 py-3 text-sm text-sidebar-foreground/40">
+						No drafts yet. Start writing and your draft will appear here.
+					</div>
+				{:else}
+					<Sidebar.Menu>
+						{#each drafts as draft (draft.id)}
+							<Sidebar.MenuItem>
+								<Sidebar.MenuButton
+									class="group relative text-sidebar-foreground/80"
+									onclick={() => goto(`/posts/${draft.id}`)}
+								>
+									<FileTextIcon class="size-3.5 shrink-0" />
+									<span class="truncate text-sm">{truncate(draft.content)}</span>
+								</Sidebar.MenuButton>
+								<Sidebar.MenuAction
+									showOnHover
+									onclick={(e) => {
+										e.stopPropagation();
+										deleteDraft(draft.id);
+									}}
+									class="text-sidebar-foreground/40 hover:text-destructive"
+								>
+									<TrashIcon class="size-3" />
+								</Sidebar.MenuAction>
+							</Sidebar.MenuItem>
+						{/each}
+					</Sidebar.Menu>
+				{/if}
+			</Sidebar.GroupContent>
+		</Sidebar.Group>
 	</Sidebar.Content>
 
 	<Sidebar.Footer>
@@ -332,6 +392,29 @@
 							</div>
 						</DropdownMenu.Label>
 						<DropdownMenu.Separator />
+
+						<!-- Navigation items moved here -->
+						<DropdownMenu.Group>
+							<DropdownMenu.Item onclick={() => goto('/accounts')}>
+								<UsersIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Accounts</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => goto('/media')}>
+								<ImageIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Media</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => goto('/prompts')}>
+								<LightbulbIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Prompts</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => goto('/settings')}>
+								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Settings</span>
+							</DropdownMenu.Item>
+						</DropdownMenu.Group>
+
+						<DropdownMenu.Separator />
+
 						<DropdownMenu.Group>
 							<DropdownMenu.Item onclick={toggleMode}>
 								<SunIcon
@@ -343,7 +426,9 @@
 								<span>Toggle theme</span>
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>
+
 						<DropdownMenu.Separator />
+
 						{#if IS_CAPACITOR}
 							<DropdownMenu.Item onclick={handleSwitchServer}>
 								<ServerIcon class="mr-2 text-muted-foreground" />
@@ -351,6 +436,7 @@
 							</DropdownMenu.Item>
 							<DropdownMenu.Separator />
 						{/if}
+
 						<DropdownMenu.Item onclick={handleLogout}>
 							<LogOutIcon class="mr-2 text-muted-foreground" />
 							<span>Log out</span>
@@ -363,5 +449,4 @@
 	<Sidebar.Rail />
 </Sidebar.Root>
 
-<ComposeModal onSuccess={loadOverview} />
 <DayPostsModal />

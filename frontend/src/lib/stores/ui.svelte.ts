@@ -6,6 +6,7 @@ class UIState {
 	isDayPostsOpen = $state(false);
 	dayPostsDate = $state<DateValue | undefined>(undefined);
 	refreshCounter = $state(0);
+	promptText = $state<string | null>(null);
 
 	openCompose(date?: DateValue) {
 		this.composeInitialDate = date;
@@ -29,6 +30,14 @@ class UIState {
 		this.isDayPostsOpen = false;
 		this.composeInitialDate = date;
 		this.isComposeOpen = true;
+	}
+
+	setPrompt(text: string) {
+		this.promptText = text;
+	}
+
+	clearPrompt() {
+		this.promptText = null;
 	}
 
 	triggerRefresh() {

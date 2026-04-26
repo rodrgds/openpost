@@ -7,10 +7,13 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { getLocalTimeZone, today, type DateValue } from '@internationalized/date';
 	import PlusIcon from 'lucide-svelte/icons/plus';
-	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import CalendarIcon from 'lucide-svelte/icons/calendar';
+	import TrashIcon from 'lucide-svelte/icons/trash-2';
+	import PencilIcon from 'lucide-svelte/icons/pencil';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { getStatusColor } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import { goto } from '$app/navigation';
 
 	let posts = $state<Post[]>([]);
 	let loading = $state(false);
@@ -19,7 +22,7 @@
 
 	let currentDate = $derived<DateValue | undefined>(ui.dayPostsDate);
 	let dateStr = $derived(
-		currentDate ? currentDate.toDate(getLocalTimeZone()).toISOString().split('T')[0] : ''
+		currentDate ? currentDate.toString() : ''
 	);
 	let isFutureDay = $derived.by(() => {
 		if (!currentDate) return false;
@@ -54,8 +57,9 @@
 		loading = true;
 		error = '';
 		try {
+			const workspaceId = workspaceCtx.currentWorkspace?.id;
 			const { data, error: err } = await client.GET('/posts', {
-				params: { query: { date } }
+				params: { query: { date, ...(workspaceId ? { workspace_id: workspaceId } : {}) } }
 			});
 			if (err) throw new Error('Failed to load posts');
 			posts = data ?? [];
@@ -78,8 +82,39 @@
 	}
 
 	function handleNewPost() {
-		if (currentDate) {
-			ui.openComposeForDay(currentDate);
+		ui.closeDayPosts();
+		goto('/');
+	}
+
+	async function handleDelete(postId: string) {
+		if (!confirm('Delete this post?')) return;
+		try {
+			const { error: err } = await (client as any).DELETE('/posts/{id}', {
+				params: { path: { id: postId } }
+			});
+			if (err) throw new Error((err as any).detail || 'Failed to delete');
+			loadPosts(dateStr);
+			ui.triggerRefresh();
+		} catch (e) {
+			console.error('Failed to delete post:', e);
+		}
+	}
+
+	async function handleReschedule(postId: string) {
+		const newDate = prompt('Enter new date (YYYY-MM-DD):');
+		if (!newDate) return;
+		const newTime = prompt('Enter new time (HH:MM):');
+		if (!newTime) return;
+		try {
+			const scheduledAt = new Date(`${newDate}T${newTime}:00`).toISOString();
+			await (client as any).PATCH('/posts/{id}', {
+				params: { path: { id: postId } },
+				body: { scheduled_at: scheduledAt }
+			});
+			loadPosts(dateStr);
+			ui.triggerRefresh();
+		} catch (e) {
+			console.error('Failed to reschedule post:', e);
 		}
 	}
 </script>
@@ -90,7 +125,7 @@
 	>
 		<div class="min-h-0 p-4 sm:p-6">
 			<Dialog.Header>
-				<Dialog.Title class="flex items-center gap-2 text-xl font-bold">
+				<Dialog.Title class="flex items-center gap-2 text-xl font-semibold">
 					<CalendarIcon class="size-5" />
 					{formattedDate}
 				</Dialog.Title>
@@ -100,8 +135,16 @@
 			</Dialog.Header>
 			<div class="mt-4 space-y-4">
 				{#if loading}
-					<div class="flex justify-center py-8">
-						<LoaderIcon class="size-6 animate-spin text-muted-foreground" />
+					<div class="space-y-4 py-4">
+						{#each [1, 2, 3] as _}
+							<div class="flex items-start gap-3">
+								<Skeleton class="h-8 w-8 shrink-0 rounded-full" />
+								<div class="flex flex-1 flex-col gap-2">
+									<Skeleton class="h-3 w-full rounded" />
+									<Skeleton class="h-3 w-2/3 rounded" />
+								</div>
+							</div>
+						{/each}
 					</div>
 				{:else if error}
 					<div
@@ -117,19 +160,37 @@
 				{:else}
 					<div class="grid max-h-[55dvh] gap-3 overflow-y-auto">
 						{#each posts as post (post.id)}
-							<Card class="gap-0 p-0 shadow-none">
+							<Card class="gap-0 p-0 shadow-none group">
 								<CardContent class="p-4">
 									<div class="flex items-start justify-between gap-3">
 										<div class="min-w-0 flex-1">
 											<p class="line-clamp-2 text-sm">{post.content}</p>
 										</div>
-										<span
-											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {getStatusColor(
-												post.status
-											)}"
-										>
-											{post.status}
-										</span>
+										<div class="flex items-center gap-1 shrink-0">
+											<button
+												type="button"
+												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+												onclick={(e) => { e.stopPropagation(); handleReschedule(post.id); }}
+												title="Reschedule"
+											>
+												<PencilIcon class="h-3.5 w-3.5" />
+											</button>
+											<button
+												type="button"
+												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
+												onclick={(e) => { e.stopPropagation(); handleDelete(post.id); }}
+												title="Delete"
+											>
+												<TrashIcon class="h-3.5 w-3.5" />
+											</button>
+											<span
+												class="rounded-full px-2 py-0.5 text-xs font-medium {getStatusColor(
+													post.status
+												)}"
+											>
+												{post.status}
+											</span>
+										</div>
 									</div>
 									<div class="mt-2 flex items-center justify-between">
 										<div class="flex items-center gap-1.5">
