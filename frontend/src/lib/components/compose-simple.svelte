@@ -100,7 +100,6 @@
 	let selectedSetId = $state<string | null>(null);
 	let loadingSets = $state(false);
 
-	let previewPlatform = $state<string>('x');
 	let showPreview = $state(true);
 
 	let selectedDate = $state<CalendarDate | undefined>(undefined);
@@ -157,16 +156,6 @@
 
 	const selectedAccounts = $derived(
 		accounts.filter((a) => selectedAccountIds.includes(a.id))
-	);
-
-	const previewAccount = $derived(
-		selectedAccounts.find((a) => getPlatformKey(a.platform) === previewPlatform) ??
-			selectedAccounts[0] ??
-			accounts[0]
-	);
-
-	const variantContent = $derived(
-		previewAccount ? variants.get(previewAccount.id) ?? null : null
 	);
 
 	const isVariantUnsynced = $derived((accountId: string) => variants.has(accountId));
@@ -342,13 +331,6 @@
 				}
 			} else {
 				selectedAccountIds = accounts.map((a) => a.id);
-			}
-			// Only set preview platform from selected accounts, not all accounts
-			const selAcc = accounts.find((a) => selectedAccountIds.includes(a.id));
-			if (selAcc) {
-				previewPlatform = getPlatformKey(selAcc.platform);
-			} else if (accounts.length > 0) {
-				previewPlatform = getPlatformKey(accounts[0].platform);
 			}
 		} catch (e) {
 			console.error('Failed to load accounts:', e);
@@ -965,8 +947,6 @@
 							{/each}
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
-				{:else if workspaces.length === 1}
-					<span class="text-sm text-muted-foreground">{workspaces[0].name}</span>
 				{/if}
 
 				{#if sets.length > 0}
@@ -1018,24 +998,6 @@
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				{/if}
-			</div>
-
-			<div class="h-5 w-px bg-border"></div>
-
-			<!-- Platform Selector -->
-			<div class="flex items-center gap-1 rounded-lg bg-muted p-1">
-				{#each platformOptions as opt}
-					{@const hasAccount = accounts.some((a) => getPlatformKey(a.platform) === opt.key)}
-					<button
-						type="button"
-						class="relative flex h-7 w-7 items-center justify-center rounded-md transition-colors {previewPlatform === opt.key ? 'bg-background shadow-sm' : 'hover:bg-background/50'} {hasAccount ? '' : 'opacity-30'}"
-						onclick={() => (previewPlatform = opt.key)}
-						disabled={!hasAccount}
-						title={opt.name}
-					>
-						<PlatformIcon platform={opt.key} class="h-4 w-4" />
-					</button>
-				{/each}
 			</div>
 
 			<!-- Account selector dropdown -->
@@ -1517,7 +1479,7 @@
 		</div>
 
 		<!-- Preview Column -->
-		{#if showPreview && previewAccount}
+		{#if showPreview && selectedAccounts.length > 0}
 			<div class="hidden w-[420px] border-l bg-muted/20 px-6 py-6 lg:block">
 				<div class="sticky top-6">
 					<div class="mb-4 flex items-center justify-between">
@@ -1533,32 +1495,48 @@
 						</button>
 					</div>
 
-					{#if isThread}
-						<div class="space-y-4">
-							{#each posts.filter((p) => p.content.trim().length > 0) as post, pi}
-								<PlatformPreview
-									platform={previewPlatform}
-									content={post.content}
-									mediaIds={post.mediaIds}
-									username={previewAccount.account_username || 'username'}
-									displayName={previewAccount.account_username || 'Display Name'}
-								/>
-							{/each}
-						</div>
-					{:else}
-						<PlatformPreview
-							platform={previewPlatform}
-							content={activePost.content}
-							mediaIds={activePost.mediaIds}
-							username={previewAccount.account_username || 'username'}
-							displayName={previewAccount.account_username || 'Display Name'}
-							variantContent={variantContent}
-							isUnsynced={!!variantContent}
-						/>
-					{/if}
+					<div class="space-y-5">
+						{#each selectedPlatformLimits as pl (pl.key)}
+							{@const account = selectedAccounts.find((a) => getPlatformKey(a.platform) === pl.key)}
+							{#if account}
+								<div>
+									<div class="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+										<PlatformIcon platform={pl.key} class="h-3 w-3" />
+										<span>{pl.platform}</span>
+										{#if account.account_username}
+											<span class="text-muted-foreground/60">@{account.account_username}</span>
+										{/if}
+									</div>
+									{#if isThread}
+										<div class="space-y-3">
+											{#each posts.filter((p) => p.content.trim().length > 0) as post, pi}
+												<PlatformPreview
+													platform={pl.key}
+													content={variants.get(account.id) ?? post.content}
+													mediaIds={post.mediaIds}
+													username={account.account_username || 'username'}
+													displayName={account.account_username || 'Display Name'}
+												/>
+											{/each}
+										</div>
+									{:else}
+										<PlatformPreview
+											platform={pl.key}
+											content={activePost.content}
+											mediaIds={activePost.mediaIds}
+											username={account.account_username || 'username'}
+											displayName={account.account_username || 'Display Name'}
+											variantContent={variants.get(account.id) ?? null}
+											isUnsynced={variants.has(account.id)}
+										/>
+									{/if}
+								</div>
+							{/if}
+						{/each}
+					</div>
 				</div>
 			</div>
-		{:else if !showPreview}
+		{:else if !showPreview && selectedAccounts.length > 0}
 			<div class="hidden w-10 border-l bg-muted/20 lg:flex lg:items-start lg:justify-center lg:pt-4">
 				<button
 					type="button"
@@ -1566,7 +1544,7 @@
 					onclick={() => (showPreview = true)}
 					title="Show preview"
 				>
-					<PlatformIcon platform={previewPlatform} class="h-4 w-4" />
+					<PlatformIcon platform={getPlatformKey(selectedAccounts[0].platform)} class="h-4 w-4" />
 				</button>
 			</div>
 		{/if}
