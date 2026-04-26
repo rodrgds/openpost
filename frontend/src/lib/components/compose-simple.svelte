@@ -254,16 +254,31 @@
 		draftId = post.id;
 		lastInitializedPostId = post.id;
 		selectedWorkspaceId = post.workspace_id;
-		posts = [
-			{
-				key: generatePostKey(),
-				content: post.content,
-				mediaIds: post.media?.map((m) => m.media_id) ?? []
-			}
-		];
-		activePostIndex = 0;
-		lastSavedContent = post.content;
 		selectedAccountIds = post.destinations?.map((d) => d.social_account_id) ?? [];
+
+		// Check if this is a thread draft
+		if (isThreadDraft(post.content)) {
+			const threadData = decodeThreadDraft(post.content);
+			if (threadData && threadData.length > 0) {
+				posts = threadData.map((item) => ({
+					key: generatePostKey(),
+					content: item.content,
+					mediaIds: item.mediaIds
+				}));
+			} else {
+				posts = [{ key: generatePostKey(), content: '', mediaIds: [] }];
+			}
+		} else {
+			posts = [
+				{
+					key: generatePostKey(),
+					content: post.content,
+					mediaIds: post.media?.map((m) => m.media_id) ?? []
+				}
+			];
+		}
+		activePostIndex = 0;
+		lastSavedContent = JSON.stringify(posts.map((p) => ({ content: p.content, mediaIds: p.mediaIds })));
 		variants = new Map();
 		selectedSetId = null;
 
@@ -411,6 +426,33 @@
 		return date.toISOString();
 	}
 
+	// Thread draft format: we store thread posts as JSON in the content field
+// so a single draft post captures all posts and their media.
+	const THREAD_DRAFT_PREFIX = '__openpost_thread__:';
+	const THREAD_DRAFT_SEPARATOR = '\n\n---\n\n';
+
+	function encodeThreadDraft(postItems: PostItem[]): string {
+		const data = postItems.map((p) => ({ c: p.content, m: p.mediaIds }));
+		return THREAD_DRAFT_PREFIX + JSON.stringify(data);
+	}
+
+	function isThreadDraft(content: string): boolean {
+		return content.startsWith(THREAD_DRAFT_PREFIX);
+	}
+
+	function decodeThreadDraft(content: string): { content: string; mediaIds: string[] }[] | null {
+		try {
+			const data = JSON.parse(content.slice(THREAD_DRAFT_PREFIX.length));
+			if (!Array.isArray(data)) return null;
+			return data.map((item: any) => ({
+				content: item.c ?? '',
+				mediaIds: item.m ?? []
+			}));
+		} catch {
+			return null;
+		}
+	}
+
 	// Auto-save draft
 	function scheduleAutoSave() {
 		if (autoSaveTimer) clearTimeout(autoSaveTimer);
@@ -428,97 +470,40 @@
 		if (!selectedWorkspaceId || !hasContent) return;
 		isSaving = true;
 		try {
+			// Determine the content to save
+			let draftContent: string;
+			let draftMediaIds: string[];
 			if (isThread) {
-				const validPosts = posts.filter((p) => p.content.trim().length > 0);
-				if (validPosts.length >= 2) {
-					if (draftId) {
-						// Delete existing thread and recreate
-						const firstPost = posts.find((p) => p.id);
-						if (firstPost?.id) {
-							try {
-								await (client as any).DELETE('/posts/{id}', {
-									params: { path: { id: firstPost.id } }
-								});
-							} catch {}
-						}
-					}
-					const { data, error: err } = await client.POST('/posts/thread' as any, {
-						body: {
-							workspace_id: selectedWorkspaceId,
-							social_account_ids: selectedAccountIds,
-							posts: validPosts.map((p) => ({
-								content: p.content,
-								media_ids: p.mediaIds
-							}))
-						}
-					});
-					if (!err && data?.post_ids) {
-						draftId = data.post_ids[0];
-						// Store IDs on each post for future updates
-						for (let i = 0; i < validPosts.length && i < data.post_ids.length; i++) {
-							const idx = posts.indexOf(validPosts[i]);
-							if (idx >= 0) {
-								posts[idx] = { ...posts[idx], id: data.post_ids[i] };
-							}
-						}
-					}
-				} else if (validPosts.length === 1) {
-					// Thread reduced to single post — save as regular draft
-					if (draftId) {
-						await (client as any).PATCH('/posts/{id}', {
-							params: { path: { id: draftId } },
-							body: {
-								content: validPosts[0].content,
-								scheduled_at: '',
-								social_account_ids: selectedAccountIds,
-								media_ids: validPosts[0].mediaIds,
-								random_delay_minutes: 0
-							}
-						});
-					} else {
-						const { data, error: err } = await client.POST('/posts', {
-							body: {
-								workspace_id: selectedWorkspaceId,
-								content: validPosts[0].content,
-								social_account_ids: selectedAccountIds,
-								media_ids: validPosts[0].mediaIds
-							}
-						});
-						if (!err && data?.id) {
-							draftId = data.id;
-							const idx = posts.indexOf(validPosts[0]);
-							if (idx >= 0) {
-								posts[idx] = { ...posts[idx], id: data.id };
-							}
-						}
-					}
-				}
+				// For threads, store as JSON in a single draft post
+				draftContent = encodeThreadDraft(posts);
+				draftMediaIds = posts[0]?.mediaIds ?? [];
 			} else {
-				// Single post
-				if (draftId) {
-					await (client as any).PATCH('/posts/{id}', {
-						params: { path: { id: draftId } },
-						body: {
-							content: posts[0].content,
-							scheduled_at: '',
-							social_account_ids: selectedAccountIds,
-							media_ids: posts[0].mediaIds,
-							random_delay_minutes: 0
-						}
-					});
-				} else {
-					const { data, error: err } = await client.POST('/posts', {
-						body: {
-							workspace_id: selectedWorkspaceId,
-							content: posts[0].content,
-							social_account_ids: selectedAccountIds,
-							media_ids: posts[0].mediaIds
-						}
-					});
-					if (!err && data?.id) {
-						draftId = data.id;
-						posts[0] = { ...posts[0], id: data.id };
+				draftContent = posts[0].content;
+				draftMediaIds = posts[0].mediaIds;
+			}
+
+			if (draftId) {
+				await (client as any).PATCH('/posts/{id}', {
+					params: { path: { id: draftId } },
+					body: {
+						content: draftContent,
+						scheduled_at: '',
+						social_account_ids: selectedAccountIds,
+						media_ids: draftMediaIds,
+						random_delay_minutes: 0
 					}
+				});
+			} else {
+				const { data, error: err } = await client.POST('/posts', {
+					body: {
+						workspace_id: selectedWorkspaceId,
+						content: draftContent,
+						social_account_ids: selectedAccountIds,
+						media_ids: draftMediaIds
+					}
+				});
+				if (!err && data?.id) {
+					draftId = data.id;
 				}
 			}
 			lastSavedContent = JSON.stringify(posts.map((p) => ({ content: p.content, mediaIds: p.mediaIds })));

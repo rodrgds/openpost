@@ -206,6 +206,18 @@
 	};
 
 	function truncate(text: string, max: number = 40): string {
+		if (text.startsWith('__openpost_thread__:')) {
+			try {
+				const data = JSON.parse(text.slice('__openpost_thread__:'.length));
+				const firstPost = Array.isArray(data) && data.length > 0 ? data[0] : null;
+				const content = firstPost?.c ?? '';
+				const suffix = data.length > 1 ? ` (thread: ${data.length} posts)` : '';
+				if (content.length + suffix.length <= max) return content + suffix;
+				return content.slice(0, max - suffix.length - 3).trim() + '...' + suffix;
+			} catch {
+				return 'Thread draft';
+			}
+		}
 		if (text.length <= max) return text;
 		return text.slice(0, max).trim() + '...';
 	}
