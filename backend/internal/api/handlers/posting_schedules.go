@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -337,6 +338,20 @@ func (h *PostingScheduleHandler) DeleteSchedule(api huma.API) {
 	})
 }
 
+type SuggestScheduleInput struct {
+	Body struct {
+		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+		PostsPerDay int    `json:"posts_per_day" doc:"Number of posts per day (1-10)"`
+	}
+}
+
+type SuggestScheduleOutput struct {
+	Body struct {
+		Schedules []PostingScheduleResponse `json:"schedules" doc:"Created schedule slots"`
+		Message   string                    `json:"message" doc:"Message about the result"`
+	}
+}
+
 type NextAvailableSlotInput struct {
 	WorkspaceID string `query:"workspace_id" doc:"Workspace ID"`
 	SetID       string `query:"set_id" doc:"Optional set ID"`
@@ -348,6 +363,133 @@ type NextAvailableSlotOutput struct {
 		SlotTime string                   `json:"slot_time" doc:"The suggested time in ISO 8601 format"`
 		Message  string                   `json:"message" doc:"Message about the result"`
 	}
+}
+
+func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "suggest-posting-schedule",
+		Method:      http.MethodPost,
+		Path:        "/posting-schedules/suggest",
+		Summary:     "Generate a suggested posting schedule",
+		Tags:        []string{"Posting Schedules"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403},
+	}, func(ctx context.Context, input *SuggestScheduleInput) (*SuggestScheduleOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		if input.Body.PostsPerDay < 1 || input.Body.PostsPerDay > 10 {
+			return nil, huma.Error400BadRequest("posts_per_day must be between 1 and 10")
+		}
+
+		// Verify workspace access
+		var memberCount int
+		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+			Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
+			Count(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+		}
+		if memberCount == 0 {
+			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+		}
+
+		// Get workspace timezone
+		var workspace models.Workspace
+		if err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch workspace")
+		}
+
+		loc, err := time.LoadLocation(workspace.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
+
+		now := time.Now().In(loc)
+
+		// Define optimal posting times in local timezone
+		suggestionTemplates := map[int][]struct {
+			Hour   int
+			Minute int
+			Label  string
+		}{
+			1:  {{10, 0, "Late Morning"}},
+			2:  {{8, 0, "Morning"}, {18, 0, "Evening"}},
+			3:  {{8, 0, "Morning"}, {12, 0, "Lunch"}, {18, 0, "Evening"}},
+			4:  {{8, 0, "Morning"}, {11, 0, "Late Morning"}, {14, 0, "Afternoon"}, {18, 0, "Evening"}},
+			5:  {{8, 0, "Morning"}, {11, 0, "Late Morning"}, {14, 0, "Afternoon"}, {17, 0, "Late Afternoon"}, {20, 0, "Night"}},
+			6:  {{8, 0, "Morning"}, {10, 0, "Late Morning"}, {12, 0, "Lunch"}, {15, 0, "Afternoon"}, {18, 0, "Evening"}, {21, 0, "Night"}},
+			7:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {15, 0, "Afternoon"}, {18, 0, "Evening"}, {21, 0, "Night"}},
+			8:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {15, 0, "Afternoon"}, {17, 0, "Late Afternoon"}, {19, 0, "Evening"}, {21, 0, "Night"}},
+			9:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {14, 0, "Afternoon"}, {16, 0, "Late Afternoon"}, {18, 0, "Evening"}, {20, 0, "Night"}, {22, 0, "Late Night"}},
+			10: {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {10, 0, "Late Morning"}, {12, 0, "Lunch"}, {13, 0, "Afternoon"}, {15, 0, "Late Afternoon"}, {17, 0, "Late Afternoon"}, {18, 0, "Evening"}, {20, 0, "Night"}, {22, 0, "Late Night"}},
+		}
+
+		templates := suggestionTemplates[input.Body.PostsPerDay]
+		if templates == nil {
+			// Fallback for any value within 1-10 (should not happen due to validation)
+			templates = suggestionTemplates[3]
+		}
+
+		// Convert local times to UTC and create schedules for all 7 days
+		schedules := make([]models.PostingSchedule, 0, len(templates)*7)
+		for dayOfWeek := 0; dayOfWeek <= 6; dayOfWeek++ {
+			for _, t := range templates {
+				localTime := time.Date(now.Year(), now.Month(), now.Day(), t.Hour, t.Minute, 0, 0, loc)
+				utcTime := localTime.UTC()
+
+				schedules = append(schedules, models.PostingSchedule{
+					ID:          uuid.New().String(),
+					WorkspaceID: input.Body.WorkspaceID,
+					UTCHour:     utcTime.Hour(),
+					UTCMinute:   utcTime.Minute(),
+					DayOfWeek:   dayOfWeek,
+					Label:       t.Label,
+					IsActive:    true,
+					CreatedAt:   time.Now().UTC(),
+				})
+			}
+		}
+
+		// Insert in a transaction
+		tx, err := h.db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to begin transaction")
+		}
+		defer tx.Rollback()
+
+		for i := range schedules {
+			if _, err := tx.NewInsert().Model(&schedules[i]).Exec(ctx); err != nil {
+				return nil, huma.Error500InternalServerError("failed to create schedule")
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, huma.Error500InternalServerError("failed to commit transaction")
+		}
+
+		resp := make([]PostingScheduleResponse, len(schedules))
+		for i, s := range schedules {
+			resp[i] = PostingScheduleResponse{
+				ID:          s.ID,
+				WorkspaceID: s.WorkspaceID,
+				SetID:       s.SetID,
+				UTCHour:     s.UTCHour,
+				UTCMinute:   s.UTCMinute,
+				DayOfWeek:   s.DayOfWeek,
+				Label:       s.Label,
+				IsActive:    s.IsActive,
+				CreatedAt:   s.CreatedAt.Format(time.RFC3339),
+			}
+		}
+
+		return &SuggestScheduleOutput{Body: struct {
+			Schedules []PostingScheduleResponse `json:"schedules" doc:"Created schedule slots"`
+			Message   string                    `json:"message" doc:"Message about the result"`
+		}{
+			Schedules: resp,
+			Message:   fmt.Sprintf("Created %d schedule slots (%d per day, 7 days a week)", len(schedules), input.Body.PostsPerDay),
+		}}, nil
+	})
 }
 
 func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {

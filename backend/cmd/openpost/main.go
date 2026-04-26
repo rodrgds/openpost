@@ -178,6 +178,7 @@ func main() {
 	postingScheduleHandler.CreateSchedule(api)
 	postingScheduleHandler.UpdateSchedule(api)
 	postingScheduleHandler.DeleteSchedule(api)
+	postingScheduleHandler.SuggestSchedule(api)
 	postingScheduleHandler.GetNextAvailableSlot(api)
 
 	promptHandler := handlers.NewPromptHandler(db, authService)
