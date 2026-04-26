@@ -400,6 +400,48 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			}
 		}
 
+		// Load the selected workspace to get its timezone for date conversion
+		var workspaceTzModifier string
+		if selectedWorkspaceID != "" {
+			var ws models.Workspace
+			if err := h.db.NewSelect().Model(&ws).Where("id = ?", selectedWorkspaceID).Scan(ctx); err == nil && ws.Timezone != "" {
+				if loc, err := time.LoadLocation(ws.Timezone); err == nil {
+					// Get offset at the month start to handle DST (use monthStart UTC)
+					_, offsetSecs := monthStart.In(loc).Zone()
+					offsetHours := offsetSecs / 3600
+					offsetMins := ((offsetSecs % 3600) + 3600) % 3600 / 60
+					workspaceTzModifier = fmt.Sprintf("%+03d:%02d", offsetHours, offsetMins)
+				}
+			}
+		}
+
+		// Compute the date expression for SQL. If we have a workspace timezone modifier, use it;
+		// otherwise fall back to plain DATE() which uses UTC.
+		dateFn := "DATE(p.scheduled_at)"
+		if workspaceTzModifier != "" {
+			dateFn = fmt.Sprintf("DATE(datetime(p.scheduled_at, '%s'))", workspaceTzModifier)
+		}
+
+		// Expand month boundaries to account for timezone offsets
+		// so we capture posts whose local date falls in the target month
+		queryMonthStart := monthStart
+		queryMonthEnd := monthEnd
+		if workspaceTzModifier != "" {
+			var sign byte
+			var h, m int
+			fmt.Sscanf(workspaceTzModifier, "%c%02d:%02d", &sign, &h, &m)
+			offsetDur := time.Duration(h)*time.Hour + time.Duration(m)*time.Minute
+			if sign == '-' {
+				offsetDur = -offsetDur
+			}
+			queryMonthStart = monthStart.Add(-offsetDur)
+			queryMonthEnd = monthEnd.Add(-offsetDur)
+			if queryMonthEnd.Sub(queryMonthStart) > 40*24*time.Hour {
+				queryMonthStart = monthStart.AddDate(0, 0, -1)
+				queryMonthEnd = monthEnd.AddDate(0, 0, 1)
+			}
+		}
+
 		selectedPlatform := input.Platform
 
 		var platformRows []struct {
@@ -445,12 +487,12 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			Count int    `bun:"count"`
 		}
 
-		dayQuery := `
-			SELECT DATE(p.scheduled_at) AS date, COUNT(DISTINCT p.id) AS count
+		dayQuery := fmt.Sprintf(`
+			SELECT %s AS date, COUNT(DISTINCT p.id) AS count
 			FROM posts AS p
 			JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
-		`
-		dayArgs := []interface{}{userID, monthStart, monthEnd}
+		`, dateFn)
+		dayArgs := []interface{}{userID, queryMonthStart, queryMonthEnd}
 
 		if selectedPlatform != "" {
 			dayQuery += `
@@ -475,7 +517,7 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			dayArgs = append(dayArgs, selectedPlatform)
 		}
 
-		dayQuery += ` GROUP BY DATE(p.scheduled_at) ORDER BY DATE(p.scheduled_at)`
+		dayQuery += fmt.Sprintf(` GROUP BY %s ORDER BY %s`, dateFn, dateFn)
 
 		if err = h.db.NewRaw(dayQuery, dayArgs...).Scan(ctx, &dayRows); err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch schedule days")
@@ -505,8 +547,8 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		combinedArgs := make([]interface{}, 0)
 
 		// Platform counts part (only includes posts that have destinations/platforms)
-		platformPart := `
-            SELECT DATE(p.scheduled_at) AS date, sa.platform AS platform, NULL AS workspace_id, COUNT(DISTINCT p.id) AS count
+		platformPart := fmt.Sprintf(`
+            SELECT %s AS date, sa.platform AS platform, NULL AS workspace_id, COUNT(DISTINCT p.id) AS count
             FROM posts AS p
             JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
             JOIN post_destinations AS pd ON pd.post_id = p.id
@@ -515,8 +557,8 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
                 AND p.scheduled_at >= ?
                 AND p.scheduled_at < ?
                 AND p.status IN ('scheduled', 'publishing', 'published')
-        `
-		platformArgs := []interface{}{userID, monthStart, monthEnd}
+        `, dateFn)
+		platformArgs := []interface{}{userID, queryMonthStart, queryMonthEnd}
 		if selectedWorkspaceID != "" {
 			platformPart += ` AND p.workspace_id = ?`
 			platformArgs = append(platformArgs, selectedWorkspaceID)
@@ -525,24 +567,24 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			platformPart += ` AND sa.platform = ?`
 			platformArgs = append(platformArgs, selectedPlatform)
 		}
-		platformPart += ` GROUP BY DATE(p.scheduled_at), sa.platform`
+		platformPart += fmt.Sprintf(` GROUP BY %s, sa.platform`, dateFn)
 
 		// Workspace counts part
-		workspacePart := `
-            SELECT DATE(p.scheduled_at) AS date, NULL AS platform, p.workspace_id AS workspace_id, COUNT(DISTINCT p.id) AS count
+		workspacePart := fmt.Sprintf(`
+            SELECT %s AS date, NULL AS platform, p.workspace_id AS workspace_id, COUNT(DISTINCT p.id) AS count
             FROM posts AS p
             JOIN workspace_members AS wm ON wm.workspace_id = p.workspace_id
             WHERE wm.user_id = ?
                 AND p.scheduled_at >= ?
                 AND p.scheduled_at < ?
                 AND p.status IN ('scheduled', 'publishing', 'published')
-        `
-		workspaceArgs := []interface{}{userID, monthStart, monthEnd}
+        `, dateFn)
+		workspaceArgs := []interface{}{userID, queryMonthStart, queryMonthEnd}
 		if selectedWorkspaceID != "" {
 			workspacePart += ` AND p.workspace_id = ?`
 			workspaceArgs = append(workspaceArgs, selectedWorkspaceID)
 		}
-		workspacePart += ` GROUP BY DATE(p.scheduled_at), p.workspace_id`
+		workspacePart += fmt.Sprintf(` GROUP BY %s, p.workspace_id`, dateFn)
 
 		combinedQuery = platformPart + ` UNION ALL ` + workspacePart + ` ORDER BY date`
 		combinedArgs = append(combinedArgs, platformArgs...)
