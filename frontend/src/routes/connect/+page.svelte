@@ -55,7 +55,7 @@
 	</div>
 	<Card class="w-full max-w-md">
 		<CardHeader>
-			<CardTitle class="text-center">Connect to Server</CardTitle>
+			<CardTitle class="text-center text-lg font-semibold">Connect to Server</CardTitle>
 			<CardDescription class="text-center">
 				Enter the URL of your self-hosted OpenPost instance
 			</CardDescription>
@@ -80,7 +80,7 @@
 						placeholder="https://openpost.example.com"
 						disabled={isConnecting}
 					/>
-					<p class="text-xs text-muted-foreground">
+					<p class="text-sm text-muted-foreground">
 						The address where your OpenPost server is running
 					</p>
 				</div>

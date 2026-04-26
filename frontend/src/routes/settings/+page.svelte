@@ -13,6 +13,7 @@
 	import CalendarIcon from 'lucide-svelte/icons/calendar';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import TrashIcon from 'lucide-svelte/icons/trash';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 
 	const timezones = [
@@ -150,6 +151,9 @@
 	let schedules = $state<PostingSchedule[]>([]);
 	let loadingSchedules = $state(false);
 	let showAddSchedule = $state(false);
+	let showSuggestSchedule = $state(false);
+	let suggestedPostsPerDay = $state(3);
+	let generatingSchedule = $state(false);
 	let newSchedule = $state({
 		day_of_week: 1,
 		utc_hour: 9,
@@ -208,6 +212,27 @@
 			toastMessage = 'Schedule deleted successfully';
 		} catch (e) {
 			toastMessage = (e as Error).message || 'Failed to delete schedule';
+		}
+	}
+
+	async function generateSuggestedSchedule() {
+		if (!workspaceCtx.currentWorkspace) return;
+		generatingSchedule = true;
+		try {
+			const { error: err } = await (client as any).POST('/posting-schedules/suggest', {
+				body: {
+					workspace_id: workspaceCtx.currentWorkspace.id,
+					posts_per_day: suggestedPostsPerDay
+				}
+			});
+			if (err) throw err;
+			showSuggestSchedule = false;
+			await loadSchedules();
+			toastMessage = `Generated suggested schedule with ${suggestedPostsPerDay} posts per day`;
+		} catch (e) {
+			toastMessage = (e as Error).message || 'Failed to generate schedule';
+		} finally {
+			generatingSchedule = false;
 		}
 	}
 
@@ -272,7 +297,7 @@
 >
 	<div class="space-y-8">
 		<!-- Workspace Info -->
-		<section class="rounded-lg border p-6">
+		<section class="space-y-4">
 			<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
 			<div class="space-y-4">
 				<div class="flex items-center gap-4">
@@ -283,7 +308,7 @@
 		</section>
 
 		<!-- Date & Time Settings -->
-		<section class="rounded-lg border p-6">
+		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Date & Time
@@ -311,7 +336,7 @@
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<p class="text-xs text-muted-foreground">Used for displaying scheduled post times</p>
+						<p class="text-sm text-muted-foreground">Used for displaying scheduled post times</p>
 					</div>
 
 					<div class="space-y-2">
@@ -329,14 +354,14 @@
 								<Select.Item value="1">Monday</Select.Item>
 							</Select.Content>
 						</Select.Root>
-						<p class="text-xs text-muted-foreground">Affects the calendar display in the sidebar</p>
+						<p class="text-sm text-muted-foreground">Affects the calendar display in the sidebar</p>
 					</div>
 				</div>
 			</div>
 		</section>
 
 		<!-- Media Cleanup Settings -->
-		<section class="rounded-lg border p-6">
+		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ImageIcon class="h-5 w-5 text-muted-foreground" />
 				Media Cleanup
@@ -359,7 +384,7 @@
 							{/each}
 						</Select.Content>
 					</Select.Root>
-					<p class="text-xs text-muted-foreground">
+					<p class="text-sm text-muted-foreground">
 						Automatically delete unused, non-favorited media after this period. Favorited media is
 						always kept.
 					</p>
@@ -379,19 +404,66 @@
 					Add Time Slot
 				</Button>
 			</div>
-			<p class="mb-4 text-xs text-muted-foreground">
+			<p class="mb-4 text-sm text-muted-foreground">
 				Define your preferred posting times. The "Suggest Time" button in the compose page will use
 				these slots.
 			</p>
 
 			{#if loadingSchedules}
-				<div class="flex justify-center py-8">
-					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
+				<div class="space-y-2">
+					<Skeleton class="h-14 rounded-md" />
+					<Skeleton class="h-14 rounded-md" />
+					<Skeleton class="h-14 rounded-md" />
 				</div>
 			{:else if schedules.length === 0}
 				<div class="rounded-md border border-dashed p-8 text-center text-muted-foreground">
 					<p class="text-sm">No posting schedules configured.</p>
 					<p class="mt-1 text-xs">Add time slots to enable the "Suggest Time" feature.</p>
+					{#if !showSuggestSchedule}
+						<Button
+							onclick={() => (showSuggestSchedule = true)}
+							variant="outline"
+							size="sm"
+							class="mt-4"
+						>
+							Use suggested schedule
+						</Button>
+					{:else}
+						<div class="mt-4 flex flex-col items-center gap-3">
+							<div class="flex items-center gap-2">
+								<label class="text-sm" for="posts-per-day">Posts per day</label>
+								<Select.Root
+									type="single"
+									value={String(suggestedPostsPerDay)}
+									onValueChange={(v) => (suggestedPostsPerDay = Number(v))}
+								>
+									<Select.Trigger id="posts-per-day" class="w-24">
+										{suggestedPostsPerDay}
+									</Select.Trigger>
+									<Select.Content class="max-h-60 overflow-y-auto">
+										{#each Array.from({ length: 10 }, (_, i) => i + 1) as n}
+											<Select.Item value={String(n)}>{n}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							</div>
+							<div class="flex gap-2">
+								<Button
+									onclick={() => (showSuggestSchedule = false)}
+									variant="outline"
+									size="sm"
+								>
+									Cancel
+								</Button>
+								<Button onclick={generateSuggestedSchedule} size="sm" disabled={generatingSchedule}>
+									{#if generatingSchedule}
+										<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+									{/if}
+									Generate Schedule
+								</Button>
+							</div>
+						</div>
+					{/if}
 				</div>
 			{:else}
 				<div class="space-y-2">

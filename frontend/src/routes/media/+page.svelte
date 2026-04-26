@@ -11,6 +11,7 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import ImageIcon from 'lucide-svelte/icons/image';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import VideoIcon from 'lucide-svelte/icons/video';
 	import HeartIcon from 'lucide-svelte/icons/heart';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
@@ -466,7 +467,7 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			<Select.Root type="single" bind:value={sort}>
-				<Select.Trigger class="h-8 w-[120px] text-xs">
+				<Select.Trigger class="h-9 w-[120px] text-sm">
 					{sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : 'Size'}
 				</Select.Trigger>
 				<Select.Content>
@@ -505,8 +506,14 @@
 
 	<!-- Media Grid -->
 	{#if mediaLoading}
-		<div class="flex items-center justify-center py-16">
-			<LoaderIcon class="size-8 animate-spin text-muted-foreground" />
+		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+			{#each Array(10) as _}
+				<div class="space-y-2">
+					<Skeleton class="aspect-square rounded-lg" />
+					<Skeleton class="h-3 w-3/4" />
+					<Skeleton class="h-3 w-1/2" />
+				</div>
+			{/each}
 		</div>
 	{:else if mediaItems.length === 0}
 		{#if filter !== 'all'}
@@ -612,11 +619,11 @@
 
 					<div class="p-2.5">
 						{#if media.original_filename}
-							<p class="truncate text-xs font-medium" title={media.original_filename}>
+							<p class="truncate text-sm font-medium" title={media.original_filename}>
 								{media.original_filename}
 							</p>
 						{/if}
-						<p class="truncate text-xs text-muted-foreground">
+						<p class="truncate text-sm text-muted-foreground">
 							{formatSize(media.size)} · {formatDate(media.created_at)}
 							{#if media.width && media.height}
 								· {media.width}×{media.height}
@@ -624,16 +631,16 @@
 						</p>
 						<div class="mt-1.5">
 							{#if media.usage_count > 0}
-								<span
-									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-								>
+							<span
+								class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+							>
 									Used in {media.usage_count}
 									{media.usage_count === 1 ? 'post' : 'posts'}
 								</span>
 							{:else}
-								<span
-									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-								>
+							<span
+								class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+							>
 									Unused
 								</span>
 							{/if}
@@ -684,7 +691,7 @@
 				>
 					<UploadIcon class="mb-2 h-8 w-8 text-muted-foreground/40" />
 					<p class="text-sm font-medium">Click to select a file</p>
-					<p class="text-xs text-muted-foreground">Image or video (max 50MB)</p>
+					<p class="text-sm text-muted-foreground">Image or video (max 50MB)</p>
 				</label>
 				<input id="file-upload" type="file" accept="image/*,video/*" class="hidden" />
 			</div>
@@ -706,7 +713,7 @@
 				>
 					<Grid2X2Icon class="mb-2 h-8 w-8 text-muted-foreground/40" />
 					<p class="text-sm font-medium">Select multiple files</p>
-					<p class="text-xs text-muted-foreground">Images or videos</p>
+					<p class="text-sm text-muted-foreground">Images or videos</p>
 				</label>
 				<input
 					id="batch-file-upload"
@@ -753,8 +760,10 @@
 
 		<div class="max-h-[400px] space-y-2 overflow-y-auto py-4">
 			{#if usageLoading}
-				<div class="flex items-center justify-center py-8">
-					<LoaderIcon class="size-6 animate-spin text-muted-foreground" />
+				<div class="space-y-2 py-4">
+					<Skeleton class="h-16 rounded-lg" />
+					<Skeleton class="h-16 rounded-lg" />
+					<Skeleton class="h-16 rounded-lg" />
 				</div>
 			{:else if mediaUsage.length === 0}
 				<p class="py-8 text-center text-sm text-muted-foreground">
@@ -764,8 +773,8 @@
 				{#each mediaUsage as usage (usage.post_id)}
 					<div class="rounded-lg border p-3">
 						<p class="line-clamp-2 text-sm">{usage.content}</p>
-						<div class="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-							<span class="rounded-full bg-muted px-2 py-0.5">{usage.status}</span>
+						<div class="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
+							<span class="rounded-full bg-muted px-2 py-0.5 text-xs">{usage.status}</span>
 							{#if usage.scheduled}
 								<span
 									>{new Date(usage.scheduled).toLocaleString('en-US', {

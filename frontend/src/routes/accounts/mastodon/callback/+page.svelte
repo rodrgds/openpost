@@ -13,7 +13,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import PageContainer from '$lib/components/page-container.svelte';
-	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 
 	let code = $state('');
 	let serverName = $state('');
@@ -77,8 +77,10 @@
 </svelte:head>
 
 {#if pageLoading}
-	<div class="flex flex-1 items-center justify-center">
-		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
+	<div class="flex flex-1 flex-col items-center justify-center gap-3">
+		<Skeleton class="h-10 w-10 rounded-full" />
+		<Skeleton class="h-4 w-40" />
+		<Skeleton class="h-3 w-56" />
 	</div>
 {:else if success}
 	<PageContainer title="Account Connected!">

@@ -47,7 +47,7 @@
 	</div>
 	<Card class="w-full max-w-md">
 		<CardHeader>
-			<CardTitle class="text-center">Sign In</CardTitle>
+			<CardTitle class="text-center text-lg font-semibold">Sign In</CardTitle>
 			<CardDescription class="text-center"
 				>Enter your credentials to access your account</CardDescription
 			>

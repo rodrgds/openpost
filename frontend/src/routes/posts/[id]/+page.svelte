@@ -3,14 +3,11 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { client } from '$lib/api/client';
-	import ComposePost from '$lib/components/compose-post.svelte';
-	import PageContainer from '$lib/components/page-container.svelte';
+	import ComposeSimple from '$lib/components/compose-simple.svelte';
 	import { ui } from '$lib/stores/ui.svelte';
-	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
-	import PencilIcon from 'lucide-svelte/icons/pencil';
 
 	interface PostMedia {
 		media_id: string;
@@ -38,24 +35,36 @@
 	}
 
 	let post = $state<PostDetail | null>(null);
-	let loading = $state(true);
+	let hasLoaded = $state(false);
 	let error = $state('');
 	let deleting = $state(false);
 	let showDeleteConfirm = $state(false);
 
 	const postId = $derived($page.params.id);
 
-	onMount(async () => {
+	async function loadPost(id: string) {
+		error = '';
 		try {
 			const { data, error: err } = await (client as any).GET('/posts/{id}', {
-				params: { path: { id: postId } }
+				params: { path: { id } }
 			});
 			if (err) throw new Error((err as any)?.detail || 'Failed to load post');
 			post = data;
 		} catch (e) {
 			error = (e as Error).message;
+			if (!hasLoaded) post = null;
 		} finally {
-			loading = false;
+			hasLoaded = true;
+		}
+	}
+
+	onMount(() => {
+		loadPost(postId);
+	});
+
+	$effect(() => {
+		if (postId) {
+			loadPost(postId);
 		}
 	});
 
@@ -84,85 +93,79 @@
 	function handleCancel() {
 		goto('/');
 	}
-
-	const descriptionText = $derived.by(() => {
-		if (post) {
-			const status = post.status.charAt(0).toUpperCase() + post.status.slice(1);
-			if (post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z') {
-				return `${status} · Scheduled for ${new Date(post.scheduled_at).toLocaleString('en-US', {
-					timeZone: workspaceCtx.settings.timezone || 'UTC'
-				})}`;
-			}
-			return status;
-		}
-		return '';
-	});
 </script>
 
 <svelte:head>
 	<title>{post ? 'Edit Post' : 'Loading...'} - OpenPost</title>
 </svelte:head>
 
-{#if loading}
-	<div class="flex flex-1 items-center justify-center">
-		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
+{#if !hasLoaded}
+	<div class="mx-auto w-full max-w-2xl p-6 space-y-4">
+		<Skeleton class="h-9 w-full rounded-lg" />
+		<Skeleton class="h-64 w-full rounded-lg" />
 	</div>
 {:else if error && !post}
 	<div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
 		<div class="rounded-lg border border-destructive/20 bg-destructive/10 p-6 text-center">
 			<p class="mb-3 text-destructive">{error}</p>
-			<Button variant="outline" onclick={() => goto('/')}>Back to Dashboard</Button>
+			<Button variant="outline" onclick={() => goto('/')}>Back</Button>
 		</div>
 	</div>
 {:else if post}
-	<PageContainer title="Edit Post" description={descriptionText} icon={PencilIcon}>
-		{#snippet actions()}
-			{#if post && (post.status === 'draft' || post.status === 'scheduled')}
+	<div class="flex flex-1 flex-col overflow-hidden">
+		<!-- Edit header with delete -->
+		<div class="flex items-center justify-between border-b px-4 py-2">
+			<span class="text-xs text-muted-foreground">
+				Editing {post.status} post
+			</span>
+			{#if post.status === 'draft' || post.status === 'scheduled'}
 				{#if showDeleteConfirm}
 					<div class="flex items-center gap-2">
-						<span class="text-sm text-destructive">Delete this post?</span>
+						<span class="text-xs text-destructive">Delete?</span>
 						<Button
-							variant="outline"
-							size="sm"
+							variant="ghost"
+							size="xs"
 							onclick={() => (showDeleteConfirm = false)}
 							disabled={deleting}
+							class="h-6 text-xs"
 						>
 							Cancel
 						</Button>
-						<Button variant="destructive" size="sm" onclick={handleDelete} disabled={deleting}>
-							{deleting ? 'Deleting...' : 'Confirm'}
+						<Button
+							variant="destructive"
+							size="xs"
+							onclick={handleDelete}
+							disabled={deleting}
+							class="h-6 text-xs"
+						>
+							{deleting ? '...' : 'Confirm'}
 						</Button>
 					</div>
 				{:else}
 					<Button
 						variant="ghost"
-						size="sm"
-						class="gap-1.5 text-muted-foreground hover:text-destructive"
+						size="xs"
+						class="h-6 gap-1 text-xs text-muted-foreground hover:text-destructive"
 						onclick={() => (showDeleteConfirm = true)}
 						disabled={deleting}
 					>
-						<TrashIcon class="h-4 w-4" />
+						<TrashIcon class="h-3 w-3" />
 						Delete
 					</Button>
 				{/if}
 			{/if}
-		{/snippet}
+		</div>
 
 		{#if error}
-			<div
-				class="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-			>
+			<div class="mx-4 mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 				{error}
 			</div>
 		{/if}
 
-		<div class="rounded-lg border bg-card p-6 pb-0">
-			<ComposePost
-				isPage={true}
-				initialPost={post}
-				onSuccess={handleSuccess}
-				onCancel={handleCancel}
-			/>
-		</div>
-	</PageContainer>
+		<ComposeSimple
+			initialPost={post}
+			onSuccess={handleSuccess}
+			onCancel={handleCancel}
+		/>
+	</div>
 {/if}

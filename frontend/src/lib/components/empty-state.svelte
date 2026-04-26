@@ -50,9 +50,9 @@
 	]} {sizeClasses[size]}"
 >
 	<Icon class="mb-3 h-10 w-10 text-muted-foreground/40" />
-	<p class="mb-1 text-sm font-medium">{title}</p>
+	<p class="mb-1 text-base font-medium">{title}</p>
 	{#if description}
-		<p class="mb-4 text-xs text-muted-foreground">{description}</p>
+		<p class="mb-4 text-sm text-muted-foreground">{description}</p>
 	{/if}
 	{#if actionLabel}
 		{#if actionHref}

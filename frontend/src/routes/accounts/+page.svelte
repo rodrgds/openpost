@@ -20,6 +20,7 @@
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import UsersIcon from 'lucide-svelte/icons/users';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	interface MastodonServer {
 		name: string;
@@ -404,12 +405,27 @@
 </svelte:head>
 
 {#if loading}
-	<div class="flex flex-1 items-center justify-center">
-		<LoaderIcon class="h-8 w-8 animate-spin text-primary" />
+	<div class="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8">
+		<div class="mb-6 flex items-center gap-2">
+			<Skeleton class="h-8 w-8 rounded-md" />
+			<Skeleton class="h-7 w-48" />
+		</div>
+		<div class="mb-6"><Skeleton class="h-9 w-40 rounded-md" /></div>
+		<div class="mb-8 space-y-3">
+			<Skeleton class="h-6 w-32" />
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<Skeleton class="h-28 rounded-lg" />
+				<Skeleton class="h-28 rounded-lg" />
+			</div>
+		</div>
+		<div class="space-y-3">
+			<Skeleton class="h-6 w-40" />
+			<Skeleton class="h-40 rounded-lg" />
+		</div>
 	</div>
 {:else if !workspaces || workspaces.length === 0}
 	<div class="mx-auto max-w-md px-4 py-16 text-center">
-		<h2 class="mb-2 text-xl font-bold">No Workspaces Found</h2>
+		<h2 class="mb-2 text-xl font-semibold">No Workspaces Found</h2>
 		<p class="mb-4 text-sm text-muted-foreground">
 			Create a workspace first before connecting social accounts.
 		</p>
@@ -437,7 +453,7 @@
 					{#snippet child({ props })}
 						<Button {...props} variant="outline" class="gap-2">
 							<span
-								class="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-[0.6rem] font-bold text-primary"
+								class="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary"
 							>
 								{selectedWorkspaceName.slice(0, 2).toUpperCase()}
 							</span>
@@ -454,7 +470,7 @@
 							class="gap-2 p-2"
 						>
 							<span
-								class="flex size-6 items-center justify-center rounded-md bg-primary/10 text-[0.6rem] font-bold text-primary"
+								class="flex size-6 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary"
 							>
 								{workspace.name.slice(0, 2).toUpperCase()}
 							</span>
@@ -475,11 +491,12 @@
 				</Button>
 			</div>
 
-			{#if setsLoading}
-				<div class="flex justify-center py-6">
-					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
-				</div>
-			{:else if sets.length === 0}
+		{#if setsLoading}
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<Skeleton class="h-28 rounded-lg" />
+				<Skeleton class="h-28 rounded-lg" />
+			</div>
+		{:else if sets.length === 0}
 				<EmptyState
 					icon={LayersIcon}
 					title="No sets yet"
@@ -500,7 +517,7 @@
 									</div>
 									<div>
 										<h3 class="text-sm font-medium">{set.name}</h3>
-										<p class="text-xs text-muted-foreground">
+										<p class="text-sm text-muted-foreground">
 											{set.accounts.length} account{set.accounts.length !== 1 ? 's' : ''}
 										</p>
 									</div>
@@ -537,7 +554,7 @@
 								<div class="flex flex-wrap gap-1.5">
 									{#each set.accounts as acc (acc.social_account_id)}
 										<span
-											class="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs"
+											class="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-sm font-medium"
 										>
 											<PlatformIcon platform={acc.platform} class="h-3 w-3" />
 											{acc.account_username || acc.platform}
@@ -545,7 +562,7 @@
 									{/each}
 								</div>
 							{:else}
-								<p class="text-xs text-muted-foreground">No accounts in this set</p>
+								<p class="text-sm text-muted-foreground">No accounts in this set</p>
 							{/if}
 						</div>
 					{/each}
@@ -557,11 +574,13 @@
 		<div class="mb-8">
 			<h2 class="mb-4 text-lg font-semibold">Connected Accounts</h2>
 
-			{#if accountsLoading}
-				<div class="flex justify-center py-6">
-					<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
-				</div>
-			{:else if !accounts || accounts.length === 0}
+		{#if accountsLoading}
+			<div class="space-y-3">
+				<Skeleton class="h-12 rounded-lg" />
+				<Skeleton class="h-12 rounded-lg" />
+				<Skeleton class="h-12 rounded-lg" />
+			</div>
+		{:else if !accounts || accounts.length === 0}
 				<EmptyState
 					icon={UsersIcon}
 					title="No accounts connected"
@@ -583,7 +602,7 @@
 								</div>
 								<div class="flex-1">
 									<h3 class="text-sm font-medium">{getPlatformName(platform)}</h3>
-									<p class="text-xs text-muted-foreground">
+									<p class="text-sm text-muted-foreground">
 										{platformAccounts.length} account{platformAccounts.length !== 1 ? 's' : ''}
 									</p>
 								</div>
@@ -605,7 +624,7 @@
 														{account.account_id}
 													{/if}
 												</p>
-												<p class="text-xs text-muted-foreground">
+												<p class="text-sm text-muted-foreground">
 													{account.is_active ? 'Connected' : 'Disconnected'}
 												</p>
 											</div>
@@ -641,7 +660,7 @@
 					</div>
 					<div class="min-w-0 flex-1">
 						<h3 class="text-sm font-medium">X (Twitter)</h3>
-						<p class="text-xs text-muted-foreground">Post tweets</p>
+						<p class="text-sm text-muted-foreground">Post tweets</p>
 					</div>
 					<Button onclick={connectTwitter} size="sm">Connect</Button>
 				</div>
@@ -657,7 +676,7 @@
 							</div>
 							<div class="min-w-0 flex-1">
 								<h3 class="text-sm font-medium">{server.name}</h3>
-								<p class="truncate text-xs text-muted-foreground">
+								<p class="truncate text-sm text-muted-foreground">
 									{server.instance_url.replace('https://', '')}
 								</p>
 							</div>
@@ -679,7 +698,7 @@
 						</div>
 						<div class="min-w-0 flex-1">
 							<h3 class="text-sm font-medium">Mastodon</h3>
-							<p class="text-xs text-muted-foreground">Not configured</p>
+							<p class="text-sm text-muted-foreground">Not configured</p>
 						</div>
 					</div>
 				{/if}
@@ -693,7 +712,7 @@
 					</div>
 					<div class="min-w-0 flex-1">
 						<h3 class="text-sm font-medium">Threads</h3>
-						<p class="text-xs text-muted-foreground">Post to Threads</p>
+						<p class="text-sm text-muted-foreground">Post to Threads</p>
 					</div>
 					<Button onclick={connectThreads} size="sm">Connect</Button>
 				</div>
@@ -707,7 +726,7 @@
 					</div>
 					<div class="min-w-0 flex-1">
 						<h3 class="text-sm font-medium">Bluesky</h3>
-						<p class="text-xs text-muted-foreground">Post to Bluesky</p>
+						<p class="text-sm text-muted-foreground">Post to Bluesky</p>
 					</div>
 					<Button onclick={connectBluesky} size="sm">Connect</Button>
 				</div>
@@ -721,7 +740,7 @@
 					</div>
 					<div class="min-w-0 flex-1">
 						<h3 class="text-sm font-medium">LinkedIn</h3>
-						<p class="text-xs text-muted-foreground">Post to LinkedIn</p>
+						<p class="text-sm text-muted-foreground">Post to LinkedIn</p>
 					</div>
 					<Button onclick={connectLinkedIn} size="sm">Connect</Button>
 				</div>

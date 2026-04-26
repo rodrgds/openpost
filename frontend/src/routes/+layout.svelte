@@ -13,6 +13,7 @@
 	import { instanceStore, isInstanceConfigured } from '$lib/stores/instance.svelte';
 	import { client } from '$lib/api/client';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 
 	let { children } = $props();
 
@@ -108,8 +109,10 @@
 
 <ModeWatcher />
 {#if instance.isLoading || authState.isLoading || (authState.isAuthenticated && !onboardingChecked)}
-	<div class="flex min-h-screen items-center justify-center">
-		<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+	<div class="flex min-h-screen flex-col items-center justify-center gap-3">
+		<Skeleton class="h-12 w-12 rounded-lg" />
+		<Skeleton class="h-3 w-32 rounded" />
+		<Skeleton class="h-3 w-24 rounded" />
 	</div>
 {:else if !authState.isAuthenticated}
 	{#if currentPath === '/'}
@@ -142,13 +145,6 @@
 	<Sidebar.Provider>
 		<SidebarLeft />
 		<Sidebar.Inset>
-			<header
-				class="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background"
-			>
-				<div class="flex items-center gap-2 px-4">
-					<Sidebar.Trigger class="-ml-1" />
-				</div>
-			</header>
 			<div class="flex flex-1 flex-col overflow-auto">
 				{@render children()}
 			</div>

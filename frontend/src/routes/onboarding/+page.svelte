@@ -10,6 +10,7 @@
 	import Logo from '$lib/components/Logo.svelte';
 	import RocketIcon from 'lucide-svelte/icons/rocket';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 
 	let workspaceName = $state('Personal');
 	let isLoading = $state(false);
@@ -80,8 +81,9 @@
 
 {#if pageLoading}
 	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-4 px-4">
-		<LoaderIcon class="h-6 w-6 animate-spin text-primary" />
-		<p class="text-sm text-muted-foreground">Loading workspace setup...</p>
+		<Skeleton class="h-12 w-12 rounded-xl" />
+		<Skeleton class="h-6 w-48" />
+		<Skeleton class="h-4 w-64" />
 	</div>
 {:else}
 	<div class="flex min-h-[80vh] flex-col items-center justify-center gap-6 px-4">
@@ -95,8 +97,8 @@
 					<RocketIcon class="h-8 w-8 text-primary" />
 				</div>
 			</div>
-			<h1 class="mb-2 text-2xl font-bold tracking-tight">Welcome to OpenPost</h1>
-			<p class="mb-8 text-muted-foreground">
+		<h1 class="mb-2 text-xl font-semibold tracking-tight">Welcome to OpenPost</h1>
+		<p class="mb-8 text-muted-foreground">
 				Let's set up your first workspace. This is where you'll organize your posts and connect your
 				social accounts.
 			</p>
@@ -122,9 +124,9 @@
 								required
 								autofocus
 							/>
-							<p class="text-xs text-muted-foreground">
-								You can create more workspaces later for different projects or brands.
-							</p>
+						<p class="text-sm text-muted-foreground">
+							You can create more workspaces later for different projects or brands.
+						</p>
 						</div>
 
 						<Button type="submit" disabled={isLoading || !workspaceName.trim()} class="w-full">
