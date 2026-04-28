@@ -48,7 +48,7 @@ frontend/bun.lock
 
 # Logs
 *.log
-logs/
+/logs/
 
 # Android signing
 *.jks
