@@ -24,19 +24,19 @@ func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Conte
 	return func(ctx huma.Context, next func(huma.Context)) {
 		authHeader := ctx.Header("Authorization")
 		if authHeader == "" {
-			huma.WriteErr(api, ctx, http.StatusUnauthorized, "missing authorization header")
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "missing authorization header")
 			return
 		}
 
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid authorization header format")
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid authorization header format")
 			return
 		}
 
 		claims, err := authService.ValidateToken(tokenParts[1])
 		if err != nil {
-			huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or expired token")
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
 
@@ -61,13 +61,13 @@ func GetWorkspaceID(ctx context.Context) string {
 	return ""
 }
 
-// WorkspaceAccessMiddleware validates that the user has access to the workspace specified in the request
-// This should be used after AuthMiddleware
-func WorkspaceAccessMiddleware(api huma.API, db *bun.DB) func(ctx huma.Context, next func(huma.Context)) {
+// WorkspaceAccessMiddleware validates that the user has access to the workspace specified in the request.
+// This should be used after AuthMiddleware.
+func WorkspaceAccessMiddleware(api huma.API, _ *bun.DB) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		userID := GetUserID(ctx.Context())
 		if userID == "" {
-			huma.WriteErr(api, ctx, http.StatusUnauthorized, "unauthorized")
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
@@ -78,7 +78,7 @@ func WorkspaceAccessMiddleware(api huma.API, db *bun.DB) func(ctx huma.Context, 
 	}
 }
 
-// CheckWorkspaceAccess is a helper function to verify workspace access
+// CheckWorkspaceAccess is a helper function to verify workspace access.
 func CheckWorkspaceAccess(ctx context.Context, db *bun.DB, workspaceID, userID string) (bool, error) {
 	var memberCount int
 	memberCount, err := db.NewSelect().Model((*models.WorkspaceMember)(nil)).

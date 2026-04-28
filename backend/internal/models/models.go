@@ -171,7 +171,7 @@ type PostVariant struct {
 	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
-// PostingSchedule defines preferred time slots for posting per workspace
+// PostingSchedule defines preferred time slots for posting per workspace.
 type PostingSchedule struct {
 	bun.BaseModel `bun:"table:posting_schedules"`
 
@@ -191,7 +191,7 @@ type PostingSchedule struct {
 	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
-// Prompt represents a writing prompt for content inspiration
+// Prompt represents a writing prompt for content inspiration.
 type Prompt struct {
 	bun.BaseModel `bun:"table:prompts"`
 

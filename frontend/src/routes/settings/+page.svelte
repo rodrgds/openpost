@@ -532,13 +532,13 @@
 					<h3 class="mb-3 text-sm font-medium">Add New Time Slot</h3>
 					<div class="grid gap-4 sm:grid-cols-4">
 						<div class="space-y-2">
-							<label class="text-xs">Day</label>
+							<label class="text-xs" for="schedule-day">Day</label>
 							<Select.Root
 								type="single"
 								value={String(newSchedule.day_of_week)}
 								onValueChange={(v) => (newSchedule.day_of_week = Number(v))}
 							>
-								<Select.Trigger class="w-full">
+								<Select.Trigger id="schedule-day" class="w-full">
 									{dayNames[newSchedule.day_of_week]}
 								</Select.Trigger>
 								<Select.Content>
@@ -549,13 +549,13 @@
 							</Select.Root>
 						</div>
 						<div class="space-y-2">
-							<label class="text-xs">Hour (UTC)</label>
+							<label class="text-xs" for="schedule-hour">Hour (UTC)</label>
 							<Select.Root
 								type="single"
 								value={String(newSchedule.utc_hour)}
 								onValueChange={(v) => (newSchedule.utc_hour = Number(v))}
 							>
-								<Select.Trigger class="w-full">
+								<Select.Trigger id="schedule-hour" class="w-full">
 									{newSchedule.utc_hour.toString().padStart(2, '0')}:00
 								</Select.Trigger>
 								<Select.Content class="max-h-60 overflow-y-auto">
@@ -568,13 +568,13 @@
 							</Select.Root>
 						</div>
 						<div class="space-y-2">
-							<label class="text-xs">Minute</label>
+							<label class="text-xs" for="schedule-minute">Minute</label>
 							<Select.Root
 								type="single"
 								value={String(newSchedule.utc_minute)}
 								onValueChange={(v) => (newSchedule.utc_minute = Number(v))}
 							>
-								<Select.Trigger class="w-full">
+								<Select.Trigger id="schedule-minute" class="w-full">
 									{newSchedule.utc_minute.toString().padStart(2, '0')}
 								</Select.Trigger>
 								<Select.Content>
@@ -587,8 +587,9 @@
 							</Select.Root>
 						</div>
 						<div class="space-y-2">
-							<label class="text-xs">Label (optional)</label>
+							<label class="text-xs" for="schedule-label">Label (optional)</label>
 							<input
+								id="schedule-label"
 								type="text"
 								bind:value={newSchedule.label}
 								placeholder="e.g., Morning"
@@ -618,13 +619,13 @@
 					minute. This makes your posting pattern look more natural.
 				</p>
 				<div class="space-y-2">
-					<label class="text-sm font-medium">Random delay range</label>
+					<label class="text-sm font-medium" for="random-delay">Random delay range</label>
 					<Select.Root
 						type="single"
 						value={String(workspaceCtx.settings.random_delay_minutes)}
 						onValueChange={(v) => (workspaceCtx.settings.random_delay_minutes = Number(v))}
 					>
-						<Select.Trigger class="w-full sm:w-64">
+						<Select.Trigger id="random-delay" class="w-full sm:w-64">
 							{#if workspaceCtx.settings.random_delay_minutes === 0}
 								No delay (exact time)
 							{:else}
@@ -657,13 +658,13 @@
 				</p>
 				<div class="grid gap-4 sm:grid-cols-3">
 					<div class="space-y-2">
-						<label class="text-sm font-medium">Start time</label>
+						<label class="text-sm font-medium" for="start-time">Start time</label>
 						<Select.Root
 							type="single"
 							value={String(workspaceCtx.settings.slot_start_hour)}
 							onValueChange={(v) => (workspaceCtx.settings.slot_start_hour = Number(v))}
 						>
-							<Select.Trigger class="w-full">
+							<Select.Trigger id="start-time" class="w-full">
 								{workspaceCtx.settings.slot_start_hour.toString().padStart(2, '0')}:00
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
@@ -676,13 +677,13 @@
 						</Select.Root>
 					</div>
 					<div class="space-y-2">
-						<label class="text-sm font-medium">End time</label>
+						<label class="text-sm font-medium" for="end-time">End time</label>
 						<Select.Root
 							type="single"
 							value={String(workspaceCtx.settings.slot_end_hour)}
 							onValueChange={(v) => (workspaceCtx.settings.slot_end_hour = Number(v))}
 						>
-							<Select.Trigger class="w-full">
+							<Select.Trigger id="end-time" class="w-full">
 								{workspaceCtx.settings.slot_end_hour.toString().padStart(2, '0')}:00
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
@@ -695,8 +696,9 @@
 						</Select.Root>
 					</div>
 					<div class="space-y-2">
-						<label class="text-sm font-medium">Interval</label>
+						<label class="text-sm font-medium" for="interval">Interval</label>
 						<input
+							id="interval"
 							type="text"
 							value={intervalInput}
 							oninput={(e) => handleIntervalChange((e.target as HTMLInputElement).value)}

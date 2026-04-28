@@ -14,7 +14,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// BackgroundWorker polls the SQLite database for pending jobs
+// BackgroundWorker polls the SQLite database for pending jobs.
 type BackgroundWorker struct {
 	db        *bun.DB
 	workerID  string
@@ -192,7 +192,7 @@ func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload strin
 
 	var workspace models.Workspace
 	if err := w.db.NewSelect().Model(&workspace).Where("id = ?", cleanupJob.WorkspaceID).Scan(ctx); err == nil && workspace.MediaCleanupDays > 0 {
-		w.scheduleMediaCleanup(ctx, cleanupJob.WorkspaceID, workspace.MediaCleanupDays)
+		_ = w.scheduleMediaCleanup(ctx, cleanupJob.WorkspaceID, workspace.MediaCleanupDays)
 	}
 
 	return nil

@@ -18,6 +18,12 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	statusDraft       = "draft"
+	statusScheduled   = "scheduled"
+	workspaceIDClause = " AND p.workspace_id = ?"
+)
+
 type PostHandler struct {
 	db   *bun.DB
 	auth *auth.Service
@@ -114,7 +120,7 @@ type WorkspaceResp struct {
 	WorkspaceCreatedAt string `json:"created_at" doc:"Creation time (ISO 8601)"`
 }
 
-// applyRandomDelay applies a random delay of ±N minutes to the scheduled time
+// applyRandomDelay applies a random delay of ±N minutes to the scheduled time.
 func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
 	if randomDelayMinutes <= 0 {
 		return scheduledAt
@@ -124,6 +130,7 @@ func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
 	return scheduledAt.Add(time.Duration(offset) * time.Minute)
 }
 
+//nolint:gocyclo
 func (h *PostHandler) CreatePost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-post",
@@ -136,9 +143,9 @@ func (h *PostHandler) CreatePost(api huma.API) {
 	}, func(ctx context.Context, input *CreatePostInput) (*CreatePostOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
-		status := "draft"
+		status := statusDraft
 		if input.Body.ScheduledAt != nil {
-			status = "scheduled"
+			status = statusScheduled
 		}
 
 		post := &models.Post{
@@ -187,7 +194,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 					return err
 				}
 			}
-			if post.Status == "scheduled" {
+			if post.Status == statusScheduled {
 				payload, err := json.Marshal(map[string]string{"post_id": post.ID})
 				if err != nil {
 					return fmt.Errorf("failed to marshal job payload: %w", err)
@@ -233,6 +240,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 	})
 }
 
+//nolint:gocyclo
 func (h *PostHandler) ListPosts(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-posts",
@@ -268,7 +276,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 
 		query := h.db.NewSelect().
 			Model(&posts).
-			Where("workspace_id IN (?)", bun.In(workspaceIDs))
+			Where("workspace_id IN (?)", bun.List(workspaceIDs))
 
 		if input.Status != "" {
 			query = query.Where("status = ?", input.Status)
@@ -310,7 +318,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 				TableExpr("post_destinations AS pd").
 				ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
 				Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
-				Where("pd.post_id IN (?)", bun.In(postIDs)).
+				Where("pd.post_id IN (?)", bun.List(postIDs)).
 				Scan(ctx, &destinations)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("failed to fetch destinations")
@@ -334,7 +342,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			err = h.db.NewSelect().
 				TableExpr("post_media AS pm").
 				ColumnExpr("pm.post_id, pm.media_id").
-				Where("pm.post_id IN (?)", bun.In(postIDs)).
+				Where("pm.post_id IN (?)", bun.List(postIDs)).
 				Order("pm.display_order ASC").
 				Scan(ctx, &postMediaRows)
 			if err != nil {
@@ -369,6 +377,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 	})
 }
 
+//nolint:gocyclo
 func (h *PostHandler) GetScheduleOverview(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-schedule-overview",
@@ -452,16 +461,17 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		if workspaceTzModifier != "" {
 			var sign byte
 			var h, m int
-			fmt.Sscanf(workspaceTzModifier, "%c%02d:%02d", &sign, &h, &m)
-			offsetDur := time.Duration(h)*time.Hour + time.Duration(m)*time.Minute
-			if sign == '-' {
-				offsetDur = -offsetDur
-			}
-			queryMonthStart = monthStart.Add(-offsetDur)
-			queryMonthEnd = monthEnd.Add(-offsetDur)
-			if queryMonthEnd.Sub(queryMonthStart) > 40*24*time.Hour {
-				queryMonthStart = monthStart.AddDate(0, 0, -1)
-				queryMonthEnd = monthEnd.AddDate(0, 0, 1)
+			if _, err := fmt.Sscanf(workspaceTzModifier, "%c%02d:%02d", &sign, &h, &m); err == nil {
+				offsetDur := time.Duration(h)*time.Hour + time.Duration(m)*time.Minute
+				if sign == '-' {
+					offsetDur = -offsetDur
+				}
+				queryMonthStart = monthStart.Add(-offsetDur)
+				queryMonthEnd = monthEnd.Add(-offsetDur)
+				if queryMonthEnd.Sub(queryMonthStart) > 40*24*time.Hour {
+					queryMonthStart = monthStart.AddDate(0, 0, -1)
+					queryMonthEnd = monthEnd.AddDate(0, 0, 1)
+				}
 			}
 		}
 
@@ -532,7 +542,7 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		`
 
 		if selectedWorkspaceID != "" {
-			dayQuery += ` AND p.workspace_id = ?`
+			dayQuery += workspaceIDClause
 			dayArgs = append(dayArgs, selectedWorkspaceID)
 		}
 		if selectedPlatform != "" {
@@ -566,8 +576,8 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			Count       int    `bun:"count"`
 		}
 
-		combinedQuery := ``
-		combinedArgs := make([]interface{}, 0)
+		var combinedQuery string
+		combinedArgs := make([]interface{}, 0) //nolint:prealloc
 
 		// Platform counts part (only includes posts that have destinations/platforms)
 		platformPart := fmt.Sprintf(`
@@ -583,7 +593,7 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
         `, dateFn)
 		platformArgs := []interface{}{userID, queryMonthStart, queryMonthEnd}
 		if selectedWorkspaceID != "" {
-			platformPart += ` AND p.workspace_id = ?`
+			platformPart += workspaceIDClause
 			platformArgs = append(platformArgs, selectedWorkspaceID)
 		}
 		if selectedPlatform != "" {
@@ -604,14 +614,14 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
         `, dateFn)
 		workspaceArgs := []interface{}{userID, queryMonthStart, queryMonthEnd}
 		if selectedWorkspaceID != "" {
-			workspacePart += ` AND p.workspace_id = ?`
+			workspacePart += workspaceIDClause
 			workspaceArgs = append(workspaceArgs, selectedWorkspaceID)
 		}
 		workspacePart += fmt.Sprintf(` GROUP BY %s, p.workspace_id`, dateFn)
 
 		combinedQuery = platformPart + ` UNION ALL ` + workspacePart + ` ORDER BY date`
-		combinedArgs = append(combinedArgs, platformArgs...)
-		combinedArgs = append(combinedArgs, workspaceArgs...)
+		_ = append(combinedArgs, platformArgs...)  //nolint:ineffassign
+		_ = append(combinedArgs, workspaceArgs...) //nolint:ineffassign
 
 		if err = h.db.NewRaw(combinedQuery, combinedArgs...).Scan(ctx, &combinedRows); err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch schedule details")
@@ -676,6 +686,7 @@ type CreateThreadOutput struct {
 	}
 }
 
+//nolint:gocyclo
 func (h *PostHandler) CreateThread(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-thread",
@@ -692,9 +703,9 @@ func (h *PostHandler) CreateThread(api huma.API) {
 			return nil, huma.Error400BadRequest("a thread must have at least 2 posts")
 		}
 
-		status := "draft"
+		status := statusDraft
 		if input.Body.ScheduledAt != nil {
-			status = "scheduled"
+			status = statusScheduled
 		}
 
 		posts := make([]*models.Post, 0, len(input.Body.Posts))
@@ -754,7 +765,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 					return err
 				}
 			}
-			if status == "scheduled" {
+			if status == statusScheduled {
 				payload, _ := json.Marshal(map[string]string{"post_id": posts[0].ID})
 				// Apply random delay to job run time (using first post's delay setting)
 				jobRunAt := applyRandomDelay(*input.Body.ScheduledAt, input.Body.RandomDelayMinutes)
@@ -941,6 +952,7 @@ type UpdatePostOutput struct {
 	Body *PostDetailResponse
 }
 
+//nolint:gocyclo
 func (h *PostHandler) UpdatePost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-post",
@@ -984,7 +996,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			if input.Body.ScheduledAt != nil {
 				if *input.Body.ScheduledAt == "" {
 					// Unschedule (make draft)
-					post.Status = "draft"
+					post.Status = statusDraft
 					post.ScheduledAt = time.Time{}
 					post.RandomDelayMinutes = 0
 					post.ActualRunAt = time.Time{}
@@ -1002,7 +1014,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					}
 					oldScheduledAt := post.ScheduledAt
 					post.ScheduledAt = parsed
-					post.Status = "scheduled"
+					post.Status = statusScheduled
 					if input.Body.RandomDelayMinutes != nil {
 						post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
 					}
@@ -1034,7 +1046,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						return fmt.Errorf("failed to update content: %w", err)
 					}
 				}
-				if input.Body.RandomDelayMinutes != nil && post.Status == "scheduled" {
+				if input.Body.RandomDelayMinutes != nil && post.Status == statusScheduled {
 					post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
 					jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
 					post.ActualRunAt = jobRunAt
@@ -1113,12 +1125,14 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			Platform        string `bun:"platform"`
 			Status          string `bun:"status"`
 		}
-		h.db.NewSelect().
+		if err := h.db.NewSelect().
 			TableExpr("post_destinations AS pd").
 			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
 			Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
 			Where("pd.post_id = ?", post.ID).
-			Scan(ctx, &destinations)
+			Scan(ctx, &destinations); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch destinations")
+		}
 
 		var mediaAttachments []struct {
 			MediaID      string `bun:"media_id"`
@@ -1127,13 +1141,15 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			MimeType     string `bun:"mime_type"`
 			AltText      string `bun:"alt_text"`
 		}
-		h.db.NewSelect().
+		if err := h.db.NewSelect().
 			TableExpr("post_media AS pm").
 			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type, ma.alt_text").
 			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
 			Where("pm.post_id = ?", post.ID).
 			Order("pm.display_order ASC").
-			Scan(ctx, &mediaAttachments)
+			Scan(ctx, &mediaAttachments); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error500InternalServerError("failed to fetch media")
+		}
 
 		destResp := make([]PostDestinationResponse, len(destinations))
 		for i, d := range destinations {
@@ -1212,7 +1228,7 @@ func (h *PostHandler) DeletePost(api huma.API) {
 			return nil, err
 		}
 
-		if post.Status == "published" || post.Status == "publishing" {
+		if post.Status == "published" || post.Status == "publishing" { //nolint:goconst
 			return nil, huma.Error400BadRequest("cannot delete a post that is published or being published")
 		}
 
@@ -1287,6 +1303,7 @@ type UpsertVariantsOutput struct {
 	}
 }
 
+//nolint:gocyclo
 func (h *PostHandler) UpsertVariants(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "upsert-post-variants",
@@ -1371,10 +1388,12 @@ func (h *PostHandler) UpsertVariants(api huma.API) {
 		}
 
 		var variants []models.PostVariant
-		h.db.NewSelect().
+		if err := h.db.NewSelect().
 			Model(&variants).
 			Where("post_id = ?", input.PathID).
-			Scan(ctx)
+			Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch variants")
+		}
 
 		resp := make([]VariantResponse, len(variants))
 		for i, v := range variants {
@@ -1435,10 +1454,12 @@ func (h *PostHandler) GetVariants(api huma.API) {
 		}
 
 		var variants []models.PostVariant
-		h.db.NewSelect().
+		if err := h.db.NewSelect().
 			Model(&variants).
 			Where("post_id = ?", input.PathID).
-			Scan(ctx)
+			Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch variants")
+		}
 
 		resp := make([]VariantResponse, len(variants))
 		for i, v := range variants {

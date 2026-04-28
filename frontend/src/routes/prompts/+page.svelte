@@ -245,10 +245,17 @@
 						</h2>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 							{#each categoryPrompts as prompt}
-								<button
-									type="button"
-									class="group relative flex flex-col items-start rounded-md border bg-card p-3 text-left transition-all hover:border-accent hover:bg-accent"
+								<div
+									role="button"
+									tabindex="0"
+									class="group relative flex cursor-pointer flex-col items-start rounded-md border bg-card p-3 text-left transition-all hover:border-accent hover:bg-accent"
 									onclick={() => usePrompt(prompt.text)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											usePrompt(prompt.text);
+										}
+									}}
 								>
 									<p
 										class="line-clamp-4 text-sm leading-relaxed text-foreground/80 group-hover:text-foreground"
@@ -272,7 +279,7 @@
 											</button>
 										{/if}
 									</div>
-								</button>
+								</div>
 							{/each}
 						</div>
 					</section>
@@ -283,9 +290,13 @@
 		<!-- Add Prompt Modal -->
 		{#if showAddPrompt}
 			<div
+				role="presentation"
 				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 				onclick={(e) => {
 					if (e.target === e.currentTarget) showAddPrompt = false;
+				}}
+				onkeydown={(e) => {
+					if (e.key === 'Escape') showAddPrompt = false;
 				}}
 			>
 				<div class="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">

@@ -59,7 +59,7 @@ func RegisterSpaRoutes(e *echo.Echo) {
 		if err == nil {
 			if info.IsDir() {
 				indexPath := relPath + "/index.html"
-				if _, err := fs.Stat(webFS, indexPath); err == nil {
+				if _, statErr := fs.Stat(webFS, indexPath); statErr == nil {
 					indexData, _ := fs.ReadFile(webFS, indexPath)
 					return writeHTML(c, indexData)
 				}

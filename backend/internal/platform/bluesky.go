@@ -20,7 +20,7 @@ func NewBlueskyAdapter(pdsURL string) *BlueskyAdapter {
 	return &BlueskyAdapter{pdsURL: pdsURL}
 }
 
-func (b *BlueskyAdapter) GenerateAuthURL(state string) (string, map[string]string) {
+func (b *BlueskyAdapter) GenerateAuthURL(_ string) (string, map[string]string) {
 	return "", nil
 }
 
@@ -55,7 +55,7 @@ func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword 
 	return session.Did, session.AccessJwt, session.RefreshJwt, nil
 }
 
-func (b *BlueskyAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error) {
+func (b *BlueskyAdapter) ExchangeCode(_ context.Context, _ string, _ map[string]string) (*TokenResult, error) {
 	return nil, fmt.Errorf("bluesky uses app passwords, not OAuth")
 }
 
@@ -82,19 +82,14 @@ func (b *BlueskyAdapter) RefreshToken(ctx context.Context, refreshToken string) 
 }
 
 func (b *BlueskyAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {
-	respBody, err := DoRequest(ctx, "GET", b.pdsURL+"/xrpc/com.atproto.server.getSession", nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var session struct {
+	type blueskySession struct {
 		Did    string `json:"did"`
 		Handle string `json:"handle"`
 	}
-	if err := json.Unmarshal(respBody, &session); err != nil {
-		return nil, fmt.Errorf("decoding bluesky session: %w", err)
+
+	session, err := DoBearerJSON[blueskySession](ctx, "GET", b.pdsURL+"/xrpc/com.atproto.server.getSession", accessToken, nil, "bluesky session")
+	if err != nil {
+		return nil, err
 	}
 
 	return &UserProfile{
@@ -103,7 +98,7 @@ func (b *BlueskyAdapter) GetProfile(ctx context.Context, accessToken string) (*U
 	}, nil
 }
 
-func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error) {
+func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, _ string, mimeType string, reader io.Reader) (string, error) {
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.repo.uploadBlob", reader, map[string]string{
 		"Authorization": "Bearer " + accessToken,
 		"Content-Type":  mimeType,
@@ -122,8 +117,8 @@ func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, accountID
 			Size     int    `json:"size"`
 		} `json:"blob"`
 	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("decoding bluesky blob: %w", err)
+	if unmarshalErr := json.Unmarshal(respBody, &result); unmarshalErr != nil {
+		return "", fmt.Errorf("decoding bluesky blob: %w", unmarshalErr)
 	}
 
 	blobJSON, err := json.Marshal(result.Blob)

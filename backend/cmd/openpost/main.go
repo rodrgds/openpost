@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -30,15 +31,17 @@ import (
 	"github.com/openpost/backend/internal/services/tokenmanager"
 )
 
+//nolint:gocyclo
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
 
 	cfg := config.Load()
+	config.Init()
 
 	e := echo.New()
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     cfg.CORSOrigins,
@@ -64,7 +67,7 @@ func main() {
 		publishSvc.SetPublicMediaURL(cfg.MediaURL)
 	}
 
-	providers := make(map[string]platform.PlatformAdapter)
+	providers := make(map[string]platform.Adapter)
 
 	if cfg.TwitterClientID != "" {
 		xAdapter := platform.NewXAdapter(
@@ -203,7 +206,7 @@ func main() {
 		Path:        "/health",
 		Summary:     "Health check",
 		Tags:        []string{"System"},
-	}, func(ctx context.Context, input *struct{}) (*struct {
+	}, func(_ context.Context, _ *struct{}) (*struct {
 		Body struct {
 			Status string `json:"status" doc:"Health status"`
 		}
@@ -229,20 +232,49 @@ func main() {
 		worker.Start(ctx)
 	}()
 
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt)
-		<-sigCh
-		log.Println("Shutting down...")
-		cancel()
-		worker.Stop()
-	}()
-
 	log.Println("Starting OpenPost on :" + cfg.Port)
 	log.Println("OpenAPI spec available at http://localhost:" + cfg.Port + "/openapi.json")
 
-	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	serverErrCh := make(chan error, 1)
+	go func() {
+		serverErrCh <- e.Start(":" + cfg.Port)
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	select {
+	case sig := <-sigCh:
+		log.Printf("Shutting down after %s...", sig)
+	case err := <-serverErrCh:
+		if err != nil && err != http.ErrServerClosed {
+			cancel()
+			signal.Stop(sigCh)
+			worker.Stop()
+			wg.Wait()
+			log.Printf("Server error: %v", err)
+			return
+		}
+		cancel()
+		worker.Stop()
+		wg.Wait()
+		log.Println("Server stopped")
+		return
+	}
+
+	cancel()
+	worker.Stop()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Echo shutdown error: %v", err)
+	}
+
+	if err := <-serverErrCh; err != nil && err != http.ErrServerClosed {
+		log.Printf("Echo server error: %v", err)
 	}
 
 	wg.Wait()

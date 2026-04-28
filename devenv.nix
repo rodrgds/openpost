@@ -15,6 +15,7 @@
     pkgs.sqlite
     pkgs.wget
     pkgs.docker
+    pkgs.golangci-lint
   ];
 
   # Environment variables
@@ -45,6 +46,13 @@
 
     test-all.exec = ''
       backend-test && frontend-test
+    '';
+
+    lint.exec = ''
+      frontend-lint
+      frontend-check
+      backend-format-check
+      backend-lint
     '';
 
     clean.exec = ''

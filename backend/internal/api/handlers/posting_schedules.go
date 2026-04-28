@@ -199,6 +199,7 @@ type UpdatePostingScheduleOutput struct {
 	Body PostingScheduleResponse
 }
 
+//nolint:gocyclo
 func (h *PostingScheduleHandler) UpdateSchedule(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-posting-schedule",
@@ -395,7 +396,8 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 
 		// Get workspace timezone
 		var workspace models.Workspace
-		if err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx); err != nil {
+		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx)
+		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspace")
 		}
 
@@ -455,7 +457,7 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to begin transaction")
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		for i := range schedules {
 			if _, err := tx.NewInsert().Model(&schedules[i]).Exec(ctx); err != nil {
@@ -492,6 +494,7 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 	})
 }
 
+//nolint:gocyclo
 func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-next-available-slot",
@@ -518,7 +521,8 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 
 		// Get workspace timezone
 		var workspace models.Workspace
-		if err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.WorkspaceID).Scan(ctx); err != nil {
+		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.WorkspaceID).Scan(ctx)
+		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspace")
 		}
 
@@ -563,7 +567,7 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 		// Find next available slot
 		var nextSlot *models.PostingSchedule
 		var daysToAdd int
-		var minMinutesDiff int = 24 * 60 * 7 // One week in minutes
+		minMinutesDiff := 24 * 60 * 7 // One week in minutes
 
 		for dayOffset := 0; dayOffset < 8; dayOffset++ {
 			checkDay := (currentDayOfWeek + dayOffset) % 7

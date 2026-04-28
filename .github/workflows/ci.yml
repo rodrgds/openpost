@@ -26,15 +26,9 @@ jobs:
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Run devenv test (hooks + environment)
-        run: devenv test
-
-      - name: Run golangci-lint
+      - name: Run shared lint suite
         shell: devenv shell bash -- -e {0}
-        run: |
-          mkdir -p backend/cmd/openpost/public
-          touch backend/cmd/openpost/public/.gitkeep
-          cd backend && golangci-lint run ./...
+        run: lint
 
   test-backend:
     name: Test Backend

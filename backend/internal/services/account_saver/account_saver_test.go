@@ -15,7 +15,7 @@ import (
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
 
-// createTestDB creates an in-memory SQLite database for testing
+// createTestDB creates an in-memory SQLite database for testing.
 func createTestDB(t *testing.T) *bun.DB {
 	sqldb, err := openInMemorySQLite()
 	require.NoError(t, err)
@@ -31,12 +31,12 @@ func createTestDB(t *testing.T) *bun.DB {
 	return db
 }
 
-// openInMemorySQLite creates an in-memory SQLite database
+// openInMemorySQLite creates an in-memory SQLite database.
 func openInMemorySQLite() (*sql.DB, error) {
 	return sql.Open("sqlite3", "file::memory:?cache=shared")
 }
 
-// TestSaveAccount_X tests saving an X (Twitter) account
+// TestSaveAccount_X tests saving an X (Twitter) account.
 func TestSaveAccount_X(t *testing.T) {
 	t.Parallel()
 
@@ -90,7 +90,7 @@ func TestSaveAccount_X(t *testing.T) {
 	require.WithinDuration(t, time.Now().UTC().Add(2*time.Hour), account.TokenExpiresAt, 10*time.Second)
 }
 
-// TestSaveAccount_Mastodon tests saving a Mastodon account
+// TestSaveAccount_Mastodon tests saving a Mastodon account.
 func TestSaveAccount_Mastodon(t *testing.T) {
 	t.Parallel()
 
@@ -133,7 +133,7 @@ func TestSaveAccount_Mastodon(t *testing.T) {
 	require.Equal(t, tokenResp.RefreshToken, decryptedRefresh)
 }
 
-// TestSaveAccount_Threads tests that Threads user ID is extracted from token extra
+// TestSaveAccount_Threads tests that Threads user ID is extracted from token extra.
 func TestSaveAccount_Threads(t *testing.T) {
 	t.Parallel()
 
@@ -172,7 +172,7 @@ func TestSaveAccount_Threads(t *testing.T) {
 	require.Equal(t, tokenResp.AccessToken, decryptedAccess)
 }
 
-// TestSaveAccount_EncryptionError tests handling of encryption failures
+// TestSaveAccount_EncryptionError tests handling of encryption failures.
 func TestSaveAccount_EncryptionError(t *testing.T) {
 	t.Parallel()
 
@@ -199,7 +199,7 @@ func TestSaveAccount_EncryptionError(t *testing.T) {
 	require.Equal(t, tokenResp.AccessToken, dec)
 }
 
-// TestSaveAccount_DatabaseError tests handling of database failures
+// TestSaveAccount_DatabaseError tests handling of database failures.
 func TestSaveAccount_DatabaseError(t *testing.T) {
 	t.Parallel()
 

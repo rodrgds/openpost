@@ -118,7 +118,7 @@ func getEnvBool(key string, fallback bool) bool {
 	return parsed
 }
 
-func init() {
+func Init() {
 	// Validate critical security config on startup
 	jwtSecret := os.Getenv("JWT_SECRET")
 	encryptionKey := os.Getenv("ENCRYPTION_KEY")

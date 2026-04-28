@@ -67,6 +67,23 @@ func DoJSON(ctx context.Context, method, url string, payload any, headers map[st
 	return DoRequest(ctx, method, url, bodyReader, headers)
 }
 
+// DoBearerJSON executes a JSON request with bearer auth and decodes the response.
+func DoBearerJSON[T any](ctx context.Context, method, url, accessToken string, payload any, label string) (*T, error) {
+	respBody, err := DoJSON(ctx, method, url, payload, map[string]string{
+		"Authorization": "Bearer " + accessToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var result T
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("decoding %s: %w", label, err)
+	}
+
+	return &result, nil
+}
+
 // DoMultipart builds a multipart/form-data body with a single file field and calls DoRequest.
 func DoMultipart(ctx context.Context, url string, fieldName string, reader io.Reader, filename string, extraFields map[string]string, headers map[string]string) ([]byte, error) {
 	var buf bytes.Buffer
@@ -133,6 +150,4 @@ func encodeFormValues(values map[string]string) []byte {
 }
 
 // jsonMarshal is a thin wrapper to allow overriding in tests if needed.
-var jsonMarshal = func(v any) ([]byte, error) {
-	return json.Marshal(v)
-}
+var jsonMarshal = json.Marshal

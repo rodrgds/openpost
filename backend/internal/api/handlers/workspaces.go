@@ -100,7 +100,7 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 		Summary:     "List workspaces for the current user",
 		Tags:        []string{"Workspaces"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *struct{}) (*ListWorkspacesOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*ListWorkspacesOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
 		var workspaces []models.Workspace
@@ -226,6 +226,7 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 	})
 }
 
+//nolint:gocyclo
 func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-workspace-settings",
@@ -307,7 +308,7 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 		}
 
 		if input.Body.MediaCleanupDays != nil {
-			queue.ScheduleMediaCleanup(h.db, input.PathID, workspace.MediaCleanupDays)
+			_ = queue.ScheduleMediaCleanup(h.db, input.PathID, workspace.MediaCleanupDays) //nolint:errcheck
 		}
 
 		return &UpdateWorkspaceSettingsOutput{Body: struct {

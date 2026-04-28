@@ -5,15 +5,6 @@
   ...
 }:
 let
-  npm-format = pkgs.writeShellApplication {
-    name = "npm-format";
-    runtimeInputs = [ pkgs.bun ];
-    text = ''
-      cd "${config.git.root}/frontend"
-      bun install --frozen-lockfile
-      bun run format
-    '';
-  };
   eslint-wrapper = pkgs.writeShellApplication {
     name = "eslint-wrapper";
     runtimeInputs = [ pkgs.bun ];
@@ -66,15 +57,15 @@ in
     '';
 
     frontend-test.exec = ''
-      cd frontend && bun run test
+      ${lib.getExe vitest-wrapper}
     '';
 
     frontend-check.exec = ''
-      cd frontend && bun run check
+      ${lib.getExe svelte-check-wrapper}
     '';
 
     frontend-lint.exec = ''
-      cd frontend && bun run lint
+      ${lib.getExe eslint-wrapper}
     '';
 
     frontend-format.exec = ''
@@ -84,16 +75,7 @@ in
 
   # Git hooks - all must pass to allow commits
   git-hooks.hooks = {
-    # Format check (prettier)
-    npm-format = {
-      enable = true;
-      name = "prettier-npm";
-      entry = "${lib.getExe npm-format}";
-      files = "\\.(js|ts|svelte|css|html)$";
-      pass_filenames = false;
-    };
-
-    # Lint check (eslint)
+    # Lint check (prettier + eslint)
     eslint = {
       enable = true;
       entry = "${lib.getExe eslint-wrapper}";

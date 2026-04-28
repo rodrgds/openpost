@@ -19,7 +19,7 @@ import (
 type Service struct {
 	db                           *bun.DB
 	tm                           *tokenmanager.TokenManager
-	providers                    map[string]platform.PlatformAdapter
+	providers                    map[string]platform.Adapter
 	disableLinkedInThreadReplies bool
 	publicMediaURL               string
 }
@@ -28,7 +28,7 @@ func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 	return &Service{
 		db:        db,
 		tm:        tm,
-		providers: make(map[string]platform.PlatformAdapter),
+		providers: make(map[string]platform.Adapter),
 	}
 }
 
@@ -40,7 +40,7 @@ func (s *Service) SetPublicMediaURL(url string) {
 	s.publicMediaURL = url
 }
 
-func (s *Service) SetProvider(platformName string, adapter platform.PlatformAdapter) {
+func (s *Service) SetProvider(platformName string, adapter platform.Adapter) {
 	s.providers[platformName] = adapter
 }
 
@@ -256,6 +256,7 @@ func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
 	}
 }
 
+//nolint:gocyclo
 func (s *Service) publishToDestination(ctx context.Context, post *models.Post, dest *models.PostDestination) error {
 	account := new(models.SocialAccount)
 	if err := s.db.NewSelect().Model(account).Where("id = ?", dest.SocialAccountID).Scan(ctx); err != nil {
@@ -351,7 +352,7 @@ func isExpiredTokenError(err error) bool {
 		(strings.Contains(msg, "expired") && strings.Contains(msg, "token"))
 }
 
-func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.PlatformAdapter, token string, media models.MediaAttachment) (string, error) {
+func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment) (string, error) {
 	if account.Platform == "threads" {
 		return s.getPublicMediaURL(media), nil
 	}

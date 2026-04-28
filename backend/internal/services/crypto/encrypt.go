@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-// TokenEncryptor handles encryption/decryption of sensitive tokens
+// TokenEncryptor handles encryption/decryption of sensitive tokens.
 type TokenEncryptor struct {
 	key []byte
 }
@@ -21,7 +21,7 @@ func NewTokenEncryptor(key string) *TokenEncryptor {
 	return &TokenEncryptor{key: hash[:]}
 }
 
-// Encrypt plaintext securely using AES-256-GCM
+// Encrypt plaintext securely using AES-256-GCM.
 func (te *TokenEncryptor) Encrypt(plaintext string) ([]byte, error) {
 	if plaintext == "" {
 		return nil, nil
@@ -46,7 +46,7 @@ func (te *TokenEncryptor) Encrypt(plaintext string) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Decrypt the ciphertext using AES-256-GCM
+// Decrypt the ciphertext using AES-256-GCM.
 func (te *TokenEncryptor) Decrypt(ciphertext []byte) (string, error) {
 	if len(ciphertext) == 0 {
 		return "", nil

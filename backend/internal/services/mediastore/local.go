@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// BlobStorage exposes the S3-compatible interface for all media handles
+// BlobStorage exposes the S3-compatible interface for all media handles.
 type BlobStorage interface {
 	Save(id string, reader io.Reader) (string, error)
 	Delete(id string) error
@@ -48,7 +48,7 @@ func (s *LocalStorage) Delete(id string) error {
 }
 
 // GetURL returns the accessible URL for the media asset.
-// Example: baseURL could be "/media" mapping to a static Echo route
+// Example: baseURL could be "/media" mapping to a static Echo route.
 func (s *LocalStorage) GetURL(id string) string {
 	return s.baseURL + "/" + id
 }

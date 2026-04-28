@@ -57,7 +57,7 @@ func (l *LinkedInAdapter) GenerateAuthURL(state string) (string, map[string]stri
 	return "https://www.linkedin.com/oauth/v2/authorization?" + encodeQueryString(params), nil
 }
 
-func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error) {
+func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
 		"grant_type":    "authorization_code",
 		"code":          code,
@@ -158,7 +158,7 @@ func (l *LinkedInAdapter) UploadMedia(ctx context.Context, accessToken, personID
 	return l.uploadImage(ctx, accessToken, personID, mimeType, data)
 }
 
-func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID, mimeType string, data []byte) (string, error) {
+func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID, _ string, data []byte) (string, error) {
 	apiVersion := linkedInAPIVersion()
 
 	registerPayload := map[string]interface{}{
@@ -175,7 +175,7 @@ func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID
 	return l.completeUpload(ctx, accessToken, respBody, data)
 }
 
-func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID, mimeType string, data []byte) (string, error) {
+func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID, _ string, data []byte) (string, error) {
 	apiVersion := linkedInAPIVersion()
 
 	registerPayload := map[string]interface{}{
@@ -203,7 +203,7 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 			UploadInstructions struct {
 				UploadURL       string `json:"uploadUrl"`
 				UploadMechanism struct {
-					MediaUploadHttpRequest struct {
+					MediaUploadHTTPRequest struct {
 						Headers map[string]string `json:"headers"`
 					} `json:"com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"`
 				} `json:"uploadMechanism"`
@@ -226,7 +226,7 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 		"Authorization": "Bearer " + accessToken,
 		"Content-Type":  "application/octet-stream",
 	}
-	extraHeaders := registerResult.Value.UploadInstructions.UploadMechanism.MediaUploadHttpRequest.Headers
+	extraHeaders := registerResult.Value.UploadInstructions.UploadMechanism.MediaUploadHTTPRequest.Headers
 	if auth, ok := extraHeaders["Authorization"]; ok {
 		headers["Authorization"] = auth
 	}
@@ -332,7 +332,7 @@ func linkedinHeaders(accessToken, apiVersion string) map[string]string {
 }
 
 func encodeQueryString(params map[string]string) string {
-	var parts []string
+	parts := make([]string, 0, len(params))
 	for k, v := range params {
 		parts = append(parts, url.QueryEscape(k)+"="+url.QueryEscape(v))
 	}

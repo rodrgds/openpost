@@ -16,18 +16,18 @@ import (
 type TokenManager struct {
 	db        *bun.DB
 	crypto    *crypto.TokenEncryptor
-	providers map[string]platform.PlatformAdapter
+	providers map[string]platform.Adapter
 }
 
 func NewTokenManager(db *bun.DB, encryptor *crypto.TokenEncryptor) *TokenManager {
 	return &TokenManager{
 		db:        db,
 		crypto:    encryptor,
-		providers: make(map[string]platform.PlatformAdapter),
+		providers: make(map[string]platform.Adapter),
 	}
 }
 
-func (tm *TokenManager) SetProvider(platformName string, adapter platform.PlatformAdapter) {
+func (tm *TokenManager) SetProvider(platformName string, adapter platform.Adapter) {
 	tm.providers[platformName] = adapter
 }
 

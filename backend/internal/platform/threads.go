@@ -57,7 +57,7 @@ func (t *ThreadsAdapter) GetWorkspaceID(state string) (string, bool) {
 	return value.(string), true
 }
 
-func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error) {
+func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
 		"client_id":     t.config.ClientID,
 		"client_secret": t.config.ClientSecret,
@@ -75,8 +75,8 @@ func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, extra ma
 		AccessToken string      `json:"access_token"`
 		UserID      json.Number `json:"user_id"`
 	}
-	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return nil, fmt.Errorf("decoding threads token: %w", err)
+	if unmarshalErr := json.Unmarshal(respBody, &tokenResp); unmarshalErr != nil {
+		return nil, fmt.Errorf("decoding threads token: %w", unmarshalErr)
 	}
 
 	userID := tokenResp.UserID.String()
@@ -173,7 +173,7 @@ func (t *ThreadsAdapter) GetProfile(ctx context.Context, accessToken string) (*U
 	}, nil
 }
 
-func (t *ThreadsAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error) {
+func (t *ThreadsAdapter) UploadMedia(_ context.Context, _ string, _ string, _ string, _ io.Reader) (string, error) {
 	return "", fmt.Errorf("threads requires publicly accessible URLs, use the media serve URL directly")
 }
 
@@ -219,7 +219,7 @@ func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken,
 				Status       string `json:"status"`
 				ErrorMessage string `json:"error_message"`
 			}
-			if err := json.Unmarshal(respBody, &statusResp); err == nil {
+			if unmarshalErr := json.Unmarshal(respBody, &statusResp); unmarshalErr == nil {
 				switch statusResp.Status {
 				case "FINISHED", "PUBLISHED":
 					return nil

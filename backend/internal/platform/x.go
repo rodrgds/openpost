@@ -109,8 +109,8 @@ func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) 
 	}
 	meta := XRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID, CreatedAt: time.Now().UTC()}
 	if x.requestStore != nil {
-		if err := x.requestStore.Save(requestToken, meta.Secret, meta.WorkspaceID, meta.CreatedAt); err != nil {
-			return "", fmt.Errorf("x oauth1 request token persist failed: %w", err)
+		if saveErr := x.requestStore.Save(requestToken, meta.Secret, meta.WorkspaceID, meta.CreatedAt); saveErr != nil {
+			return "", fmt.Errorf("x oauth1 request token persist failed: %w", saveErr)
 		}
 	} else {
 		x.requestMeta.Store(requestToken, meta)
@@ -143,7 +143,7 @@ func (x *XAdapter) GetWorkspaceIDForRequestToken(requestToken string) (string, b
 	return meta.WorkspaceID, true
 }
 
-func (x *XAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error) {
+func (x *XAdapter) ExchangeCode(_ context.Context, _ string, extra map[string]string) (*TokenResult, error) {
 	oauthToken := extra["oauth_token"]
 	oauthVerifier := extra["oauth_verifier"]
 	if oauthToken == "" || oauthVerifier == "" {
@@ -208,7 +208,7 @@ func (x *XAdapter) ExchangeCode(ctx context.Context, code string, extra map[stri
 	}, nil
 }
 
-func (x *XAdapter) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
+func (x *XAdapter) RefreshToken(_ context.Context, _ string) (*TokenResult, error) {
 	return nil, fmt.Errorf("x oauth1 tokens do not support refresh")
 }
 
@@ -236,7 +236,7 @@ func (x *XAdapter) GetProfile(ctx context.Context, accessToken string) (*UserPro
 	}, nil
 }
 
-func (x *XAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error) {
+func (x *XAdapter) UploadMedia(ctx context.Context, accessToken, _ string, mimeType string, reader io.Reader) (string, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return "", fmt.Errorf("reading media: %w", err)
@@ -270,11 +270,11 @@ func (x *XAdapter) uploadMediaSimple(ctx context.Context, accessToken string, da
 	if err != nil {
 		return "", fmt.Errorf("creating media form file: %w", err)
 	}
-	if _, err := part.Write(data); err != nil {
-		return "", fmt.Errorf("writing media content: %w", err)
+	if _, writeErr := part.Write(data); writeErr != nil {
+		return "", fmt.Errorf("writing media content: %w", writeErr)
 	}
-	if err := writer.Close(); err != nil {
-		return "", fmt.Errorf("closing multipart writer: %w", err)
+	if closeErr := writer.Close(); closeErr != nil {
+		return "", fmt.Errorf("closing multipart writer: %w", closeErr)
 	}
 
 	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
@@ -307,15 +307,15 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 		"Content-Type": "application/x-www-form-urlencoded",
 	})
 	if err != nil {
-		return "", fmt.Errorf("X INIT failed: %w", err)
+		return "", fmt.Errorf("x INIT failed: %w", err)
 	}
 
 	var initResp struct {
 		MediaIDString  string                `json:"media_id_string"`
 		ProcessingInfo *xMediaProcessingInfo `json:"processing_info"`
 	}
-	if err := json.Unmarshal(respBody, &initResp); err != nil {
-		return "", fmt.Errorf("decoding X INIT: %w", err)
+	if unmarshalErr := json.Unmarshal(respBody, &initResp); unmarshalErr != nil {
+		return "", fmt.Errorf("decoding X INIT: %w", unmarshalErr)
 	}
 	if initResp.MediaIDString == "" {
 		return "", fmt.Errorf("missing media_id_string in X INIT")
@@ -335,22 +335,22 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 		_ = writer.WriteField("command", "APPEND")
 		_ = writer.WriteField("media_id", mediaID)
 		_ = writer.WriteField("segment_index", strconv.Itoa(segmentIndex))
-		part, err := writer.CreateFormFile("media", "chunk.bin")
-		if err != nil {
-			return "", fmt.Errorf("X APPEND create form file: %w", err)
+		part, createErr := writer.CreateFormFile("media", "chunk.bin")
+		if createErr != nil {
+			return "", fmt.Errorf("x APPEND create form file: %w", createErr)
 		}
-		if _, err := part.Write(data[offset:end]); err != nil {
-			return "", fmt.Errorf("X APPEND write segment %d: %w", segmentIndex, err)
+		if _, writeErr := part.Write(data[offset:end]); writeErr != nil {
+			return "", fmt.Errorf("x APPEND write segment %d: %w", segmentIndex, writeErr)
 		}
-		if err := writer.Close(); err != nil {
-			return "", fmt.Errorf("X APPEND close writer: %w", err)
+		if closeErr := writer.Close(); closeErr != nil {
+			return "", fmt.Errorf("x APPEND close writer: %w", closeErr)
 		}
 
 		_, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
 			"Content-Type": writer.FormDataContentType(),
 		})
 		if err != nil {
-			return "", fmt.Errorf("X APPEND segment %d: %w", segmentIndex, err)
+			return "", fmt.Errorf("x APPEND segment %d: %w", segmentIndex, err)
 		}
 		segmentIndex++
 	}
@@ -363,7 +363,7 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 		"Content-Type": "application/x-www-form-urlencoded",
 	})
 	if err != nil {
-		return "", fmt.Errorf("X FINALIZE: %w", err)
+		return "", fmt.Errorf("x FINALIZE: %w", err)
 	}
 
 	var finalizeResp struct {
@@ -401,7 +401,7 @@ func (x *XAdapter) waitForMediaProcessing(ctx context.Context, accessToken, medi
 		statusURL := "https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=" + url.QueryEscape(mediaID)
 		respBody, err := x.doSignedRequest(ctx, accessToken, "GET", statusURL, nil, nil)
 		if err != nil {
-			return fmt.Errorf("X STATUS check: %w", err)
+			return fmt.Errorf("x STATUS check: %w", err)
 		}
 
 		var statusResp struct {
@@ -417,17 +417,17 @@ func (x *XAdapter) waitForMediaProcessing(ctx context.Context, accessToken, medi
 		*info = *statusResp.ProcessingInfo
 
 		if info.State == "failed" {
-			return fmt.Errorf("X media processing failed")
+			return fmt.Errorf("x media processing failed")
 		}
 	}
 
 	if info.State == "succeeded" {
 		return nil
 	}
-	return fmt.Errorf("X media processing unexpected state: %s", info.State)
+	return fmt.Errorf("x media processing unexpected state: %s", info.State)
 }
 
-func (x *XAdapter) Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error) {
+func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *PublishRequest) (string, error) {
 	payload := map[string]interface{}{
 		"text": req.Content,
 	}

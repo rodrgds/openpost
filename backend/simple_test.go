@@ -7,7 +7,7 @@ import (
 	"github.com/openpost/backend/internal/platform"
 )
 
-func TestPlatformImport(t *testing.T) {
+func TestPlatformImport(_ *testing.T) {
 	var _ platform.TokenResult
 	fmt.Println("Platform import works")
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Built-in prompts seeded on first request
+// Built-in prompts seeded on first request.
 type PromptHandler struct {
 	db             *bun.DB
 	auth           *auth.Service
@@ -444,7 +444,7 @@ func (h *PromptHandler) GetCategories(api huma.API) {
 		Summary:     "Get available prompt categories",
 		Tags:        []string{"Prompts"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *struct{}) (*GetPromptCategoriesOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*GetPromptCategoriesOutput, error) {
 		// Seed built-in prompts on first request
 		if err := h.seedBuiltInPrompts(ctx); err != nil {
 			return nil, huma.Error500InternalServerError("failed to seed prompts")

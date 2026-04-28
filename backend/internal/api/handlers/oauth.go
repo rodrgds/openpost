@@ -20,10 +20,12 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const mastodonProvider = "mastodon"
+
 type OAuthHandler struct {
 	db                           *bun.DB
 	crypto                       *crypto.TokenEncryptor
-	providers                    map[string]platform.PlatformAdapter
+	providers                    map[string]platform.Adapter
 	auth                         *auth.Service
 	disableLinkedInThreadReplies bool
 	accountSaver                 *account_saver.AccountSaver
@@ -32,7 +34,7 @@ type OAuthHandler struct {
 func NewOAuthHandler(
 	db *bun.DB,
 	encryptor *crypto.TokenEncryptor,
-	providers map[string]platform.PlatformAdapter,
+	providers map[string]platform.Adapter,
 	authService *auth.Service,
 	disableLinkedInThreadReplies bool,
 ) *OAuthHandler {
@@ -110,8 +112,8 @@ type ListAccountsOutput struct {
 	Body []AccountResponse
 }
 
-func (h *OAuthHandler) getProvider(platform, serverName string) (platform.PlatformAdapter, string, error) {
-	if platform == "mastodon" {
+func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, string, error) {
+	if platform == mastodonProvider {
 		if serverName == "" {
 			return nil, "", fmt.Errorf("server_name required for mastodon")
 		}
@@ -138,7 +140,7 @@ func (h *OAuthHandler) ListMastodonServers(api huma.API) {
 		Summary:     "List configured Mastodon servers",
 		Tags:        []string{"Accounts"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *struct{}) (*ListMastodonServersOutput, error) {
+	}, func(_ context.Context, _ *struct{}) (*ListMastodonServersOutput, error) {
 		var servers []MastodonServerInfo
 		for key, adapter := range h.providers {
 			if !strings.HasPrefix(key, "mastodon:") {
@@ -165,7 +167,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
-	}, func(ctx context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
+	}, func(_ context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
 		if input.Platform == "bluesky" {
 			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
 		}
@@ -191,7 +193,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		}
 
 		authURL, _ := adapter.GenerateAuthURL(input.WorkspaceID)
-		if input.Platform == "mastodon" && input.ServerName != "" {
+		if input.Platform == mastodonProvider && input.ServerName != "" {
 			authURL, _ = adapter.GenerateAuthURL(input.ServerName + ":" + input.WorkspaceID)
 		}
 		if authURL == "" {
@@ -204,6 +206,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 	})
 }
 
+//nolint:gocyclo
 func (h *OAuthHandler) Callback(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "oauth-callback",
@@ -228,7 +231,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		}
 
 		workspaceID := input.State
-		if input.Platform == "mastodon" && input.ServerName == "" && input.State != "" {
+		if input.Platform == mastodonProvider && input.ServerName == "" && input.State != "" {
 			parts := strings.SplitN(input.State, ":", 2)
 			if len(parts) == 2 {
 				input.ServerName = parts[0]
@@ -249,10 +252,11 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		if input.Platform == "threads" {
 			if threadsAdapter, ok := adapter.(*platform.ThreadsAdapter); ok {
-				workspaceID, ok := threadsAdapter.GetWorkspaceID(input.State)
+				ws, ok := threadsAdapter.GetWorkspaceID(input.State)
 				if !ok {
 					return nil, huma.Error400BadRequest("invalid or expired state")
 				}
+				workspaceID = ws
 				extra["_workspace_id"] = workspaceID
 			}
 		}
@@ -264,7 +268,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 
 		profile, err := adapter.GetProfile(ctx, tokenResp.AccessToken)
 		if err != nil {
-			if input.Platform == "mastodon" {
+			if input.Platform == mastodonProvider {
 				profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
 			} else {
 				return h.redirectWithError(fmt.Sprintf("failed to get profile: %s", err.Error()))
@@ -331,7 +335,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
-		adapter, _, err := h.getProvider("mastodon", input.Body.ServerName)
+		adapter, _, err := h.getProvider(mastodonProvider, input.Body.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -347,7 +351,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		}
 
 		// Delegate saving the account (encrypting tokens and inserting) to AccountSaver
-		if _, err := h.accountSaver.SaveAccount(ctx, "mastodon", input.Body.WorkspaceID, profile.ID, profile.Username, input.Body.ServerName, tokenResp); err != nil {
+		if _, err := h.accountSaver.SaveAccount(ctx, mastodonProvider, input.Body.WorkspaceID, profile.ID, profile.Username, input.Body.ServerName, tokenResp); err != nil {
 			log.Printf("[ExchangeCode] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to save account: %s", err.Error()))
 		}

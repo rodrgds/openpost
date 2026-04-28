@@ -143,6 +143,7 @@ type UpdateMediaOutput struct {
 	}
 }
 
+//nolint:gocyclo
 func (h *MediaHandler) RegisterRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-media",
@@ -211,13 +212,15 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		result := make([]MediaListItem, len(media))
 		for i, m := range media {
 			var usageCount int
-			h.db.NewSelect().Model(&models.PostMedia{}).
+			usageCount, _ = h.db.NewSelect().Model(&models.PostMedia{}).
 				Where("media_id = ?", m.ID).
 				Count(ctx)
 
 			var thumbs Thumbnails
 			if m.ThumbnailsJSON != "" {
-				json.Unmarshal([]byte(m.ThumbnailsJSON), &thumbs)
+				if err := json.Unmarshal([]byte(m.ThumbnailsJSON), &thumbs); err != nil {
+					thumbs = Thumbnails{}
+				}
 			}
 
 			result[i] = MediaListItem{
@@ -411,7 +414,14 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 				continue
 			}
 
-			if err := h.deleteMediaFiles(&media); err != nil {
+			err = h.deleteMediaFiles(&media)
+			if err != nil {
+				failedIDs = append(failedIDs, mediaID)
+				continue
+			}
+
+			err = h.deleteMediaFiles(&media)
+			if err != nil {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
@@ -517,14 +527,14 @@ func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {
 
 	var thumbs Thumbnails
 	if media.ThumbnailsJSON != "" {
-		json.Unmarshal([]byte(media.ThumbnailsJSON), &thumbs)
+		_ = json.Unmarshal([]byte(media.ThumbnailsJSON), &thumbs)
 	}
 
 	if thumbs.SM != "" {
-		h.storage.Delete(thumbs.SM)
+		h.storage.Delete(thumbs.SM) //nolint:errcheck
 	}
 	if thumbs.MD != "" {
-		h.storage.Delete(thumbs.MD)
+		h.storage.Delete(thumbs.MD) //nolint:errcheck
 	}
 
 	return nil
@@ -684,7 +694,7 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 	}
 
 	width, height := 0, 0
-	thumbnails := Thumbnails{}
+	var thumbnails Thumbnails
 
 	if strings.HasPrefix(mimeType, "image/") {
 		width, height, thumbnails, err = h.processImage(content, mediaID, mimeType)
@@ -758,7 +768,7 @@ func (h *MediaHandler) saveThumbnail(filename string, img image.Image, format im
 	return err
 }
 
-func (h *MediaHandler) getImageDimensions(reader io.Reader, mimeType string) (int, int) {
+func (h *MediaHandler) getImageDimensions(reader io.Reader, _ string) (int, int) {
 	config, _, err := image.DecodeConfig(reader)
 	if err != nil {
 		return 0, 0
@@ -800,7 +810,7 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 
 	var thumbs Thumbnails
 	if media.ThumbnailsJSON != "" {
-		json.Unmarshal([]byte(media.ThumbnailsJSON), &thumbs)
+		_ = json.Unmarshal([]byte(media.ThumbnailsJSON), &thumbs)
 	}
 
 	var thumbFilename string

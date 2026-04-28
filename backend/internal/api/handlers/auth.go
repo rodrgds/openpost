@@ -147,7 +147,7 @@ func (h *AuthHandler) Me(api huma.API) {
 		Summary:     "Get current authenticated user",
 		Tags:        []string{"Auth"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *struct{}) (*MeOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
 		user := new(models.User)

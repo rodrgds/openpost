@@ -684,7 +684,7 @@
 
 		<div class="space-y-4 py-4">
 			<div class="space-y-2">
-				<label class="text-sm font-medium">Single Upload</label>
+				<span class="text-sm font-medium">Single Upload</span>
 				<label
 					class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-primary/50"
 					for="file-upload"
@@ -706,7 +706,7 @@
 			</div>
 
 			<div class="space-y-2">
-				<label class="text-sm font-medium">Batch Upload (up to 10)</label>
+				<span class="text-sm font-medium">Batch Upload (up to 10)</span>
 				<label
 					class="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-primary/50"
 					for="batch-file-upload"

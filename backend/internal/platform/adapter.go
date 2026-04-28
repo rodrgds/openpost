@@ -28,12 +28,12 @@ type TokenResult struct {
 	Extra        map[string]string `json:"extra"` // Platform-specific data (e.g., user ID for Threads)
 }
 
-// PlatformAdapter is the single interface every social platform must implement.
+// Adapter is the single interface every social platform must implement.
 // This eliminates switch statements across publisher, token manager, and OAuth handlers.
 //
 // Each platform implementation lives in its own file (x.go, mastodon.go, etc.)
-// and is registered in main.go via a map[string]PlatformAdapter.
-type PlatformAdapter interface {
+// and is registered in main.go via a map[string]Adapter.
+type Adapter interface {
 	// Auth flow
 	// GenerateAuthURL returns the OAuth authorization URL.
 	// extra contains platform-specific params (e.g. PKCE code_challenge for X).
