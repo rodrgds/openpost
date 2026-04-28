@@ -47,7 +47,14 @@
     # Lint check (golangci-lint)
     golangci-lint = {
       enable = true;
-      entry = "${lib.getExe pkgs.golangci-lint}";
+      entry = lib.getExe (pkgs.writeShellApplication {
+        name = "golangci-lint-wrapper";
+        text = ''
+          mkdir -p backend/cmd/openpost/public
+          touch backend/cmd/openpost/public/.gitkeep
+          cd backend && golangci-lint run ./...
+        '';
+      });
       files = "\\.go$";
       pass_filenames = false;
     };
@@ -58,6 +65,8 @@
       entry = lib.getExe (pkgs.writeShellApplication {
         name = "go-test";
         text = ''
+          mkdir -p backend/cmd/openpost/public
+          touch backend/cmd/openpost/public/.gitkeep
           cd backend && go test ./...
         '';
       });
