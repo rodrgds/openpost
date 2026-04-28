@@ -446,7 +446,7 @@
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>Settings</span>
 							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => goto('/logs')}>
+							<DropdownMenu.Item onclick={() => goto('/activity')}>
 								<ScrollTextIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>Logs</span>
 							</DropdownMenu.Item>
