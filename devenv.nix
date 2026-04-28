@@ -27,9 +27,18 @@
     dev.exec = ''
       frontend-dev &
       FRONTEND_PID=$!
+      disown $FRONTEND_PID 2>/dev/null || true
 
       cleanup() {
+        # Kill the entire frontend process group (wrapper + bun + vite)
+        local pgid
+        pgid=$(ps -o pgid= $FRONTEND_PID 2>/dev/null | tr -d ' ')
+        if [ -n "$pgid" ] && [ "$pgid" != "$$" ] && [ "$pgid" != "1" ]; then
+          kill -- -$pgid 2>/dev/null || true
+        fi
+        # Fallback: kill PID directly, then force-kill if still alive
         kill $FRONTEND_PID 2>/dev/null || true
+        (sleep 0.5 && kill -9 $FRONTEND_PID 2>/dev/null) &
         wait $FRONTEND_PID 2>/dev/null || true
       }
       trap cleanup INT TERM EXIT
