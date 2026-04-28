@@ -151,6 +151,24 @@ func (m *MastodonAdapter) waitForMediaProcessing(ctx context.Context, accessToke
 }
 
 func (m *MastodonAdapter) Publish(ctx context.Context, accessToken, _ string, req *PublishRequest) (string, error) {
+	// Update alt text for each uploaded media before attaching to the status
+	for i, mediaID := range req.PlatformMediaIDs {
+		altText := ""
+		if i < len(req.MediaAltTexts) {
+			altText = req.MediaAltTexts[i]
+		}
+		if altText != "" {
+			_, err := DoFormURLEncoded(ctx, "PUT", m.instanceURL+"/api/v1/media/"+mediaID, map[string]string{
+				"description": altText,
+			}, map[string]string{
+				"Authorization": "Bearer " + accessToken,
+			})
+			if err != nil {
+				return "", fmt.Errorf("updating mastodon media alt text: %w", err)
+			}
+		}
+	}
+
 	formValues := url.Values{}
 	formValues.Set("status", req.Content)
 	formValues.Set("visibility", "public")

@@ -428,6 +428,32 @@ func (x *XAdapter) waitForMediaProcessing(ctx context.Context, accessToken, medi
 }
 
 func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *PublishRequest) (string, error) {
+	// Set alt text for each media before posting
+	for i, mediaID := range req.PlatformMediaIDs {
+		altText := ""
+		if i < len(req.MediaAltTexts) {
+			altText = req.MediaAltTexts[i]
+		}
+		if altText != "" {
+			metaPayload := map[string]interface{}{
+				"media_id": mediaID,
+				"alt_text": map[string]string{
+					"text": altText,
+				},
+			}
+			metaBody, err := jsonMarshal(metaPayload)
+			if err != nil {
+				return "", fmt.Errorf("marshaling X media metadata: %w", err)
+			}
+			_, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/metadata/create.json", bytes.NewReader(metaBody), map[string]string{
+				"Content-Type": "application/json",
+			})
+			if err != nil {
+				return "", fmt.Errorf("setting X media alt text: %w", err)
+			}
+		}
+	}
+
 	payload := map[string]interface{}{
 		"text": req.Content,
 	}

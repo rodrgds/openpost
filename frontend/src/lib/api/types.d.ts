@@ -174,6 +174,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent background jobs */
+        get: operations["list-jobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List media attachments for a workspace */
+        get: operations["list-media"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete multiple media attachments at once (only unused ones) */
+        post: operations["batch-delete-media"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a media attachment (only if not used in any post) */
+        delete: operations["delete-media"];
+        options?: never;
+        head?: never;
+        /** Update media metadata (alt text) */
+        patch: operations["update-media"];
+        trace?: never;
+    };
+    "/media/{id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Toggle favorite status of a media attachment */
+        patch: operations["update-media-favorite"];
+        trace?: never;
+    };
+    "/media/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get posts that use a media attachment */
+        get: operations["get-media-usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posting-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List posting schedules for a workspace */
+        get: operations["list-posting-schedules"];
+        put?: never;
+        /** Create a new posting schedule slot */
+        post: operations["create-posting-schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posting-schedules/next-slot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the next available posting time slot */
+        get: operations["get-next-available-slot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posting-schedules/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate a suggested posting schedule */
+        post: operations["suggest-posting-schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/posting-schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a posting schedule slot */
+        delete: operations["delete-posting-schedule"];
+        options?: never;
+        head?: never;
+        /** Update a posting schedule slot */
+        patch: operations["update-posting-schedule"];
+        trace?: never;
+    };
     "/posts": {
         parameters: {
             query?: never;
@@ -259,6 +432,75 @@ export interface paths {
         post?: never;
         /** Delete all variants for a post (reset to unified content) */
         delete: operations["delete-post-variants"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List writing prompts */
+        get: operations["list-prompts"];
+        put?: never;
+        /** Create a custom writing prompt */
+        post: operations["create-prompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/prompts/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get available prompt categories */
+        get: operations["get-prompt-categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/prompts/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a random writing prompt */
+        get: operations["get-random-prompt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/prompts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a custom prompt */
+        delete: operations["delete-prompt"];
         options?: never;
         head?: never;
         patch?: never;
@@ -353,6 +595,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get workspace settings */
+        get: operations["get-workspace-settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update workspace settings */
+        patch: operations["update-workspace-settings"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -396,6 +656,31 @@ export interface components {
             token: string;
             user: components["schemas"]["UserProfile"];
         };
+        BatchDeleteMediaInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BatchDeleteMediaInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Array of media IDs to delete */
+            media_ids: string[] | null;
+        };
+        BatchDeleteMediaOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BatchDeleteMediaOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Number of media deleted
+             */
+            deleted: number;
+            /** @description IDs that could not be deleted (in use) */
+            failed_ids: string[] | null;
+        };
         BlueskyLoginInputBody: {
             /**
              * Format: uri
@@ -422,6 +707,11 @@ export interface components {
             /** @description Media attachment IDs to include */
             media_ids?: string[] | null;
             /**
+             * Format: int64
+             * @description Random delay in minutes (±N) to add for natural posting
+             */
+            random_delay_minutes?: number;
+            /**
              * Format: date-time
              * @description Schedule time (ISO 8601). Omit for draft.
              */
@@ -430,6 +720,49 @@ export interface components {
             social_account_ids: string[] | null;
             /** @description Target workspace ID */
             workspace_id: string;
+        };
+        CreatePostingScheduleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreatePostingScheduleInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Day of week (0=Sunday, 6=Saturday)
+             */
+            day_of_week: number;
+            /** @description Display label */
+            label?: string;
+            /** @description Optional set ID */
+            set_id?: string;
+            /**
+             * Format: int64
+             * @description Hour in UTC (0-23)
+             */
+            utc_hour: number;
+            /**
+             * Format: int64
+             * @description Minute in UTC (0-59)
+             */
+            utc_minute: number;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        CreatePromptInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreatePromptInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Prompt category */
+            category: string;
+            /** @description Prompt text */
+            text: string;
+            /** @description Workspace ID (for workspace prompt) */
+            workspace_id?: string;
         };
         CreateSetInputBody: {
             /**
@@ -456,6 +789,11 @@ export interface components {
             readonly $schema?: string;
             /** @description Thread posts in order */
             posts: components["schemas"]["ThreadPostInput"][] | null;
+            /**
+             * Format: int64
+             * @description Random delay in minutes (±N) to add for natural posting
+             */
+            random_delay_minutes?: number;
             /**
              * Format: date-time
              * @description Schedule time (ISO 8601). Omit for draft.
@@ -497,11 +835,41 @@ export interface components {
             id: string;
             name: string;
         };
+        DeleteMediaOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeleteMediaOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Success message */
+            message: string;
+        };
         DeletePostOutputBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
              * @example https://example.com/schemas/DeletePostOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Success message */
+            message: string;
+        };
+        DeletePostingScheduleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeletePostingScheduleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Success message */
+            message: string;
+        };
+        DeletePromptOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeletePromptOutputBody.json
              */
             readonly $schema?: string;
             /** @description Success message */
@@ -598,6 +966,31 @@ export interface components {
             /** @description OAuth authorization URL */
             url: string;
         };
+        GetMediaUsageOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/GetMediaUsageOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Number of posts using this media
+             */
+            count: number;
+            /** @description Posts using this media */
+            usage: components["schemas"]["MediaUsageItem"][] | null;
+        };
+        GetPromptCategoriesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/GetPromptCategoriesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Available prompt categories */
+            categories: string[] | null;
+        };
         GetVariantsOutputBody: {
             /**
              * Format: uri
@@ -607,6 +1000,27 @@ export interface components {
             readonly $schema?: string;
             /** @description Post variants */
             variants: components["schemas"]["VariantResponse"][] | null;
+        };
+        GetWorkspaceSettingsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/GetWorkspaceSettingsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            media_cleanup_days: number;
+            /** Format: int64 */
+            random_delay_minutes: number;
+            /** Format: int64 */
+            slot_end_hour: number;
+            /** Format: int64 */
+            slot_interval_minutes: number;
+            /** Format: int64 */
+            slot_start_hour: number;
+            timezone: string;
+            /** Format: int64 */
+            week_start: number;
         };
         "Health-checkResponse": {
             /**
@@ -622,6 +1036,49 @@ export interface components {
             created_at: string;
             id: string;
             name: string;
+        };
+        JobResponse: {
+            /**
+             * Format: int64
+             * @description Number of attempts
+             */
+            attempts: number;
+            /** @description Creation time */
+            created_at: string;
+            /** @description Job ID */
+            id: string;
+            /** @description Last error message */
+            last_error?: string;
+            /** @description When job was locked */
+            locked_at?: string;
+            /**
+             * Format: int64
+             * @description Maximum attempts
+             */
+            max_attempts: number;
+            /** @description Job payload */
+            payload?: string;
+            /** @description Scheduled run time */
+            run_at: string;
+            /** @description Job status */
+            status: string;
+            /** @description Job type */
+            type: string;
+        };
+        ListMediaOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ListMediaOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Media attachments */
+            media: components["schemas"]["MediaListItem"][] | null;
+            /**
+             * Format: int64
+             * @description Total count matching filter
+             */
+            total: number;
         };
         LoginInputBody: {
             /**
@@ -644,7 +1101,75 @@ export interface components {
             /** @description Server configuration name */
             name: string;
         };
+        MediaListItem: {
+            /** @description Alt text */
+            alt_text: string;
+            /** @description Creation time */
+            created_at: string;
+            /**
+             * Format: int64
+             * @description Image height
+             */
+            height: number;
+            /** @description Media ID */
+            id: string;
+            /** @description Whether media is favorited */
+            is_favorite: boolean;
+            /** @description MIME type */
+            mime_type: string;
+            /** @description Original filename */
+            original_filename: string;
+            /** @description Processing status */
+            processing_status: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             */
+            size: number;
+            /** @description Thumbnail URL for grid view */
+            thumbnail_url: string;
+            /** @description URL to access the media */
+            url: string;
+            /**
+             * Format: int64
+             * @description Number of posts using this media
+             */
+            usage_count: number;
+            /**
+             * Format: int64
+             * @description Image width
+             */
+            width: number;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        MediaUsageItem: {
+            /** @description Post content (truncated) */
+            content: string;
+            /** @description Post ID */
+            post_id: string;
+            /** @description Scheduled time */
+            scheduled_at: string;
+            /** @description Post status */
+            status: string;
+        };
+        NextAvailableSlotOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/NextAvailableSlotOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Message about the result */
+            message: string;
+            /** @description Next available schedule slot */
+            slot?: components["schemas"]["PostingScheduleResponse"];
+            /** @description The suggested time in ISO 8601 format */
+            slot_time: string;
+        };
         PostDestinationResponse: {
+            /** @description Error message if publishing failed */
+            error_message?: string;
             /** @description Platform name */
             platform: string;
             /** @description Social account ID */
@@ -659,6 +1184,8 @@ export interface components {
              * @example https://example.com/schemas/PostDetailResponse.json
              */
             readonly $schema?: string;
+            /** @description Actual run time after random delay (ISO 8601) */
+            actual_run_at?: string;
             /** @description Post content */
             content: string;
             /** @description Creation time (ISO 8601) */
@@ -671,6 +1198,11 @@ export interface components {
             id: string;
             /** @description Attached media */
             media?: components["schemas"]["PostMediaResponse"][] | null;
+            /**
+             * Format: int64
+             * @description Random delay in minutes (±N)
+             */
+            random_delay_minutes: number;
             /** @description Scheduled time (ISO 8601) */
             scheduled_at: string;
             /** @description Post status */
@@ -679,6 +1211,8 @@ export interface components {
             workspace_id: string;
         };
         PostMediaResponse: {
+            /** @description Alt text for accessibility */
+            alt_text: string;
             /**
              * Format: int64
              * @description Display order
@@ -698,6 +1232,8 @@ export interface components {
              * @example https://example.com/schemas/PostResponse.json
              */
             readonly $schema?: string;
+            /** @description Actual run time after random delay (ISO 8601) */
+            actual_run_at?: string;
             /** @description Post content */
             content: string;
             /** @description Creation time (ISO 8601) */
@@ -708,14 +1244,76 @@ export interface components {
             destinations?: components["schemas"]["PostDestinationResponse"][] | null;
             /** @description Post ID */
             id: string;
+            /** @description Attached media IDs */
+            media_ids?: string[] | null;
+            /**
+             * Format: int64
+             * @description Random delay in minutes (±N)
+             */
+            random_delay_minutes: number;
             /** @description Scheduled time (ISO 8601) */
             scheduled_at: string;
             /** @description Post status (draft, scheduled, publishing, published, failed) */
             status: string;
             /** @description Workspace ID */
             workspace_id: string;
-            /** @description Attached media IDs */
-            media_ids?: string[] | null;
+        };
+        PostingScheduleResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PostingScheduleResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Creation time (ISO 8601) */
+            created_at: string;
+            /**
+             * Format: int64
+             * @description Day of week (0=Sunday, 6=Saturday) in UTC
+             */
+            day_of_week: number;
+            /** @description Schedule ID */
+            id: string;
+            /** @description Whether this slot is active */
+            is_active: boolean;
+            /** @description Display label (e.g., Morning, Lunch) */
+            label?: string;
+            /** @description Optional set ID */
+            set_id?: string;
+            /**
+             * Format: int64
+             * @description Hour in UTC (0-23)
+             */
+            utc_hour: number;
+            /**
+             * Format: int64
+             * @description Minute in UTC (0-59)
+             */
+            utc_minute: number;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        PromptResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PromptResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Prompt category */
+            category: string;
+            /** @description Creation time (ISO 8601) */
+            created_at: string;
+            /** @description Prompt ID */
+            id: string;
+            /** @description Whether this is a built-in prompt */
+            is_built_in: boolean;
+            /** @description Prompt text */
+            text: string;
+            /** @description User ID (if custom) */
+            user_id?: string;
+            /** @description Workspace ID (if custom) */
+            workspace_id?: string;
         };
         RegisterInputBody: {
             /**
@@ -821,11 +1419,68 @@ export interface components {
             /** @description Workspace ID */
             workspace_id: string;
         };
+        SuggestScheduleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SuggestScheduleInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Number of posts per day (1-10)
+             */
+            posts_per_day: number;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        SuggestScheduleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SuggestScheduleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Message about the result */
+            message: string;
+            /** @description Created schedule slots */
+            schedules: components["schemas"]["PostingScheduleResponse"][] | null;
+        };
         ThreadPostInput: {
             /** @description Post content */
             content: string;
             /** @description Media attachment IDs */
             media_ids?: string[] | null;
+        };
+        UpdateMediaFavoriteOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateMediaFavoriteOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Updated favorite status */
+            is_favorite: boolean;
+        };
+        UpdateMediaInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateMediaInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Alt text for accessibility */
+            alt_text: string;
+        };
+        UpdateMediaOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateMediaOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Success message */
+            message: string;
         };
         UpdatePostInputBody: {
             /**
@@ -838,10 +1493,42 @@ export interface components {
             content?: string;
             /** @description Media attachment IDs to include (replace all) */
             media_ids?: string[] | null;
+            /**
+             * Format: int64
+             * @description Random delay in minutes (±N) to add for natural posting
+             */
+            random_delay_minutes?: number;
             /** @description Schedule time (ISO 8601). Set to empty string to unschedule (make draft). */
             scheduled_at?: string;
             /** @description Social account IDs to publish to (replace all) */
             social_account_ids?: string[] | null;
+        };
+        UpdatePostingScheduleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdatePostingScheduleInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Day of week (0=Sunday, 6=Saturday)
+             */
+            day_of_week?: number;
+            /** @description Whether this slot is active */
+            is_active?: boolean;
+            /** @description Display label */
+            label?: string;
+            /**
+             * Format: int64
+             * @description Hour in UTC (0-23)
+             */
+            utc_hour?: number;
+            /**
+             * Format: int64
+             * @description Minute in UTC (0-59)
+             */
+            utc_minute?: number;
         };
         UpdateSetInputBody: {
             /**
@@ -854,6 +1541,48 @@ export interface components {
             is_default?: boolean;
             /** @description Set name */
             name?: string;
+        };
+        UpdateWorkspaceSettingsInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateWorkspaceSettingsInputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            media_cleanup_days?: number;
+            /** Format: int64 */
+            random_delay_minutes?: number;
+            /** Format: int64 */
+            slot_end_hour?: number;
+            /** Format: int64 */
+            slot_interval_minutes?: number;
+            /** Format: int64 */
+            slot_start_hour?: number;
+            timezone?: string;
+            /** Format: int64 */
+            week_start?: number;
+        };
+        UpdateWorkspaceSettingsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateWorkspaceSettingsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            media_cleanup_days: number;
+            /** Format: int64 */
+            random_delay_minutes: number;
+            /** Format: int64 */
+            slot_end_hour: number;
+            /** Format: int64 */
+            slot_interval_minutes: number;
+            /** Format: int64 */
+            slot_start_hour: number;
+            timezone: string;
+            /** Format: int64 */
+            week_start: number;
         };
         UpsertVariantsInputBody: {
             /**
@@ -1358,6 +2087,762 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-jobs": {
+        parameters: {
+            query?: {
+                /** @description Number of jobs to return (default 50, max 200) */
+                limit?: number;
+                /** @description Filter by status (pending, processing, completed, failed) */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-media": {
+        parameters: {
+            query?: {
+                /** @description Filter by workspace ID (required) */
+                workspace_id?: string;
+                /** @description Filter: all, used, unused, favorites */
+                filter?: string;
+                /** @description Sort: newest, oldest, size */
+                sort?: string;
+                /** @description Limit (default 50, max 200) */
+                limit?: number;
+                /** @description Offset for pagination */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMediaOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "batch-delete-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteMediaInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteMediaOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Media ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteMediaOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Media ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMediaInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateMediaOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-media-favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Media ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateMediaFavoriteOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-media-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Media ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetMediaUsageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-posting-schedules": {
+        parameters: {
+            query?: {
+                /** @description Filter by workspace ID */
+                workspace_id?: string;
+                /** @description Filter by set ID (optional) */
+                set_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingScheduleResponse"][] | null;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-posting-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePostingScheduleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingScheduleResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-next-available-slot": {
+        parameters: {
+            query?: {
+                /** @description Workspace ID */
+                workspace_id?: string;
+                /** @description Optional set ID */
+                set_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextAvailableSlotOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "suggest-posting-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestScheduleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestScheduleOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-posting-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Schedule ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletePostingScheduleOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-posting-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Schedule ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePostingScheduleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingScheduleResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1950,6 +3435,231 @@ export interface operations {
             };
         };
     };
+    "list-prompts": {
+        parameters: {
+            query?: {
+                /** @description Filter by workspace ID */
+                workspace_id?: string;
+                /** @description Filter by category */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptResponse"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePromptInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-prompt-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetPromptCategoriesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-random-prompt": {
+        parameters: {
+            query?: {
+                /** @description Filter by workspace ID */
+                workspace_id?: string;
+                /** @description Filter by category */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Prompt ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletePromptOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-sets": {
         parameters: {
             query?: {
@@ -2409,6 +4119,137 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-workspace-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetWorkspaceSettingsOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-workspace-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceSettingsInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateWorkspaceSettingsOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

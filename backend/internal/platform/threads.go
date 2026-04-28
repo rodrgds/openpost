@@ -251,6 +251,11 @@ func (t *ThreadsAdapter) createContainer(ctx context.Context, accessToken, userI
 	}
 
 	if mediaURL != "" {
+		if !strings.HasPrefix(mediaURL, "https://") {
+			return "", fmt.Errorf("threads requires a publicly-accessible HTTPS URL for media. "+
+				"Set OPENPOST_MEDIA_URL to your server's public HTTPS URL (e.g. https://yourdomain.com/media). "+
+				"Current url: %s", mediaURL)
+		}
 		if isVideo {
 			payload["media_type"] = "VIDEO"
 			payload["video_url"] = mediaURL

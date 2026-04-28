@@ -16,6 +16,7 @@
 	import ImageIcon from 'lucide-svelte/icons/image';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
+	import ScrollTextIcon from 'lucide-svelte/icons/scroll-text';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
@@ -444,6 +445,10 @@
 							<DropdownMenu.Item onclick={() => goto('/settings')}>
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>Settings</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => goto('/logs')}>
+								<ScrollTextIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Logs</span>
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>
 

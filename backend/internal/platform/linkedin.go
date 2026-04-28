@@ -277,6 +277,9 @@ func (l *LinkedInAdapter) createPost(ctx context.Context, accessToken, authorURN
 		mediaItem := map[string]interface{}{
 			"id": req.PlatformMediaIDs[0],
 		}
+		if len(req.MediaAltTexts) > 0 && req.MediaAltTexts[0] != "" {
+			mediaItem["altText"] = req.MediaAltTexts[0]
+		}
 		payload["content"] = map[string]interface{}{
 			"media": mediaItem,
 		}

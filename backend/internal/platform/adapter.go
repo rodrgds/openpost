@@ -9,6 +9,7 @@ import (
 type PublishRequest struct {
 	Content          string   // Post text content
 	PlatformMediaIDs []string // Platform-specific media IDs from UploadMedia
+	MediaAltTexts    []string // Alt text for each media item (parallel to PlatformMediaIDs)
 	ReplyToID        string   // External ID of parent post (empty for first post in thread)
 }
 

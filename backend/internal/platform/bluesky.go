@@ -138,13 +138,17 @@ func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID str
 
 	if len(req.PlatformMediaIDs) > 0 {
 		images := make([]map[string]interface{}, 0, len(req.PlatformMediaIDs))
-		for _, blobJSON := range req.PlatformMediaIDs {
+		for i, blobJSON := range req.PlatformMediaIDs {
 			var blob map[string]interface{}
 			if err := json.Unmarshal([]byte(blobJSON), &blob); err != nil {
 				return "", fmt.Errorf("decoding bluesky blob: %w", err)
 			}
+			altText := ""
+			if i < len(req.MediaAltTexts) {
+				altText = req.MediaAltTexts[i]
+			}
 			images = append(images, map[string]interface{}{
-				"alt":   "",
+				"alt":   altText,
 				"image": blob,
 			})
 		}

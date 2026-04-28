@@ -290,6 +290,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	}
 
 	var platformMediaIDs []string
+	var mediaAltTexts []string
 	for _, media := range mediaAttachments {
 		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media)
 		if err != nil {
@@ -297,6 +298,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 			return fmt.Errorf("media upload failed for %s: %w", media.ID, err)
 		}
 		platformMediaIDs = append(platformMediaIDs, mediaID)
+		mediaAltTexts = append(mediaAltTexts, media.AltText)
 	}
 
 	replyToID := ""
@@ -310,6 +312,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	req := &platform.PublishRequest{
 		Content:          post.Content,
 		PlatformMediaIDs: platformMediaIDs,
+		MediaAltTexts:    mediaAltTexts,
 		ReplyToID:        replyToID,
 	}
 

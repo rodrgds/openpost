@@ -191,6 +191,9 @@ func main() {
 	promptHandler.GetRandomPrompt(api)
 	promptHandler.GetCategories(api)
 
+	jobHandler := handlers.NewJobHandler(db, authService)
+	jobHandler.RegisterRoutes(api)
+
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)

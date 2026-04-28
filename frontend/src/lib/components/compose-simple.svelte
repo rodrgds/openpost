@@ -527,7 +527,7 @@
 			}
 		}
 
-		const randomDelay = workspaceCtx.settings.random_delay_minutes;
+		const randomDelay = publishNow ? 0 : workspaceCtx.settings.random_delay_minutes;
 		isSubmitting = true;
 
 		try {
@@ -609,7 +609,7 @@
 				}
 			}
 
-			success = publishNow ? 'Published!' : 'Scheduled!';
+			success = publishNow ? 'Publishing now... Check Logs for status.' : 'Scheduled!';
 			ui.triggerRefresh();
 
 			if (isEditMode && onSuccess) {

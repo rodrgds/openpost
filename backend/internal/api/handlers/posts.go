@@ -52,6 +52,7 @@ type PostDestinationResponse struct {
 	SocialAccountID string `json:"social_account_id" doc:"Social account ID"`
 	Platform        string `json:"platform" doc:"Platform name"`
 	Status          string `json:"status" doc:"Destination status"`
+	ErrorMessage    string `json:"error_message,omitempty" doc:"Error message if publishing failed"`
 }
 
 type PostResponse struct {
@@ -312,11 +313,12 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			SocialAccountID string `bun:"social_account_id"`
 			Platform        string `bun:"platform"`
 			Status          string `bun:"status"`
+			ErrorMessage    string `bun:"error_message"`
 		}
 		if len(postIDs) > 0 {
 			err = h.db.NewSelect().
 				TableExpr("post_destinations AS pd").
-				ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+				ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status, pd.error_message").
 				Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
 				Where("pd.post_id IN (?)", bun.List(postIDs)).
 				Scan(ctx, &destinations)
@@ -331,6 +333,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 				SocialAccountID: d.SocialAccountID,
 				Platform:        d.Platform,
 				Status:          d.Status,
+				ErrorMessage:    d.ErrorMessage,
 			})
 		}
 
@@ -869,10 +872,11 @@ func (h *PostHandler) GetPost(api huma.API) {
 			SocialAccountID string `bun:"social_account_id"`
 			Platform        string `bun:"platform"`
 			Status          string `bun:"status"`
+			ErrorMessage    string `bun:"error_message"`
 		}
 		err = h.db.NewSelect().
 			TableExpr("post_destinations AS pd").
-			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status, pd.error_message").
 			Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
 			Where("pd.post_id = ?", input.PathID).
 			Scan(ctx, &destinations)
@@ -904,6 +908,7 @@ func (h *PostHandler) GetPost(api huma.API) {
 				SocialAccountID: d.SocialAccountID,
 				Platform:        d.Platform,
 				Status:          d.Status,
+				ErrorMessage:    d.ErrorMessage,
 			}
 		}
 
@@ -1124,10 +1129,11 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			SocialAccountID string `bun:"social_account_id"`
 			Platform        string `bun:"platform"`
 			Status          string `bun:"status"`
+			ErrorMessage    string `bun:"error_message"`
 		}
 		if err := h.db.NewSelect().
 			TableExpr("post_destinations AS pd").
-			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status").
+			ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status, pd.error_message").
 			Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
 			Where("pd.post_id = ?", post.ID).
 			Scan(ctx, &destinations); err != nil {
@@ -1157,6 +1163,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				SocialAccountID: d.SocialAccountID,
 				Platform:        d.Platform,
 				Status:          d.Status,
+				ErrorMessage:    d.ErrorMessage,
 			}
 		}
 
