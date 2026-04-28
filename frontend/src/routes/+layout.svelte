@@ -145,6 +145,11 @@
 	<Sidebar.Provider>
 		<SidebarLeft />
 		<Sidebar.Inset>
+			<!-- Mobile header -->
+			<div class="flex items-center gap-2 border-b px-3 py-2 md:hidden">
+				<Sidebar.Trigger />
+				<span class="text-sm font-medium">OpenPost</span>
+			</div>
 			<div class="flex flex-1 flex-col overflow-auto">
 				{@render children()}
 			</div>

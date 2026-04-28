@@ -491,12 +491,12 @@
 				</Button>
 			</div>
 
-		{#if setsLoading}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-				<Skeleton class="h-28 rounded-lg" />
-				<Skeleton class="h-28 rounded-lg" />
-			</div>
-		{:else if sets.length === 0}
+			{#if setsLoading}
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<Skeleton class="h-28 rounded-lg" />
+					<Skeleton class="h-28 rounded-lg" />
+				</div>
+			{:else if sets.length === 0}
 				<EmptyState
 					icon={LayersIcon}
 					title="No sets yet"
@@ -574,13 +574,13 @@
 		<div class="mb-8">
 			<h2 class="mb-4 text-lg font-semibold">Connected Accounts</h2>
 
-		{#if accountsLoading}
-			<div class="space-y-3">
-				<Skeleton class="h-12 rounded-lg" />
-				<Skeleton class="h-12 rounded-lg" />
-				<Skeleton class="h-12 rounded-lg" />
-			</div>
-		{:else if !accounts || accounts.length === 0}
+			{#if accountsLoading}
+				<div class="space-y-3">
+					<Skeleton class="h-12 rounded-lg" />
+					<Skeleton class="h-12 rounded-lg" />
+					<Skeleton class="h-12 rounded-lg" />
+				</div>
+			{:else if !accounts || accounts.length === 0}
 				<EmptyState
 					icon={UsersIcon}
 					title="No accounts connected"

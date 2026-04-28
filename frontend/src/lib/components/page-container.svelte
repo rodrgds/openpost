@@ -45,15 +45,15 @@
 		<!-- Page Header -->
 		<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 			<div>
-			<h1 class="flex items-center gap-2.5 text-xl font-semibold tracking-tight">
-				{#if Icon}
-					<Icon class="h-5 w-5 text-primary" />
+				<h1 class="flex items-center gap-2.5 text-xl font-semibold tracking-tight">
+					{#if Icon}
+						<Icon class="h-5 w-5 text-primary" />
+					{/if}
+					{title}
+				</h1>
+				{#if description}
+					<p class="mt-1 text-sm text-muted-foreground">{description}</p>
 				{/if}
-				{title}
-			</h1>
-			{#if description}
-				<p class="mt-1 text-sm text-muted-foreground">{description}</p>
-			{/if}
 			</div>
 			{#if actions}
 				<div class="flex shrink-0 items-center gap-2">

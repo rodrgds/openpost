@@ -4,12 +4,30 @@
 			"AccountResponse": {
 				"additionalProperties": false,
 				"properties": {
-					"account_id": { "description": "Platform-specific account ID", "type": "string" },
-					"account_username": { "description": "Account username", "type": "string" },
-					"id": { "description": "Account ID", "type": "string" },
-					"instance_url": { "description": "Instance URL (Mastodon/Bluesky)", "type": "string" },
-					"is_active": { "description": "Whether the account is active", "type": "boolean" },
-					"platform": { "description": "Platform name", "type": "string" },
+					"account_id": {
+						"description": "Platform-specific account ID",
+						"type": "string"
+					},
+					"account_username": {
+						"description": "Account username",
+						"type": "string"
+					},
+					"id": {
+						"description": "Account ID",
+						"type": "string"
+					},
+					"instance_url": {
+						"description": "Instance URL (Mastodon/Bluesky)",
+						"type": "string"
+					},
+					"is_active": {
+						"description": "Whether the account is active",
+						"type": "boolean"
+					},
+					"platform": {
+						"description": "Platform name",
+						"type": "string"
+					},
 					"thread_replies_supported": {
 						"description": "Whether this account supports thread replies in current server config",
 						"type": "boolean"
@@ -38,10 +56,15 @@
 					},
 					"account_ids": {
 						"description": "Account IDs to add",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
-					"is_main": { "description": "Mark as main platform", "type": "boolean" }
+					"is_main": {
+						"description": "Mark as main platform",
+						"type": "boolean"
+					}
 				},
 				"required": ["account_ids"],
 				"type": "object"
@@ -56,8 +79,13 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"token": { "description": "JWT authentication token", "type": "string" },
-					"user": { "$ref": "#/components/schemas/UserProfile" }
+					"token": {
+						"description": "JWT authentication token",
+						"type": "string"
+					},
+					"user": {
+						"$ref": "#/components/schemas/UserProfile"
+					}
 				},
 				"required": ["token", "user"],
 				"type": "object"
@@ -73,11 +101,17 @@
 						"type": "string"
 					},
 					"app_password": {
-						"description": "Bluesky app password (Settings \u003e App Passwords)",
+						"description": "Bluesky app password (Settings > App Passwords)",
 						"type": "string"
 					},
-					"handle": { "description": "Bluesky handle (e.g. user.bsky.social)", "type": "string" },
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"handle": {
+						"description": "Bluesky handle (e.g. user.bsky.social)",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "handle", "app_password"],
 				"type": "object"
@@ -92,10 +126,16 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"content": { "description": "Post content", "minLength": 1, "type": "string" },
+					"content": {
+						"description": "Post content",
+						"minLength": 1,
+						"type": "string"
+					},
 					"media_ids": {
 						"description": "Media attachment IDs to include",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
 					"scheduled_at": {
@@ -105,10 +145,15 @@
 					},
 					"social_account_ids": {
 						"description": "Social account IDs to publish to",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
-					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+					"workspace_id": {
+						"description": "Target workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "content", "social_account_ids"],
 				"type": "object"
@@ -125,15 +170,24 @@
 					},
 					"account_ids": {
 						"description": "Initial account IDs to include in the set",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
 					"is_default": {
 						"description": "Set as the default set for this workspace",
 						"type": "boolean"
 					},
-					"name": { "description": "Set name", "minLength": 1, "type": "string" },
-					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+					"name": {
+						"description": "Set name",
+						"minLength": 1,
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Target workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "name", "is_default", "account_ids"],
 				"type": "object"
@@ -150,7 +204,9 @@
 					},
 					"posts": {
 						"description": "Thread posts in order",
-						"items": { "$ref": "#/components/schemas/ThreadPostInput" },
+						"items": {
+							"$ref": "#/components/schemas/ThreadPostInput"
+						},
 						"minItems": 2,
 						"type": ["array", "null"]
 					},
@@ -161,10 +217,15 @@
 					},
 					"social_account_ids": {
 						"description": "Social account IDs to publish to",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
-					"workspace_id": { "description": "Target workspace ID", "type": "string" }
+					"workspace_id": {
+						"description": "Target workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "social_account_ids", "posts"],
 				"type": "object"
@@ -181,7 +242,9 @@
 					},
 					"post_ids": {
 						"description": "Created post IDs in order",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -218,9 +281,15 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"created_at": { "type": "string" },
-					"id": { "type": "string" },
-					"name": { "type": "string" }
+					"created_at": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
 				},
 				"required": ["id", "name", "created_at"],
 				"type": "object"
@@ -235,7 +304,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"message": { "description": "Success message", "type": "string" }
+					"message": {
+						"description": "Success message",
+						"type": "string"
+					}
 				},
 				"required": ["message"],
 				"type": "object"
@@ -250,7 +322,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"message": { "description": "Success message", "type": "string" }
+					"message": {
+						"description": "Success message",
+						"type": "string"
+					}
 				},
 				"required": ["message"],
 				"type": "object"
@@ -265,7 +340,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"message": { "description": "Success message", "type": "string" }
+					"message": {
+						"description": "Success message",
+						"type": "string"
+					}
 				},
 				"required": ["message"],
 				"type": "object"
@@ -277,8 +355,13 @@
 						"description": "Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'",
 						"type": "string"
 					},
-					"message": { "description": "Error message text", "type": "string" },
-					"value": { "description": "The value at the given location" }
+					"message": {
+						"description": "Error message text",
+						"type": "string"
+					},
+					"value": {
+						"description": "The value at the given location"
+					}
 				},
 				"type": "object"
 			},
@@ -299,7 +382,9 @@
 					},
 					"errors": {
 						"description": "Optional list of individual error details",
-						"items": { "$ref": "#/components/schemas/ErrorDetail" },
+						"items": {
+							"$ref": "#/components/schemas/ErrorDetail"
+						},
 						"type": ["array", "null"]
 					},
 					"instance": {
@@ -339,9 +424,18 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"code": { "description": "Authorization code from OAuth flow", "type": "string" },
-					"server_name": { "description": "Mastodon server name from config", "type": "string" },
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"code": {
+						"description": "Authorization code from OAuth flow",
+						"type": "string"
+					},
+					"server_name": {
+						"description": "Mastodon server name from config",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "server_name", "code"],
 				"type": "object"
@@ -356,7 +450,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"url": { "description": "OAuth authorization URL", "type": "string" }
+					"url": {
+						"description": "OAuth authorization URL",
+						"type": "string"
+					}
 				},
 				"required": ["url"],
 				"type": "object"
@@ -373,7 +470,9 @@
 					},
 					"variants": {
 						"description": "Post variants",
-						"items": { "$ref": "#/components/schemas/VariantResponse" },
+						"items": {
+							"$ref": "#/components/schemas/VariantResponse"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -390,7 +489,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"status": { "description": "Health status", "type": "string" }
+					"status": {
+						"description": "Health status",
+						"type": "string"
+					}
 				},
 				"required": ["status"],
 				"type": "object"
@@ -398,9 +500,15 @@
 			"Item": {
 				"additionalProperties": false,
 				"properties": {
-					"created_at": { "type": "string" },
-					"id": { "type": "string" },
-					"name": { "type": "string" }
+					"created_at": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
 				},
 				"required": ["id", "name", "created_at"],
 				"type": "object"
@@ -415,8 +523,15 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"email": { "description": "User email address", "format": "email", "type": "string" },
-					"password": { "description": "User password", "type": "string" }
+					"email": {
+						"description": "User email address",
+						"format": "email",
+						"type": "string"
+					},
+					"password": {
+						"description": "User password",
+						"type": "string"
+					}
 				},
 				"required": ["email", "password"],
 				"type": "object"
@@ -424,8 +539,14 @@
 			"MastodonServerInfo": {
 				"additionalProperties": false,
 				"properties": {
-					"instance_url": { "description": "Mastodon instance URL", "type": "string" },
-					"name": { "description": "Server configuration name", "type": "string" }
+					"instance_url": {
+						"description": "Mastodon instance URL",
+						"type": "string"
+					},
+					"name": {
+						"description": "Server configuration name",
+						"type": "string"
+					}
 				},
 				"required": ["name", "instance_url"],
 				"type": "object"
@@ -433,9 +554,18 @@
 			"PostDestinationResponse": {
 				"additionalProperties": false,
 				"properties": {
-					"platform": { "description": "Platform name", "type": "string" },
-					"social_account_id": { "description": "Social account ID", "type": "string" },
-					"status": { "description": "Destination status", "type": "string" }
+					"platform": {
+						"description": "Platform name",
+						"type": "string"
+					},
+					"social_account_id": {
+						"description": "Social account ID",
+						"type": "string"
+					},
+					"status": {
+						"description": "Destination status",
+						"type": "string"
+					}
 				},
 				"required": ["social_account_id", "platform", "status"],
 				"type": "object"
@@ -450,23 +580,48 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"content": { "description": "Post content", "type": "string" },
-					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
-					"created_by": { "description": "Creator user ID", "type": "string" },
+					"content": {
+						"description": "Post content",
+						"type": "string"
+					},
+					"created_at": {
+						"description": "Creation time (ISO 8601)",
+						"type": "string"
+					},
+					"created_by": {
+						"description": "Creator user ID",
+						"type": "string"
+					},
 					"destinations": {
 						"description": "Post destinations",
-						"items": { "$ref": "#/components/schemas/PostDestinationResponse" },
+						"items": {
+							"$ref": "#/components/schemas/PostDestinationResponse"
+						},
 						"type": ["array", "null"]
 					},
-					"id": { "description": "Post ID", "type": "string" },
+					"id": {
+						"description": "Post ID",
+						"type": "string"
+					},
 					"media": {
 						"description": "Attached media",
-						"items": { "$ref": "#/components/schemas/PostMediaResponse" },
+						"items": {
+							"$ref": "#/components/schemas/PostMediaResponse"
+						},
 						"type": ["array", "null"]
 					},
-					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
-					"status": { "description": "Post status", "type": "string" },
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"scheduled_at": {
+						"description": "Scheduled time (ISO 8601)",
+						"type": "string"
+					},
+					"status": {
+						"description": "Post status",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
 				},
 				"required": [
 					"id",
@@ -482,10 +637,23 @@
 			"PostMediaResponse": {
 				"additionalProperties": false,
 				"properties": {
-					"display_order": { "description": "Display order", "format": "int64", "type": "integer" },
-					"file_path": { "description": "File path for media URL", "type": "string" },
-					"media_id": { "description": "Media ID", "type": "string" },
-					"mime_type": { "description": "Media MIME type", "type": "string" }
+					"display_order": {
+						"description": "Display order",
+						"format": "int64",
+						"type": "integer"
+					},
+					"file_path": {
+						"description": "File path for media URL",
+						"type": "string"
+					},
+					"media_id": {
+						"description": "Media ID",
+						"type": "string"
+					},
+					"mime_type": {
+						"description": "Media MIME type",
+						"type": "string"
+					}
 				},
 				"required": ["media_id", "display_order", "file_path", "mime_type"],
 				"type": "object"
@@ -500,21 +668,48 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"content": { "description": "Post content", "type": "string" },
-					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
-					"created_by": { "description": "Creator user ID", "type": "string" },
+					"content": {
+						"description": "Post content",
+						"type": "string"
+					},
+					"created_at": {
+						"description": "Creation time (ISO 8601)",
+						"type": "string"
+					},
+					"created_by": {
+						"description": "Creator user ID",
+						"type": "string"
+					},
 					"destinations": {
 						"description": "Post destinations",
-						"items": { "$ref": "#/components/schemas/PostDestinationResponse" },
+						"items": {
+							"$ref": "#/components/schemas/PostDestinationResponse"
+						},
 						"type": ["array", "null"]
 					},
-					"id": { "description": "Post ID", "type": "string" },
-					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
+					"id": {
+						"description": "Post ID",
+						"type": "string"
+					},
+					"scheduled_at": {
+						"description": "Scheduled time (ISO 8601)",
+						"type": "string"
+					},
 					"status": {
 						"description": "Post status (draft, scheduled, publishing, published, failed)",
 						"type": "string"
 					},
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					},
+					"media_ids": {
+						"description": "Attached media IDs",
+						"items": {
+							"type": "string"
+						},
+						"type": ["array", "null"]
+					}
 				},
 				"required": [
 					"id",
@@ -537,7 +732,11 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"email": { "description": "User email address", "format": "email", "type": "string" },
+					"email": {
+						"description": "User email address",
+						"format": "email",
+						"type": "string"
+					},
 					"password": {
 						"description": "User password (min 8 characters)",
 						"minLength": 8,
@@ -555,15 +754,22 @@
 						"format": "int64",
 						"type": "integer"
 					},
-					"date": { "description": "Date in YYYY-MM-DD format", "type": "string" },
+					"date": {
+						"description": "Date in YYYY-MM-DD format",
+						"type": "string"
+					},
 					"platforms": {
 						"description": "Per-platform breakdown",
-						"items": { "$ref": "#/components/schemas/ScheduleDayPlatform" },
+						"items": {
+							"$ref": "#/components/schemas/ScheduleDayPlatform"
+						},
 						"type": ["array", "null"]
 					},
 					"workspaces": {
 						"description": "Per-workspace breakdown",
-						"items": { "$ref": "#/components/schemas/ScheduleDayWorkspace" },
+						"items": {
+							"$ref": "#/components/schemas/ScheduleDayWorkspace"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -578,7 +784,10 @@
 						"format": "int64",
 						"type": "integer"
 					},
-					"platform": { "description": "Platform name", "type": "string" }
+					"platform": {
+						"description": "Platform name",
+						"type": "string"
+					}
 				},
 				"required": ["platform", "count"],
 				"type": "object"
@@ -591,7 +800,10 @@
 						"format": "int64",
 						"type": "integer"
 					},
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["workspace_id", "count"],
 				"type": "object"
@@ -608,7 +820,9 @@
 					},
 					"days": {
 						"description": "Daily schedule data",
-						"items": { "$ref": "#/components/schemas/ScheduleDay" },
+						"items": {
+							"$ref": "#/components/schemas/ScheduleDay"
+						},
 						"type": ["array", "null"]
 					},
 					"month": {
@@ -618,7 +832,9 @@
 					},
 					"platforms": {
 						"description": "Available platforms",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
 					"selected_platform": {
@@ -631,10 +847,16 @@
 					},
 					"workspaces": {
 						"description": "Available workspaces",
-						"items": { "$ref": "#/components/schemas/WorkspaceResp" },
+						"items": {
+							"$ref": "#/components/schemas/WorkspaceResp"
+						},
 						"type": ["array", "null"]
 					},
-					"year": { "description": "Year of the overview", "format": "int64", "type": "integer" }
+					"year": {
+						"description": "Year of the overview",
+						"format": "int64",
+						"type": "integer"
+					}
 				},
 				"required": [
 					"year",
@@ -650,13 +872,22 @@
 			"SetAccountResponse": {
 				"additionalProperties": false,
 				"properties": {
-					"account_username": { "description": "Account username", "type": "string" },
+					"account_username": {
+						"description": "Account username",
+						"type": "string"
+					},
 					"is_main": {
 						"description": "Whether this is the main platform in the set",
 						"type": "boolean"
 					},
-					"platform": { "description": "Platform name", "type": "string" },
-					"social_account_id": { "description": "Social account ID", "type": "string" }
+					"platform": {
+						"description": "Platform name",
+						"type": "string"
+					},
+					"social_account_id": {
+						"description": "Social account ID",
+						"type": "string"
+					}
 				},
 				"required": ["social_account_id", "platform", "account_username", "is_main"],
 				"type": "object"
@@ -673,14 +904,31 @@
 					},
 					"accounts": {
 						"description": "Accounts in this set",
-						"items": { "$ref": "#/components/schemas/SetAccountResponse" },
+						"items": {
+							"$ref": "#/components/schemas/SetAccountResponse"
+						},
 						"type": ["array", "null"]
 					},
-					"created_at": { "description": "Creation time", "type": "string" },
-					"id": { "description": "Set ID", "type": "string" },
-					"is_default": { "description": "Is default set", "type": "boolean" },
-					"name": { "description": "Set name", "type": "string" },
-					"workspace_id": { "description": "Workspace ID", "type": "string" }
+					"created_at": {
+						"description": "Creation time",
+						"type": "string"
+					},
+					"id": {
+						"description": "Set ID",
+						"type": "string"
+					},
+					"is_default": {
+						"description": "Is default set",
+						"type": "boolean"
+					},
+					"name": {
+						"description": "Set name",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
 				},
 				"required": ["id", "workspace_id", "name", "is_default", "created_at"],
 				"type": "object"
@@ -688,10 +936,16 @@
 			"ThreadPostInput": {
 				"additionalProperties": false,
 				"properties": {
-					"content": { "description": "Post content", "minLength": 1, "type": "string" },
+					"content": {
+						"description": "Post content",
+						"minLength": 1,
+						"type": "string"
+					},
 					"media_ids": {
 						"description": "Media attachment IDs",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -708,10 +962,15 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"content": { "description": "Post content", "type": "string" },
+					"content": {
+						"description": "Post content",
+						"type": "string"
+					},
 					"media_ids": {
 						"description": "Media attachment IDs to include (replace all)",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					},
 					"scheduled_at": {
@@ -720,7 +979,9 @@
 					},
 					"social_account_ids": {
 						"description": "Social account IDs to publish to (replace all)",
-						"items": { "type": "string" },
+						"items": {
+							"type": "string"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -736,8 +997,14 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"is_default": { "description": "Set as default", "type": "boolean" },
-					"name": { "description": "Set name", "type": "string" }
+					"is_default": {
+						"description": "Set as default",
+						"type": "boolean"
+					},
+					"name": {
+						"description": "Set name",
+						"type": "string"
+					}
 				},
 				"type": "object"
 			},
@@ -753,7 +1020,9 @@
 					},
 					"variants": {
 						"description": "Variant overrides per social account",
-						"items": { "$ref": "#/components/schemas/VariantInput" },
+						"items": {
+							"$ref": "#/components/schemas/VariantInput"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -772,7 +1041,9 @@
 					},
 					"variants": {
 						"description": "Updated variants",
-						"items": { "$ref": "#/components/schemas/VariantResponse" },
+						"items": {
+							"$ref": "#/components/schemas/VariantResponse"
+						},
 						"type": ["array", "null"]
 					}
 				},
@@ -794,8 +1065,14 @@
 						"format": "date-time",
 						"type": "string"
 					},
-					"email": { "description": "User email address", "type": "string" },
-					"id": { "description": "User ID", "type": "string" }
+					"email": {
+						"description": "User email address",
+						"type": "string"
+					},
+					"id": {
+						"description": "User ID",
+						"type": "string"
+					}
 				},
 				"required": ["id", "email", "created_at"],
 				"type": "object"
@@ -811,8 +1088,14 @@
 						"description": "Whether this variant has diverged from parent",
 						"type": "boolean"
 					},
-					"media_ids": { "description": "JSON array of media IDs override", "type": "string" },
-					"social_account_id": { "description": "Social account ID", "type": "string" }
+					"media_ids": {
+						"description": "JSON array of media IDs override",
+						"type": "string"
+					},
+					"social_account_id": {
+						"description": "Social account ID",
+						"type": "string"
+					}
 				},
 				"required": ["social_account_id", "is_unsynced"],
 				"type": "object"
@@ -820,17 +1103,38 @@
 			"VariantResponse": {
 				"additionalProperties": false,
 				"properties": {
-					"content": { "description": "Variant content (empty = use parent)", "type": "string" },
-					"created_at": { "description": "Creation time", "type": "string" },
-					"id": { "description": "Variant ID", "type": "string" },
+					"content": {
+						"description": "Variant content (empty = use parent)",
+						"type": "string"
+					},
+					"created_at": {
+						"description": "Creation time",
+						"type": "string"
+					},
+					"id": {
+						"description": "Variant ID",
+						"type": "string"
+					},
 					"is_unsynced": {
 						"description": "Whether this variant has diverged from parent",
 						"type": "boolean"
 					},
-					"media_ids": { "description": "JSON array of media IDs override", "type": "string" },
-					"post_id": { "description": "Post ID", "type": "string" },
-					"social_account_id": { "description": "Social account ID", "type": "string" },
-					"updated_at": { "description": "Last update time", "type": "string" }
+					"media_ids": {
+						"description": "JSON array of media IDs override",
+						"type": "string"
+					},
+					"post_id": {
+						"description": "Post ID",
+						"type": "string"
+					},
+					"social_account_id": {
+						"description": "Social account ID",
+						"type": "string"
+					},
+					"updated_at": {
+						"description": "Last update time",
+						"type": "string"
+					}
 				},
 				"required": [
 					"id",
@@ -847,16 +1151,28 @@
 			"WorkspaceResp": {
 				"additionalProperties": false,
 				"properties": {
-					"created_at": { "description": "Creation time (ISO 8601)", "type": "string" },
-					"id": { "description": "Workspace ID", "type": "string" },
-					"name": { "description": "Workspace name", "type": "string" }
+					"created_at": {
+						"description": "Creation time (ISO 8601)",
+						"type": "string"
+					},
+					"id": {
+						"description": "Workspace ID",
+						"type": "string"
+					},
+					"name": {
+						"description": "Workspace name",
+						"type": "string"
+					}
 				},
 				"required": ["id", "name", "created_at"],
 				"type": "object"
 			}
 		}
 	},
-	"info": { "title": "OpenPost API", "version": "1.0.0" },
+	"info": {
+		"title": "OpenPost API",
+		"version": "1.0.0"
+	},
 	"openapi": "3.1.0",
 	"paths": {
 		"/accounts": {
@@ -868,7 +1184,10 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
-						"schema": { "description": "Filter by workspace ID", "type": "string" }
+						"schema": {
+							"description": "Filter by workspace ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
@@ -876,7 +1195,9 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"items": { "$ref": "#/components/schemas/AccountResponse" },
+									"items": {
+										"$ref": "#/components/schemas/AccountResponse"
+									},
 									"type": ["array", "null"]
 								}
 							}
@@ -886,7 +1207,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -902,17 +1225,23 @@
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/BlueskyLoginInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/BlueskyLoginInputBody"
+							}
 						}
 					},
 					"required": true
 				},
 				"responses": {
-					"204": { "description": "No Content" },
+					"204": {
+						"description": "No Content"
+					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -920,7 +1249,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -928,7 +1259,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -944,17 +1277,23 @@
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/ExchangeCodeInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/ExchangeCodeInputBody"
+							}
 						}
 					},
 					"required": true
 				},
 				"responses": {
-					"204": { "description": "No Content" },
+					"204": {
+						"description": "No Content"
+					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -962,7 +1301,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -970,7 +1311,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -988,7 +1331,9 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"items": { "$ref": "#/components/schemas/MastodonServerInfo" },
+									"items": {
+										"$ref": "#/components/schemas/MastodonServerInfo"
+									},
 									"type": ["array", "null"]
 								}
 							}
@@ -998,7 +1343,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -1012,14 +1359,25 @@
 			"delete": {
 				"operationId": "disconnect-account",
 				"parameters": [
-					{ "in": "path", "name": "account_id", "required": true, "schema": { "type": "string" } }
+					{
+						"in": "path",
+						"name": "account_id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
 				],
 				"responses": {
-					"204": { "description": "No Content" },
+					"204": {
+						"description": "No Content"
+					},
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1027,7 +1385,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1035,7 +1395,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1064,7 +1426,10 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
-						"schema": { "description": "Workspace ID to link account to", "type": "string" }
+						"schema": {
+							"description": "Workspace ID to link account to",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Mastodon server name from config (required for mastodon)",
@@ -1081,7 +1446,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/GetAuthURLOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/GetAuthURLOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1089,7 +1456,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1097,7 +1466,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1105,7 +1476,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1120,21 +1493,31 @@
 				"operationId": "login",
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/LoginInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LoginInputBody"
+							}
+						}
 					},
 					"required": true
 				},
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuthOutputBody"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"401": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unauthorized"
@@ -1142,7 +1525,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1150,7 +1535,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1166,14 +1553,20 @@
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UserProfile"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -1188,21 +1581,31 @@
 				"operationId": "register",
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/RegisterInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RegisterInputBody"
+							}
+						}
 					},
 					"required": true
 				},
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AuthOutputBody"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1210,7 +1613,9 @@
 					"409": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Conflict"
@@ -1218,7 +1623,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1226,7 +1633,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1243,7 +1652,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/Health-checkResponse" }
+								"schema": {
+									"$ref": "#/components/schemas/Health-checkResponse"
+								}
 							}
 						},
 						"description": "OK"
@@ -1251,7 +1662,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -1270,14 +1683,20 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
-						"schema": { "description": "Filter by workspace ID", "type": "string" }
+						"schema": {
+							"description": "Filter by workspace ID",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Filter by date (YYYY-MM-DD)",
 						"explode": false,
 						"in": "query",
 						"name": "date",
-						"schema": { "description": "Filter by date (YYYY-MM-DD)", "type": "string" }
+						"schema": {
+							"description": "Filter by date (YYYY-MM-DD)",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Filter by status (draft, scheduled, published, failed)",
@@ -1306,7 +1725,9 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"items": { "$ref": "#/components/schemas/PostResponse" },
+									"items": {
+										"$ref": "#/components/schemas/PostResponse"
+									},
 									"type": ["array", "null"]
 								}
 							}
@@ -1316,7 +1737,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -1329,21 +1752,31 @@
 				"operationId": "create-post",
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/CreatePostInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreatePostInputBody"
+							}
+						}
 					},
 					"required": true
 				},
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/PostResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PostResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1351,7 +1784,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1359,7 +1794,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1378,14 +1815,20 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
-						"schema": { "description": "Filter by workspace ID", "type": "string" }
+						"schema": {
+							"description": "Filter by workspace ID",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Filter by platform",
 						"explode": false,
 						"in": "query",
 						"name": "platform",
-						"schema": { "description": "Filter by platform", "type": "string" }
+						"schema": {
+							"description": "Filter by platform",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Month in YYYY-MM format (defaults to current month)",
@@ -1402,7 +1845,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/ScheduleOverviewOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/ScheduleOverviewOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1410,7 +1855,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1418,7 +1865,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1426,7 +1875,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1434,7 +1885,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1450,7 +1903,9 @@
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/CreateThreadInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/CreateThreadInputBody"
+							}
 						}
 					},
 					"required": true
@@ -1459,7 +1914,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/CreateThreadOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/CreateThreadOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1467,7 +1924,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1475,7 +1934,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1483,7 +1944,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1502,14 +1965,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/DeletePostOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/DeletePostOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1517,7 +1985,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1525,7 +1995,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1533,7 +2005,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1541,7 +2015,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1549,7 +2025,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1566,14 +2044,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/PostDetailResponse" }
+								"schema": {
+									"$ref": "#/components/schemas/PostDetailResponse"
+								}
 							}
 						},
 						"description": "OK"
@@ -1581,7 +2064,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1589,7 +2074,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1597,7 +2084,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1614,12 +2103,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/UpdatePostInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdatePostInputBody"
+							}
+						}
 					},
 					"required": true
 				},
@@ -1627,7 +2123,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/PostDetailResponse" }
+								"schema": {
+									"$ref": "#/components/schemas/PostDetailResponse"
+								}
 							}
 						},
 						"description": "OK"
@@ -1635,7 +2133,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1643,7 +2143,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1651,7 +2153,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1659,7 +2163,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1667,7 +2173,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1686,14 +2194,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/DeleteVariantsOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/DeleteVariantsOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1701,7 +2214,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1709,7 +2224,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1717,7 +2234,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1725,7 +2244,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1742,14 +2263,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/GetVariantsOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/GetVariantsOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1757,7 +2283,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1765,7 +2293,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1773,7 +2303,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1781,7 +2313,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1798,13 +2332,18 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Post ID", "type": "string" }
+						"schema": {
+							"description": "Post ID",
+							"type": "string"
+						}
 					}
 				],
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/UpsertVariantsInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/UpsertVariantsInputBody"
+							}
 						}
 					},
 					"required": true
@@ -1813,7 +2352,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/UpsertVariantsOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/UpsertVariantsOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1821,7 +2362,9 @@
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1829,7 +2372,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1837,7 +2382,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1845,7 +2392,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1853,7 +2402,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1872,7 +2423,10 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
-						"schema": { "description": "Filter by workspace ID", "type": "string" }
+						"schema": {
+							"description": "Filter by workspace ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
@@ -1880,7 +2434,9 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"items": { "$ref": "#/components/schemas/SetResponse" },
+									"items": {
+										"$ref": "#/components/schemas/SetResponse"
+									},
 									"type": ["array", "null"]
 								}
 							}
@@ -1890,7 +2446,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -1903,21 +2461,31 @@
 				"operationId": "create-set",
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/CreateSetInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateSetInputBody"
+							}
+						}
 					},
 					"required": true
 				},
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SetResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -1925,7 +2493,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1933,7 +2503,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1941,7 +2513,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -1960,14 +2534,19 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Set ID", "type": "string" }
+						"schema": {
+							"description": "Set ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/DeleteSetOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/DeleteSetOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -1975,7 +2554,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -1983,7 +2564,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -1991,7 +2574,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -1999,7 +2584,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -2016,20 +2603,29 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Set ID", "type": "string" }
+						"schema": {
+							"description": "Set ID",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SetResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -2037,7 +2633,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -2045,7 +2643,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -2062,26 +2662,39 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Set ID", "type": "string" }
+						"schema": {
+							"description": "Set ID",
+							"type": "string"
+						}
 					}
 				],
 				"requestBody": {
 					"content": {
-						"application/json": { "schema": { "$ref": "#/components/schemas/UpdateSetInputBody" } }
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UpdateSetInputBody"
+							}
+						}
 					},
 					"required": true
 				},
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SetResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -2089,7 +2702,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -2097,7 +2712,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -2105,7 +2722,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -2113,7 +2732,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -2132,13 +2753,18 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Set ID", "type": "string" }
+						"schema": {
+							"description": "Set ID",
+							"type": "string"
+						}
 					}
 				],
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/AddSetAccountsInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/AddSetAccountsInputBody"
+							}
 						}
 					},
 					"required": true
@@ -2146,14 +2772,20 @@
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SetResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"400": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Bad Request"
@@ -2161,7 +2793,9 @@
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -2169,7 +2803,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -2177,7 +2813,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -2185,7 +2823,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -2204,27 +2844,39 @@
 						"in": "path",
 						"name": "id",
 						"required": true,
-						"schema": { "description": "Set ID", "type": "string" }
+						"schema": {
+							"description": "Set ID",
+							"type": "string"
+						}
 					},
 					{
 						"description": "Account ID to remove",
 						"in": "path",
 						"name": "account_id",
 						"required": true,
-						"schema": { "description": "Account ID to remove", "type": "string" }
+						"schema": {
+							"description": "Account ID to remove",
+							"type": "string"
+						}
 					}
 				],
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": { "schema": { "$ref": "#/components/schemas/SetResponse" } }
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SetResponse"
+								}
+							}
 						},
 						"description": "OK"
 					},
 					"403": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Forbidden"
@@ -2232,7 +2884,9 @@
 					"404": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Not Found"
@@ -2240,7 +2894,9 @@
 					"422": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Unprocessable Entity"
@@ -2248,7 +2904,9 @@
 					"500": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Internal Server Error"
@@ -2266,7 +2924,9 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"items": { "$ref": "#/components/schemas/Item" },
+									"items": {
+										"$ref": "#/components/schemas/Item"
+									},
 									"type": ["array", "null"]
 								}
 							}
@@ -2276,7 +2936,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"
@@ -2290,7 +2952,9 @@
 				"requestBody": {
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/CreateWorkspaceInputBody" }
+							"schema": {
+								"$ref": "#/components/schemas/CreateWorkspaceInputBody"
+							}
 						}
 					},
 					"required": true
@@ -2299,7 +2963,9 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/CreateWorkspaceOutputBody" }
+								"schema": {
+									"$ref": "#/components/schemas/CreateWorkspaceOutputBody"
+								}
 							}
 						},
 						"description": "OK"
@@ -2307,7 +2973,9 @@
 					"default": {
 						"content": {
 							"application/problem+json": {
-								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
 							}
 						},
 						"description": "Error"

@@ -250,15 +250,15 @@
 									class="group relative flex flex-col items-start rounded-md border bg-card p-3 text-left transition-all hover:border-accent hover:bg-accent"
 									onclick={() => usePrompt(prompt.text)}
 								>
-								<p
-									class="line-clamp-4 text-sm leading-relaxed text-foreground/80 group-hover:text-foreground"
-								>
+									<p
+										class="line-clamp-4 text-sm leading-relaxed text-foreground/80 group-hover:text-foreground"
+									>
 										{prompt.text}
 									</p>
 									<div class="mt-2 flex w-full items-center justify-between">
-									<span class="text-xs text-muted-foreground">
-										{prompt.is_built_in ? 'Built-in' : 'Custom'}
-									</span>
+										<span class="text-xs text-muted-foreground">
+											{prompt.is_built_in ? 'Built-in' : 'Custom'}
+										</span>
 										{#if !prompt.is_built_in}
 											<button
 												type="button"

@@ -21,9 +21,7 @@
 	let open = $state(false);
 
 	let currentDate = $derived<DateValue | undefined>(ui.dayPostsDate);
-	let dateStr = $derived(
-		currentDate ? currentDate.toString() : ''
-	);
+	let dateStr = $derived(currentDate ? currentDate.toString() : '');
 	let isFutureDay = $derived.by(() => {
 		if (!currentDate) return false;
 		const todayDate = today(getLocalTimeZone());
@@ -160,25 +158,31 @@
 				{:else}
 					<div class="grid max-h-[55dvh] gap-3 overflow-y-auto">
 						{#each posts as post (post.id)}
-							<Card class="gap-0 p-0 shadow-none group">
+							<Card class="group gap-0 p-0 shadow-none">
 								<CardContent class="p-4">
 									<div class="flex items-start justify-between gap-3">
 										<div class="min-w-0 flex-1">
 											<p class="line-clamp-2 text-sm">{post.content}</p>
 										</div>
-										<div class="flex items-center gap-1 shrink-0">
+										<div class="flex shrink-0 items-center gap-1">
 											<button
 												type="button"
-												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-												onclick={(e) => { e.stopPropagation(); handleReschedule(post.id); }}
+												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground"
+												onclick={(e) => {
+													e.stopPropagation();
+													handleReschedule(post.id);
+												}}
 												title="Reschedule"
 											>
 												<PencilIcon class="h-3.5 w-3.5" />
 											</button>
 											<button
 												type="button"
-												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
-												onclick={(e) => { e.stopPropagation(); handleDelete(post.id); }}
+												class="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-destructive"
+												onclick={(e) => {
+													e.stopPropagation();
+													handleDelete(post.id);
+												}}
 												title="Delete"
 											>
 												<TrashIcon class="h-3.5 w-3.5" />

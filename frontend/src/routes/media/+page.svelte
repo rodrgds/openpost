@@ -631,16 +631,16 @@
 						</p>
 						<div class="mt-1.5">
 							{#if media.usage_count > 0}
-							<span
-								class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-							>
+								<span
+									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+								>
 									Used in {media.usage_count}
 									{media.usage_count === 1 ? 'post' : 'posts'}
 								</span>
 							{:else}
-							<span
-								class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-							>
+								<span
+									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+								>
 									Unused
 								</span>
 							{/if}

@@ -40,18 +40,9 @@
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
 			.replace(/\n/g, '<br>')
-			.replace(
-				/(#[a-zA-Z0-9_]+)/g,
-				'<span class="text-blue-500">$1</span>'
-			)
-			.replace(
-				/(@[a-zA-Z0-9_]+)/g,
-				'<span class="text-blue-500">$1</span>'
-			)
-			.replace(
-				/(https?:\/\/[^\s]+)/g,
-				'<span class="text-blue-500">$1</span>'
-			);
+			.replace(/(#[a-zA-Z0-9_]+)/g, '<span class="text-blue-500">$1</span>')
+			.replace(/(@[a-zA-Z0-9_]+)/g, '<span class="text-blue-500">$1</span>')
+			.replace(/(https?:\/\/[^\s]+)/g, '<span class="text-blue-500">$1</span>');
 	}
 
 	const mediaLayout = $derived.by(() => {
@@ -93,23 +84,47 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-xl border border-border/60">
 						{#if mediaLayout === 'single'}
-							<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
+							<img
+								src="{getMediaBase()}/media/{mediaIds[0]}"
+								alt=""
+								class="h-auto w-full object-cover"
+							/>
 						{:else if mediaLayout === 'grid-2'}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id}
-									<img src="{getMediaBase()}/media/{id}" alt="" class="aspect-square w-full object-cover" />
+									<img
+										src="{getMediaBase()}/media/{id}"
+										alt=""
+										class="aspect-square w-full object-cover"
+									/>
 								{/each}
 							</div>
 						{:else if mediaLayout === 'grid-3'}
 							<div class="grid grid-cols-2 gap-0.5">
-								<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="col-span-2 aspect-video w-full object-cover" />
-								<img src="{getMediaBase()}/media/{mediaIds[1]}" alt="" class="aspect-square w-full object-cover" />
-								<img src="{getMediaBase()}/media/{mediaIds[2]}" alt="" class="aspect-square w-full object-cover" />
+								<img
+									src="{getMediaBase()}/media/{mediaIds[0]}"
+									alt=""
+									class="col-span-2 aspect-video w-full object-cover"
+								/>
+								<img
+									src="{getMediaBase()}/media/{mediaIds[1]}"
+									alt=""
+									class="aspect-square w-full object-cover"
+								/>
+								<img
+									src="{getMediaBase()}/media/{mediaIds[2]}"
+									alt=""
+									class="aspect-square w-full object-cover"
+								/>
 							</div>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id}
-									<img src="{getMediaBase()}/media/{id}" alt="" class="aspect-square w-full object-cover" />
+									<img
+										src="{getMediaBase()}/media/{id}"
+										alt=""
+										class="aspect-square w-full object-cover"
+									/>
 								{/each}
 							</div>
 						{/if}
@@ -140,8 +155,12 @@
 				{#if avatarUrl}
 					<img src={avatarUrl} alt="" class="h-12 w-12 rounded-full object-cover" />
 				{:else}
-					<div class="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
-						<span class="text-lg font-semibold text-indigo-600 dark:text-indigo-300">{displayName.charAt(0)}</span>
+					<div
+						class="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+					>
+						<span class="text-lg font-semibold text-indigo-600 dark:text-indigo-300"
+							>{displayName.charAt(0)}</span
+						>
 					</div>
 				{/if}
 			</div>
@@ -153,14 +172,19 @@
 				{#if isUnsynced}
 					<div class="text-xs text-amber-500">Customized for {previewName}</div>
 				{/if}
-				<div class="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-foreground">
+				<div class="mt-2 text-[15px] leading-relaxed whitespace-pre-wrap text-foreground">
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html formatContent(previewContent)}
 				</div>
 				{#if mediaIds.length > 0}
 					<div class="mt-3 grid grid-cols-2 gap-2">
 						{#each mediaIds as id}
-							<img src="{getMediaBase()}/media/{id}" alt="" class="rounded-lg object-cover" style="max-height: 260px;" />
+							<img
+								src="{getMediaBase()}/media/{id}"
+								alt=""
+								class="rounded-lg object-cover"
+								style="max-height: 260px;"
+							/>
 						{/each}
 					</div>
 				{/if}
@@ -193,8 +217,12 @@
 				{#if avatarUrl}
 					<img src={avatarUrl} alt="" class="h-10 w-10 rounded-full object-cover" />
 				{:else}
-					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900">
-						<span class="text-sm font-bold text-sky-600 dark:text-sky-300">{displayName.charAt(0)}</span>
+					<div
+						class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900"
+					>
+						<span class="text-sm font-bold text-sky-600 dark:text-sky-300"
+							>{displayName.charAt(0)}</span
+						>
 					</div>
 				{/if}
 			</div>
@@ -217,11 +245,19 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 						{#if mediaLayout === 'single'}
-							<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
+							<img
+								src="{getMediaBase()}/media/{mediaIds[0]}"
+								alt=""
+								class="h-auto w-full object-cover"
+							/>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id}
-									<img src="{getMediaBase()}/media/{id}" alt="" class="aspect-square w-full object-cover" />
+									<img
+										src="{getMediaBase()}/media/{id}"
+										alt=""
+										class="aspect-square w-full object-cover"
+									/>
 								{/each}
 							</div>
 						{/if}
@@ -254,8 +290,12 @@
 			{#if avatarUrl}
 				<img src={avatarUrl} alt="" class="h-12 w-12 rounded-full object-cover" />
 			{:else}
-				<div class="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-					<span class="text-lg font-semibold text-blue-700 dark:text-blue-300">{displayName.charAt(0)}</span>
+				<div
+					class="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900"
+				>
+					<span class="text-lg font-semibold text-blue-700 dark:text-blue-300"
+						>{displayName.charAt(0)}</span
+					>
 				</div>
 			{/if}
 			<div class="min-w-0 flex-1">
@@ -274,11 +314,19 @@
 		{#if mediaIds.length > 0}
 			<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 				{#if mediaLayout === 'single'}
-					<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
+					<img
+						src="{getMediaBase()}/media/{mediaIds[0]}"
+						alt=""
+						class="h-auto w-full object-cover"
+					/>
 				{:else}
 					<div class="grid grid-cols-2 gap-0.5">
 						{#each mediaIds as id}
-							<img src="{getMediaBase()}/media/{id}" alt="" class="aspect-square w-full object-cover" />
+							<img
+								src="{getMediaBase()}/media/{id}"
+								alt=""
+								class="aspect-square w-full object-cover"
+							/>
 						{/each}
 					</div>
 				{/if}
@@ -311,8 +359,12 @@
 				{#if avatarUrl}
 					<img src={avatarUrl} alt="" class="h-9 w-9 rounded-full object-cover" />
 				{:else}
-					<div class="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900">
-						<span class="text-sm font-bold text-orange-600 dark:text-orange-300">{displayName.charAt(0)}</span>
+					<div
+						class="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900"
+					>
+						<span class="text-sm font-bold text-orange-600 dark:text-orange-300"
+							>{displayName.charAt(0)}</span
+						>
 					</div>
 				{/if}
 			</div>
@@ -335,11 +387,19 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 						{#if mediaLayout === 'single'}
-							<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
+							<img
+								src="{getMediaBase()}/media/{mediaIds[0]}"
+								alt=""
+								class="h-auto w-full object-cover"
+							/>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id}
-									<img src="{getMediaBase()}/media/{id}" alt="" class="aspect-square w-full object-cover" />
+									<img
+										src="{getMediaBase()}/media/{id}"
+										alt=""
+										class="aspect-square w-full object-cover"
+									/>
 								{/each}
 							</div>
 						{/if}

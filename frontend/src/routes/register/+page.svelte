@@ -63,8 +63,8 @@
 			>
 				<CheckCircleIcon class="h-8 w-8 text-emerald-500" />
 			</div>
-		<h2 class="mb-2 text-xl font-semibold tracking-tight">You're in!</h2>
-		<p class="text-muted-foreground">Setting up your workspace...</p>
+			<h2 class="mb-2 text-xl font-semibold tracking-tight">You're in!</h2>
+			<p class="text-muted-foreground">Setting up your workspace...</p>
 		</div>
 	</div>
 {:else}
@@ -76,8 +76,8 @@
 		</div>
 		<Card class="w-full max-w-md">
 			<CardHeader>
-			<CardTitle class="text-center text-lg font-semibold">Create Account</CardTitle>
-			<CardDescription class="text-center">Enter your details to get started</CardDescription>
+				<CardTitle class="text-center text-lg font-semibold">Create Account</CardTitle>
+				<CardDescription class="text-center">Enter your details to get started</CardDescription>
 			</CardHeader>
 			<CardContent>
 				{#if error}

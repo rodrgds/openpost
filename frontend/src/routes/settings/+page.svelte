@@ -125,13 +125,48 @@
 			await workspaceCtx.saveSettings({
 				timezone: workspaceCtx.settings.timezone,
 				week_start: workspaceCtx.settings.week_start,
-				media_cleanup_days: workspaceCtx.settings.media_cleanup_days
+				media_cleanup_days: workspaceCtx.settings.media_cleanup_days,
+				random_delay_minutes: workspaceCtx.settings.random_delay_minutes,
+				slot_start_hour: workspaceCtx.settings.slot_start_hour,
+				slot_end_hour: workspaceCtx.settings.slot_end_hour,
+				slot_interval_minutes: workspaceCtx.settings.slot_interval_minutes
 			});
 			toastMessage = 'Settings saved successfully';
 		} catch (e) {
 			toastMessage = (e as Error).message;
 		} finally {
 			saving = false;
+		}
+	}
+
+	function parseDurationInput(input: string): number | null {
+		input = input.trim().toLowerCase();
+		// Try direct number first (assume minutes)
+		const direct = parseInt(input, 10);
+		if (!isNaN(direct) && direct > 0 && String(direct) === input) {
+			return direct;
+		}
+		// Parse patterns like "15m", "30 min", "1h", "1h30m", "90 minutes", "2 hours"
+		const hourMatch = input.match(/(\d+)\s*h/);
+		const minMatch = input.match(/(\d+)\s*m/);
+		let total = 0;
+		if (hourMatch) total += parseInt(hourMatch[1], 10) * 60;
+		if (minMatch) total += parseInt(minMatch[1], 10);
+		if (total > 0) return total;
+		return null;
+	}
+
+	let intervalInput = $state(String(workspaceCtx.settings.slot_interval_minutes));
+	let intervalError = $state('');
+
+	function handleIntervalChange(value: string) {
+		intervalInput = value;
+		const parsed = parseDurationInput(value);
+		if (parsed !== null && parsed >= 1 && parsed <= 180) {
+			intervalError = '';
+			workspaceCtx.settings.slot_interval_minutes = parsed;
+		} else if (value.trim() !== '') {
+			intervalError = 'Enter a duration between 1 minute and 3 hours (e.g. 15m, 1h, 30)';
 		}
 	}
 
@@ -448,11 +483,7 @@
 								</Select.Root>
 							</div>
 							<div class="flex gap-2">
-								<Button
-									onclick={() => (showSuggestSchedule = false)}
-									variant="outline"
-									size="sm"
-								>
+								<Button onclick={() => (showSuggestSchedule = false)} variant="outline" size="sm">
 									Cancel
 								</Button>
 								<Button onclick={generateSuggestedSchedule} size="sm" disabled={generatingSchedule}>
@@ -573,6 +604,117 @@
 					</div>
 				</div>
 			{/if}
+		</section>
+
+		<!-- Natural Posting Settings -->
+		<section class="space-y-4">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ClockIcon class="h-5 w-5 text-muted-foreground" />
+				Natural Posting
+			</h2>
+			<div class="space-y-4">
+				<p class="text-sm text-muted-foreground">
+					Add a small random delay to scheduled posts so they don't all go out at exactly the same
+					minute. This makes your posting pattern look more natural.
+				</p>
+				<div class="space-y-2">
+					<label class="text-sm font-medium">Random delay range</label>
+					<Select.Root
+						type="single"
+						value={String(workspaceCtx.settings.random_delay_minutes)}
+						onValueChange={(v) => (workspaceCtx.settings.random_delay_minutes = Number(v))}
+					>
+						<Select.Trigger class="w-full sm:w-64">
+							{#if workspaceCtx.settings.random_delay_minutes === 0}
+								No delay (exact time)
+							{:else}
+								±{workspaceCtx.settings.random_delay_minutes} minutes
+							{/if}
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="0">No delay (exact time)</Select.Item>
+							<Select.Item value="5">±5 minutes</Select.Item>
+							<Select.Item value="10">±10 minutes</Select.Item>
+							<Select.Item value="15">±15 minutes</Select.Item>
+							<Select.Item value="30">±30 minutes</Select.Item>
+							<Select.Item value="45">±45 minutes</Select.Item>
+							<Select.Item value="60">±1 hour</Select.Item>
+						</Select.Content>
+					</Select.Root>
+				</div>
+			</div>
+		</section>
+
+		<!-- Time Slot Configuration -->
+		<section class="space-y-4">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ClockIcon class="h-5 w-5 text-muted-foreground" />
+				Time Slot Defaults
+			</h2>
+			<div class="space-y-4">
+				<p class="text-sm text-muted-foreground">
+					Configure the default time range and interval shown in the compose page scheduler.
+				</p>
+				<div class="grid gap-4 sm:grid-cols-3">
+					<div class="space-y-2">
+						<label class="text-sm font-medium">Start time</label>
+						<Select.Root
+							type="single"
+							value={String(workspaceCtx.settings.slot_start_hour)}
+							onValueChange={(v) => (workspaceCtx.settings.slot_start_hour = Number(v))}
+						>
+							<Select.Trigger class="w-full">
+								{workspaceCtx.settings.slot_start_hour.toString().padStart(2, '0')}:00
+							</Select.Trigger>
+							<Select.Content class="max-h-60 overflow-y-auto">
+								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
+									<Select.Item value={String(hour)}>
+										{hour.toString().padStart(2, '0')}:00
+									</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					</div>
+					<div class="space-y-2">
+						<label class="text-sm font-medium">End time</label>
+						<Select.Root
+							type="single"
+							value={String(workspaceCtx.settings.slot_end_hour)}
+							onValueChange={(v) => (workspaceCtx.settings.slot_end_hour = Number(v))}
+						>
+							<Select.Trigger class="w-full">
+								{workspaceCtx.settings.slot_end_hour.toString().padStart(2, '0')}:00
+							</Select.Trigger>
+							<Select.Content class="max-h-60 overflow-y-auto">
+								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
+									<Select.Item value={String(hour)}>
+										{hour.toString().padStart(2, '0')}:00
+									</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					</div>
+					<div class="space-y-2">
+						<label class="text-sm font-medium">Interval</label>
+						<input
+							type="text"
+							value={intervalInput}
+							oninput={(e) => handleIntervalChange((e.target as HTMLInputElement).value)}
+							placeholder="e.g. 15m, 30 min, 1h"
+							class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm {intervalError
+								? 'border-destructive'
+								: ''}"
+						/>
+						{#if intervalError}
+							<p class="text-xs text-destructive">{intervalError}</p>
+						{:else}
+							<p class="text-xs text-muted-foreground">
+								Current: {workspaceCtx.settings.slot_interval_minutes} minutes
+							</p>
+						{/if}
+					</div>
+				</div>
+			</div>
 		</section>
 
 		<!-- Save Button -->

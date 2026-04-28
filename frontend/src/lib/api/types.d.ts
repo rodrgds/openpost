@@ -714,6 +714,8 @@ export interface components {
             status: string;
             /** @description Workspace ID */
             workspace_id: string;
+            /** @description Attached media IDs */
+            media_ids?: string[] | null;
         };
         RegisterInputBody: {
             /**

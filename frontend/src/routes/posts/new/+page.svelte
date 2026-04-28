@@ -8,7 +8,7 @@
 	});
 </script>
 
-<div class="mx-auto w-full max-w-2xl p-6 space-y-4">
+<div class="mx-auto w-full max-w-2xl space-y-4 p-6">
 	<Skeleton class="h-9 w-full rounded-lg" />
 	<Skeleton class="h-64 w-full rounded-lg" />
 </div>

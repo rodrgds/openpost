@@ -102,7 +102,10 @@
 	$effect(() => {
 		const currentMonth = monthString;
 		const currentWorkspaceId = workspaceCtx.currentWorkspace?.id ?? '';
-		if ((previousMonth && previousMonth !== currentMonth) || (previousWorkspaceId && previousWorkspaceId !== currentWorkspaceId)) {
+		if (
+			(previousMonth && previousMonth !== currentMonth) ||
+			(previousWorkspaceId && previousWorkspaceId !== currentWorkspaceId)
+		) {
 			loadOverview();
 		}
 		previousMonth = currentMonth;
@@ -221,6 +224,22 @@
 		if (text.length <= max) return text;
 		return text.slice(0, max).trim() + '...';
 	}
+
+	function draftHasMedia(draft: Post): boolean {
+		// Check explicit media_ids first (populated by ListPosts)
+		if (draft.media_ids && draft.media_ids.length > 0) return true;
+		// Fallback: parse thread JSON for legacy/thread drafts
+		if (draft.content.startsWith('__openpost_thread__:')) {
+			try {
+				const data = JSON.parse(draft.content.slice('__openpost_thread__:'.length));
+				if (!Array.isArray(data)) return false;
+				return data.some((item: any) => (item.m ?? []).length > 0);
+			} catch {
+				return false;
+			}
+		}
+		return false;
+	}
 </script>
 
 {#snippet dayMarker({ day, outsideMonth }: DayMarkerArgs)}
@@ -330,6 +349,9 @@
 								>
 									<FileTextIcon class="size-3.5 shrink-0" />
 									<span class="truncate text-sm">{truncate(draft.content)}</span>
+									{#if draftHasMedia(draft)}
+										<ImageIcon class="size-3 shrink-0 text-sidebar-foreground/40" />
+									{/if}
 								</Sidebar.MenuButton>
 								<Sidebar.MenuAction
 									showOnHover

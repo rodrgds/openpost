@@ -5,6 +5,10 @@ interface WorkspaceSettings {
 	timezone: string;
 	week_start: number;
 	media_cleanup_days: number;
+	random_delay_minutes: number;
+	slot_start_hour: number;
+	slot_end_hour: number;
+	slot_interval_minutes: number;
 }
 
 const STORAGE_KEY = 'openpost_current_workspace';
@@ -15,7 +19,11 @@ class WorkspaceContext {
 	settings = $state<WorkspaceSettings>({
 		timezone: 'UTC',
 		week_start: 1,
-		media_cleanup_days: 0
+		media_cleanup_days: 0,
+		random_delay_minutes: 0,
+		slot_start_hour: 5,
+		slot_end_hour: 23,
+		slot_interval_minutes: 15
 	});
 	loading = $state(false);
 
@@ -73,7 +81,11 @@ class WorkspaceContext {
 				this.settings = {
 					timezone: data.timezone || 'UTC',
 					week_start: data.week_start ?? 1,
-					media_cleanup_days: data.media_cleanup_days ?? 0
+					media_cleanup_days: data.media_cleanup_days ?? 0,
+					random_delay_minutes: data.random_delay_minutes ?? 0,
+					slot_start_hour: data.slot_start_hour ?? 5,
+					slot_end_hour: data.slot_end_hour ?? 23,
+					slot_interval_minutes: data.slot_interval_minutes ?? 15
 				};
 			}
 		} catch (e) {
@@ -95,6 +107,13 @@ class WorkspaceContext {
 			if (updates.week_start !== undefined) this.settings.week_start = updates.week_start;
 			if (updates.media_cleanup_days !== undefined)
 				this.settings.media_cleanup_days = updates.media_cleanup_days;
+			if (updates.random_delay_minutes !== undefined)
+				this.settings.random_delay_minutes = updates.random_delay_minutes;
+			if (updates.slot_start_hour !== undefined)
+				this.settings.slot_start_hour = updates.slot_start_hour;
+			if (updates.slot_end_hour !== undefined) this.settings.slot_end_hour = updates.slot_end_hour;
+			if (updates.slot_interval_minutes !== undefined)
+				this.settings.slot_interval_minutes = updates.slot_interval_minutes;
 		} catch (e) {
 			console.error('Failed to save workspace settings:', e);
 			throw e;

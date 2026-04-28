@@ -97,8 +97,8 @@
 					<RocketIcon class="h-8 w-8 text-primary" />
 				</div>
 			</div>
-		<h1 class="mb-2 text-xl font-semibold tracking-tight">Welcome to OpenPost</h1>
-		<p class="mb-8 text-muted-foreground">
+			<h1 class="mb-2 text-xl font-semibold tracking-tight">Welcome to OpenPost</h1>
+			<p class="mb-8 text-muted-foreground">
 				Let's set up your first workspace. This is where you'll organize your posts and connect your
 				social accounts.
 			</p>
@@ -124,9 +124,9 @@
 								required
 								autofocus
 							/>
-						<p class="text-sm text-muted-foreground">
-							You can create more workspaces later for different projects or brands.
-						</p>
+							<p class="text-sm text-muted-foreground">
+								You can create more workspaces later for different projects or brands.
+							</p>
 						</div>
 
 						<Button type="submit" disabled={isLoading || !workspaceName.trim()} class="w-full">

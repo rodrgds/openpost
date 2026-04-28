@@ -26,6 +26,14 @@
   scripts = {
     dev.exec = ''
       frontend-dev &
+      FRONTEND_PID=$!
+
+      cleanup() {
+        kill $FRONTEND_PID 2>/dev/null || true
+        wait $FRONTEND_PID 2>/dev/null || true
+      }
+      trap cleanup INT TERM EXIT
+
       backend-run
     '';
 

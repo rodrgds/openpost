@@ -59,7 +59,7 @@
 	}
 
 	onMount(() => {
-		loadPost(postId);
+		if (postId) loadPost(postId);
 	});
 
 	$effect(() => {
@@ -100,7 +100,7 @@
 </svelte:head>
 
 {#if !hasLoaded}
-	<div class="mx-auto w-full max-w-2xl p-6 space-y-4">
+	<div class="mx-auto w-full max-w-2xl space-y-4 p-6">
 		<Skeleton class="h-9 w-full rounded-lg" />
 		<Skeleton class="h-64 w-full rounded-lg" />
 	</div>
@@ -114,7 +114,7 @@
 {:else if post}
 	<div class="flex flex-1 flex-col overflow-hidden">
 		<!-- Edit header with delete -->
-		<div class="flex items-center justify-between border-b px-4 py-2">
+		<div class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4">
 			<span class="text-xs text-muted-foreground">
 				Editing {post.status} post
 			</span>
@@ -157,15 +157,13 @@
 		</div>
 
 		{#if error}
-			<div class="mx-4 mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+			<div
+				class="mx-4 mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+			>
 				{error}
 			</div>
 		{/if}
 
-		<ComposeSimple
-			initialPost={post}
-			onSuccess={handleSuccess}
-			onCancel={handleCancel}
-		/>
+		<ComposeSimple initialPost={post} onSuccess={handleSuccess} onCancel={handleCancel} />
 	</div>
 {/if}
