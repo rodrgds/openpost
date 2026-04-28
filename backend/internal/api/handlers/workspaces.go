@@ -113,7 +113,11 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch workspaces")
 		}
 
-		resp := &ListWorkspacesOutput{}
+		resp := &ListWorkspacesOutput{Body: []struct {
+			WorkspaceID        string `json:"id"`
+			WorkspaceName      string `json:"name"`
+			WorkspaceCreatedAt string `json:"created_at"`
+		}{}}
 		for _, ws := range workspaces {
 			resp.Body = append(resp.Body, struct {
 				WorkspaceID        string `json:"id"`
@@ -135,26 +139,38 @@ type GetWorkspaceSettingsInput struct {
 
 type GetWorkspaceSettingsOutput struct {
 	Body struct {
-		Timezone         string `json:"timezone"`
-		WeekStart        int    `json:"week_start"`
-		MediaCleanupDays int    `json:"media_cleanup_days"`
+		Timezone            string `json:"timezone"`
+		WeekStart           int    `json:"week_start"`
+		MediaCleanupDays    int    `json:"media_cleanup_days"`
+		RandomDelayMinutes  int    `json:"random_delay_minutes"`
+		SlotStartHour       int    `json:"slot_start_hour"`
+		SlotEndHour         int    `json:"slot_end_hour"`
+		SlotIntervalMinutes int    `json:"slot_interval_minutes"`
 	}
 }
 
 type UpdateWorkspaceSettingsInput struct {
 	PathID string `path:"id" doc:"Workspace ID"`
 	Body   struct {
-		Timezone         *string `json:"timezone,omitempty"`
-		WeekStart        *int    `json:"week_start,omitempty"`
-		MediaCleanupDays *int    `json:"media_cleanup_days,omitempty"`
+		Timezone            *string `json:"timezone,omitempty"`
+		WeekStart           *int    `json:"week_start,omitempty"`
+		MediaCleanupDays    *int    `json:"media_cleanup_days,omitempty"`
+		RandomDelayMinutes  *int    `json:"random_delay_minutes,omitempty"`
+		SlotStartHour       *int    `json:"slot_start_hour,omitempty"`
+		SlotEndHour         *int    `json:"slot_end_hour,omitempty"`
+		SlotIntervalMinutes *int    `json:"slot_interval_minutes,omitempty"`
 	}
 }
 
 type UpdateWorkspaceSettingsOutput struct {
 	Body struct {
-		Timezone         string `json:"timezone"`
-		WeekStart        int    `json:"week_start"`
-		MediaCleanupDays int    `json:"media_cleanup_days"`
+		Timezone            string `json:"timezone"`
+		WeekStart           int    `json:"week_start"`
+		MediaCleanupDays    int    `json:"media_cleanup_days"`
+		RandomDelayMinutes  int    `json:"random_delay_minutes"`
+		SlotStartHour       int    `json:"slot_start_hour"`
+		SlotEndHour         int    `json:"slot_end_hour"`
+		SlotIntervalMinutes int    `json:"slot_interval_minutes"`
 	}
 }
 
@@ -191,13 +207,21 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 		}
 
 		return &GetWorkspaceSettingsOutput{Body: struct {
-			Timezone         string `json:"timezone"`
-			WeekStart        int    `json:"week_start"`
-			MediaCleanupDays int    `json:"media_cleanup_days"`
+			Timezone            string `json:"timezone"`
+			WeekStart           int    `json:"week_start"`
+			MediaCleanupDays    int    `json:"media_cleanup_days"`
+			RandomDelayMinutes  int    `json:"random_delay_minutes"`
+			SlotStartHour       int    `json:"slot_start_hour"`
+			SlotEndHour         int    `json:"slot_end_hour"`
+			SlotIntervalMinutes int    `json:"slot_interval_minutes"`
 		}{
-			Timezone:         workspace.Timezone,
-			WeekStart:        workspace.WeekStart,
-			MediaCleanupDays: workspace.MediaCleanupDays,
+			Timezone:            workspace.Timezone,
+			WeekStart:           workspace.WeekStart,
+			MediaCleanupDays:    workspace.MediaCleanupDays,
+			RandomDelayMinutes:  workspace.RandomDelayMinutes,
+			SlotStartHour:       workspace.SlotStartHour,
+			SlotEndHour:         workspace.SlotEndHour,
+			SlotIntervalMinutes: workspace.SlotIntervalMinutes,
 		}}, nil
 	})
 }
@@ -249,9 +273,33 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 			}
 			workspace.MediaCleanupDays = *input.Body.MediaCleanupDays
 		}
+		if input.Body.RandomDelayMinutes != nil {
+			if *input.Body.RandomDelayMinutes < 0 || *input.Body.RandomDelayMinutes > 60 {
+				return nil, huma.Error400BadRequest("random_delay_minutes must be between 0 and 60")
+			}
+			workspace.RandomDelayMinutes = *input.Body.RandomDelayMinutes
+		}
+		if input.Body.SlotStartHour != nil {
+			if *input.Body.SlotStartHour < 0 || *input.Body.SlotStartHour > 23 {
+				return nil, huma.Error400BadRequest("slot_start_hour must be between 0 and 23")
+			}
+			workspace.SlotStartHour = *input.Body.SlotStartHour
+		}
+		if input.Body.SlotEndHour != nil {
+			if *input.Body.SlotEndHour < 0 || *input.Body.SlotEndHour > 23 {
+				return nil, huma.Error400BadRequest("slot_end_hour must be between 0 and 23")
+			}
+			workspace.SlotEndHour = *input.Body.SlotEndHour
+		}
+		if input.Body.SlotIntervalMinutes != nil {
+			if *input.Body.SlotIntervalMinutes < 1 || *input.Body.SlotIntervalMinutes > 180 {
+				return nil, huma.Error400BadRequest("slot_interval_minutes must be between 1 and 180")
+			}
+			workspace.SlotIntervalMinutes = *input.Body.SlotIntervalMinutes
+		}
 
 		_, err = h.db.NewUpdate().Model(&workspace).
-			Column("timezone", "week_start", "media_cleanup_days").
+			Column("timezone", "week_start", "media_cleanup_days", "random_delay_minutes", "slot_start_hour", "slot_end_hour", "slot_interval_minutes").
 			Where("id = ?", input.PathID).
 			Exec(ctx)
 		if err != nil {
@@ -263,13 +311,21 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 		}
 
 		return &UpdateWorkspaceSettingsOutput{Body: struct {
-			Timezone         string `json:"timezone"`
-			WeekStart        int    `json:"week_start"`
-			MediaCleanupDays int    `json:"media_cleanup_days"`
+			Timezone            string `json:"timezone"`
+			WeekStart           int    `json:"week_start"`
+			MediaCleanupDays    int    `json:"media_cleanup_days"`
+			RandomDelayMinutes  int    `json:"random_delay_minutes"`
+			SlotStartHour       int    `json:"slot_start_hour"`
+			SlotEndHour         int    `json:"slot_end_hour"`
+			SlotIntervalMinutes int    `json:"slot_interval_minutes"`
 		}{
-			Timezone:         workspace.Timezone,
-			WeekStart:        workspace.WeekStart,
-			MediaCleanupDays: workspace.MediaCleanupDays,
+			Timezone:            workspace.Timezone,
+			WeekStart:           workspace.WeekStart,
+			MediaCleanupDays:    workspace.MediaCleanupDays,
+			RandomDelayMinutes:  workspace.RandomDelayMinutes,
+			SlotStartHour:       workspace.SlotStartHour,
+			SlotEndHour:         workspace.SlotEndHour,
+			SlotIntervalMinutes: workspace.SlotIntervalMinutes,
 		}}, nil
 	})
 }

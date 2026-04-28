@@ -9,12 +9,16 @@ import (
 type Workspace struct {
 	bun.BaseModel `bun:"table:workspaces"`
 
-	ID               string    `bun:",pk" json:"id"`
-	Name             string    `bun:",notnull" json:"name"`
-	Timezone         string    `bun:",default:'UTC'" json:"timezone"`
-	WeekStart        int       `bun:",default:1" json:"week_start"`         // 0=Sunday, 1=Monday
-	MediaCleanupDays int       `bun:",default:0" json:"media_cleanup_days"` // 0 = disabled
-	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID                  string    `bun:",pk" json:"id"`
+	Name                string    `bun:",notnull" json:"name"`
+	Timezone            string    `bun:",default:'UTC'" json:"timezone"`
+	WeekStart           int       `bun:",default:1" json:"week_start"`             // 0=Sunday, 1=Monday
+	MediaCleanupDays    int       `bun:",default:0" json:"media_cleanup_days"`     // 0 = disabled
+	RandomDelayMinutes  int       `bun:",default:0" json:"random_delay_minutes"`   // ±N minutes natural posting
+	SlotStartHour       int       `bun:",default:5" json:"slot_start_hour"`        // 0-23
+	SlotEndHour         int       `bun:",default:23" json:"slot_end_hour"`         // 0-23
+	SlotIntervalMinutes int       `bun:",default:15" json:"slot_interval_minutes"` // 1-180
+	CreatedAt           time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type User struct {

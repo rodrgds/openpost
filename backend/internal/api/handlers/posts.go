@@ -30,7 +30,7 @@ func NewPostHandler(db *bun.DB, authService *auth.Service) *PostHandler {
 type CreatePostInput struct {
 	Body struct {
 		WorkspaceID        string     `json:"workspace_id" doc:"Target workspace ID"`
-		Content            string     `json:"content" minLength:"1" doc:"Post content"`
+		Content            string     `json:"content" doc:"Post content"`
 		ScheduledAt        *time.Time `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
 		SocialAccountIDs   []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
 		MediaIDs           []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
@@ -59,6 +59,7 @@ type PostResponse struct {
 	ActualRunAt        string                    `json:"actual_run_at,omitempty" doc:"Actual run time after random delay (ISO 8601)"`
 	CreatedAt          string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
 	Destinations       []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
+	MediaIDs           []string                  `json:"media_ids,omitempty" doc:"Attached media IDs"`
 }
 
 type ListPostsInput struct {
@@ -325,6 +326,27 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			})
 		}
 
+		var postMediaRows []struct {
+			PostID  string `bun:"post_id"`
+			MediaID string `bun:"media_id"`
+		}
+		if len(postIDs) > 0 {
+			err = h.db.NewSelect().
+				TableExpr("post_media AS pm").
+				ColumnExpr("pm.post_id, pm.media_id").
+				Where("pm.post_id IN (?)", bun.In(postIDs)).
+				Order("pm.display_order ASC").
+				Scan(ctx, &postMediaRows)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to fetch media")
+			}
+		}
+
+		mediaByPost := make(map[string][]string)
+		for _, m := range postMediaRows {
+			mediaByPost[m.PostID] = append(mediaByPost[m.PostID], m.MediaID)
+		}
+
 		result := make([]PostResponse, len(posts))
 		for i, p := range posts {
 			result[i] = PostResponse{
@@ -337,6 +359,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 				RandomDelayMinutes: p.RandomDelayMinutes,
 				CreatedAt:          p.CreatedAt.Format(time.RFC3339),
 				Destinations:       destByPost[p.ID],
+				MediaIDs:           mediaByPost[p.ID],
 			}
 			if !p.ActualRunAt.IsZero() {
 				result[i].ActualRunAt = p.ActualRunAt.Format(time.RFC3339)
@@ -633,7 +656,7 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 }
 
 type ThreadPostInput struct {
-	Content  string   `json:"content" minLength:"1" doc:"Post content"`
+	Content  string   `json:"content" doc:"Post content"`
 	MediaIDs []string `json:"media_ids,omitempty" doc:"Media attachment IDs"`
 }
 
@@ -785,6 +808,7 @@ type PostMediaResponse struct {
 	DisplayOrder int    `json:"display_order" doc:"Display order"`
 	FilePath     string `json:"file_path" doc:"File path for media URL"`
 	MimeType     string `json:"mime_type" doc:"Media MIME type"`
+	AltText      string `json:"alt_text" doc:"Alt text for accessibility"`
 }
 
 type PostDetailResponse struct {
@@ -850,10 +874,11 @@ func (h *PostHandler) GetPost(api huma.API) {
 			DisplayOrder int    `bun:"display_order"`
 			FilePath     string `bun:"file_path"`
 			MimeType     string `bun:"mime_type"`
+			AltText      string `bun:"alt_text"`
 		}
 		err = h.db.NewSelect().
 			TableExpr("post_media AS pm").
-			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type").
+			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type, ma.alt_text").
 			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
 			Where("pm.post_id = ?", input.PathID).
 			Order("pm.display_order ASC").
@@ -878,6 +903,7 @@ func (h *PostHandler) GetPost(api huma.API) {
 				DisplayOrder: m.DisplayOrder,
 				FilePath:     m.FilePath,
 				MimeType:     m.MimeType,
+				AltText:      m.AltText,
 			}
 		}
 
@@ -952,8 +978,12 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				post.Content = *input.Body.Content
 			}
 
+			// ------------------------------------------------------------------
+			// 1. Handle scheduling changes
+			// ------------------------------------------------------------------
 			if input.Body.ScheduledAt != nil {
 				if *input.Body.ScheduledAt == "" {
+					// Unschedule (make draft)
 					post.Status = "draft"
 					post.ScheduledAt = time.Time{}
 					post.RandomDelayMinutes = 0
@@ -965,6 +995,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						return fmt.Errorf("failed to cancel job: %w", err)
 					}
 				} else {
+					// Reschedule
 					parsed, parseErr := time.Parse(time.RFC3339, *input.Body.ScheduledAt)
 					if parseErr != nil {
 						return fmt.Errorf("invalid scheduled_at format: %w", parseErr)
@@ -972,11 +1003,9 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					oldScheduledAt := post.ScheduledAt
 					post.ScheduledAt = parsed
 					post.Status = "scheduled"
-					// Update random delay minutes if provided
 					if input.Body.RandomDelayMinutes != nil {
 						post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
 					}
-					// Apply random delay
 					jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
 					post.ActualRunAt = jobRunAt
 					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at", "random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
@@ -998,39 +1027,39 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						return fmt.Errorf("failed to create job: %w", err)
 					}
 				}
-				return nil
-			}
-
-			if input.Body.Content != nil {
-				if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
-					return fmt.Errorf("failed to update content: %w", err)
+			} else {
+				// No scheduling change — update content and/or random delay only
+				if input.Body.Content != nil {
+					if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to update content: %w", err)
+					}
+				}
+				if input.Body.RandomDelayMinutes != nil && post.Status == "scheduled" {
+					post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
+					jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
+					post.ActualRunAt = jobRunAt
+					if _, err := tx.NewUpdate().Model(&post).Column("random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to update random delay: %w", err)
+					}
+					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to cancel old job: %w", err)
+					}
+					payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+					job := &models.Job{
+						ID:      uuid.New().String(),
+						Type:    "publish_post",
+						Payload: string(payload),
+						RunAt:   jobRunAt,
+					}
+					if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to create job: %w", err)
+					}
 				}
 			}
 
-			// Handle random delay update when not rescheduling
-			if input.Body.RandomDelayMinutes != nil && input.Body.ScheduledAt == nil && post.Status == "scheduled" {
-				post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
-				jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
-				post.ActualRunAt = jobRunAt
-				if _, err := tx.NewUpdate().Model(&post).Column("random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
-					return fmt.Errorf("failed to update random delay: %w", err)
-				}
-				// Delete old job and create new one with updated run time
-				if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
-					return fmt.Errorf("failed to cancel old job: %w", err)
-				}
-				payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
-				job := &models.Job{
-					ID:      uuid.New().String(),
-					Type:    "publish_post",
-					Payload: string(payload),
-					RunAt:   jobRunAt,
-				}
-				if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
-					return fmt.Errorf("failed to create job: %w", err)
-				}
-			}
-
+			// ------------------------------------------------------------------
+			// 2. Update destinations (always processed)
+			// ------------------------------------------------------------------
 			if input.Body.SocialAccountIDs != nil {
 				if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
 					return fmt.Errorf("failed to remove old destinations: %w", err)
@@ -1048,6 +1077,9 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				}
 			}
 
+			// ------------------------------------------------------------------
+			// 3. Update media (always processed)
+			// ------------------------------------------------------------------
 			if input.Body.MediaIDs != nil {
 				if _, err := tx.NewDelete().Model(&models.PostMedia{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
 					return fmt.Errorf("failed to remove old media: %w", err)
@@ -1093,10 +1125,11 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			DisplayOrder int    `bun:"display_order"`
 			FilePath     string `bun:"file_path"`
 			MimeType     string `bun:"mime_type"`
+			AltText      string `bun:"alt_text"`
 		}
 		h.db.NewSelect().
 			TableExpr("post_media AS pm").
-			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type").
+			ColumnExpr("pm.media_id, pm.display_order, ma.file_path, ma.mime_type, ma.alt_text").
 			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
 			Where("pm.post_id = ?", post.ID).
 			Order("pm.display_order ASC").
@@ -1118,6 +1151,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				DisplayOrder: m.DisplayOrder,
 				FilePath:     m.FilePath,
 				MimeType:     m.MimeType,
+				AltText:      m.AltText,
 			}
 		}
 

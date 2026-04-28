@@ -3,7 +3,9 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
+	"github.com/openpost/backend/internal/database/migrations"
 	"github.com/openpost/backend/internal/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
@@ -61,8 +63,14 @@ func CreateSchema(db *bun.DB) error {
 	}
 	for _, model := range m {
 		if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
+
+	// Run pending migrations
+	if err := migrations.RunMigrations(db); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	return nil
 }
