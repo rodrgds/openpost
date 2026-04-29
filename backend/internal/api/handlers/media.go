@@ -801,16 +801,16 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 	}
 	defer file.Close()
 
+	c.Response().Header().Set("Content-Type", media.MimeType)
+	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
+
 	if f, ok := file.(*os.File); ok {
 		if stat, err := f.Stat(); err == nil {
-			c.Response().Header().Set("Content-Type", media.MimeType)
-			c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 			http.ServeContent(c.Response(), c.Request(), stat.Name(), stat.ModTime(), f)
 			return nil
 		}
 	}
 
-	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 	return c.Stream(http.StatusOK, media.MimeType, file)
 }
 
