@@ -779,6 +779,11 @@ func (h *MediaHandler) getImageDimensions(reader io.Reader, _ string) (int, int)
 func (h *MediaHandler) serveMedia(c echo.Context) error {
 	mediaID := c.Param("id")
 
+	// Strip file extension if present (e.g., "abc123.png" -> "abc123")
+	if ext := filepath.Ext(mediaID); ext != "" {
+		mediaID = mediaID[:len(mediaID)-len(ext)]
+	}
+
 	media := new(models.MediaAttachment)
 	if err := h.db.NewSelect().Model(media).Where("id = ?", mediaID).Scan(c.Request().Context()); err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
@@ -798,6 +803,12 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 
 func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 	mediaID := c.Param("id")
+
+	// Strip file extension if present (e.g., "abc123.png" -> "abc123")
+	if ext := filepath.Ext(mediaID); ext != "" {
+		mediaID = mediaID[:len(mediaID)-len(ext)]
+	}
+
 	size := c.Param("size")
 	if size == "" {
 		size = "md"
