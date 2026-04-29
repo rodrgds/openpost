@@ -292,7 +292,7 @@ See [docs/linkedin-integration.md](docs/linkedin-integration.md) for detailed se
 3. Add redirect URL: `http://localhost:8080/api/v1/accounts/threads/callback`
 4. Copy App ID and App Secret to your `.env` as `THREADS_CLIENT_ID` and `THREADS_CLIENT_SECRET`
 
-**Important:** For Threads image uploads to work, your server must have a valid IPv6 AAAA record pointing to it. Meta's `facebookexternalhit` bot prefers IPv6 and will fail to fetch media if the AAAA record is missing or misconfigured. Make sure your DNS has both A and AAAA records pointing to your server.
+**Important:** If you experience errors when posting images to Threads (e.g., `OAuthException`, `2207052`, or `403 Forbidden`), enable the **Cloudflare proxy** (orange cloud) for your domain's DNS record. Meta's scraper is notoriously strict about TLS, IPv6, and HTTP compliance — Cloudflare handles all of these edge cases automatically.
 
 See [docs/threads-integration.md](docs/threads-integration.md) for detailed setup instructions.
 
