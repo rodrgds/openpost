@@ -789,6 +789,11 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
 	}
 
+	// Check if Threads-compatible conversion is requested
+	if c.QueryParam("threads") == "true" {
+		return h.serveThreadsMedia(c, media)
+	}
+
 	file, err := h.storage.Open(filepath.Base(media.FilePath))
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "media file not found"})
@@ -799,6 +804,59 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 
 	return c.Stream(http.StatusOK, media.MimeType, file)
+}
+
+func (h *MediaHandler) serveThreadsMedia(c echo.Context, media *models.MediaAttachment) error {
+	// Threads requires: JPEG format, aspect ratio 4:5 to 1.91:1, sRGB color space
+	// Convert and resize the image to meet Threads requirements
+
+	file, err := h.storage.Open(filepath.Base(media.FilePath))
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "media file not found"})
+	}
+	defer file.Close()
+
+	// Decode the image
+	img, err := imaging.Decode(file)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to decode image"})
+	}
+
+	// Resize to meet Threads aspect ratio requirement (4:5 to 1.91:1)
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	aspectRatio := float64(width) / float64(height)
+
+	var resized image.Image
+	switch {
+	case aspectRatio > 1.91:
+		// Too wide - resize to 1.91:1 (max landscape)
+		newWidth := int(1.91 * float64(height))
+		// Cap at Threads max width of 1440
+		if newWidth > 1440 {
+			newWidth = 1440
+		}
+		resized = imaging.Resize(img, newWidth, 0, imaging.Lanczos)
+	case aspectRatio < 0.8:
+		// Too tall - resize to 4:5 (max portrait)
+		newHeight := int(float64(width) * 5.0 / 4.0)
+		resized = imaging.Resize(img, 0, newHeight, imaging.Lanczos)
+	default:
+		// Aspect ratio is OK, just ensure JPEG format
+		resized = img
+	}
+
+	// Convert to JPEG and serve
+	var buf bytes.Buffer
+	if err := imaging.Encode(&buf, resized, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to encode image"})
+	}
+
+	c.Response().Header().Set("Content-Type", "image/jpeg")
+	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
+
+	return c.Blob(http.StatusOK, "image/jpeg", buf.Bytes())
 }
 
 func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
