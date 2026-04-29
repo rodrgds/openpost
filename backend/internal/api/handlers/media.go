@@ -12,7 +12,9 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -799,6 +801,12 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 	}
 	defer file.Close()
 
+	if f, ok := file.(*os.File); ok {
+		if stat, err := f.Stat(); err == nil {
+			c.Response().Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
+		}
+	}
+
 	c.Response().Header().Set("Content-Type", media.MimeType)
 	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 
@@ -847,6 +855,12 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "thumbnail file not found"})
 	}
 	defer file.Close()
+
+	if f, ok := file.(*os.File); ok {
+		if stat, err := f.Stat(); err == nil {
+			c.Response().Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
+		}
+	}
 
 	c.Response().Header().Set("Content-Type", "image/jpeg")
 	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
