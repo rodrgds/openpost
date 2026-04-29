@@ -544,7 +544,9 @@ func (h *MediaHandler) RegisterLegacyRoutes(e *echo.Echo) {
 	e.POST("/api/v1/media/upload", h.uploadMedia, middleware.JWTMiddleware(h.auth))
 	e.POST("/api/v1/media/batch-upload", h.batchUploadMedia, middleware.JWTMiddleware(h.auth))
 	e.GET("/media/:id", h.serveMedia)
+	e.HEAD("/media/:id", h.serveMedia)
 	e.GET("/media/:id/thumb/:size", h.serveThumbnailSize)
+	e.HEAD("/media/:id/thumb/:size", h.serveThumbnailSize)
 }
 
 func (h *MediaHandler) uploadMedia(c echo.Context) error {
