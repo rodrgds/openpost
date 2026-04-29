@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/openpost/backend/internal/models"
@@ -369,11 +368,10 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 }
 
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
-	fileName := filepath.Base(media.FilePath)
 	if s.publicMediaURL != "" {
-		return s.publicMediaURL + "/" + fileName
+		return s.publicMediaURL + "/" + media.ID
 	}
-	return "/media/" + fileName
+	return "/media/" + media.ID
 }
 
 func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {
