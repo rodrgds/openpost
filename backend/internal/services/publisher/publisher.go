@@ -368,10 +368,21 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 }
 
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
-	if s.publicMediaURL != "" {
-		return s.publicMediaURL + "/" + media.ID
+	ext := ""
+	switch media.MimeType {
+	case "image/jpeg", "image/jpg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/gif":
+		ext = ".gif"
+	case "image/webp":
+		ext = ".webp"
 	}
-	return "/media/" + media.ID
+	if s.publicMediaURL != "" {
+		return s.publicMediaURL + "/" + media.ID + ext
+	}
+	return "/media/" + media.ID + ext
 }
 
 func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {
