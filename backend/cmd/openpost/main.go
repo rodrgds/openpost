@@ -144,6 +144,11 @@ func main() {
 		return c.Blob(http.StatusOK, "application/json", data)
 	})
 
+	e.GET("/robots.txt", func(c echo.Context) error {
+		robots := "User-agent: *\nAllow: /\nUser-agent: facebookexternalhit\nAllow: /\nUser-agent: Twitterbot\nAllow: /\nUser-agent: LinkedInBot\nAllow: /"
+		return c.String(http.StatusOK, robots)
+	})
+
 	authHandler := handlers.NewAuthHandler(db, authService)
 	authHandler.Register(api)
 	authHandler.Login(api)
