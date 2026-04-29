@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/openpost/backend/internal/models"
@@ -356,7 +357,7 @@ func isExpiredTokenError(err error) bool {
 
 func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment) (string, error) {
 	if account.Platform == "threads" {
-		return s.getThreadsMediaURL(media), nil
+		return s.getPublicMediaURL(media), nil
 	}
 
 	data, err := os.ReadFile(media.FilePath)
@@ -367,45 +368,12 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, bytes.NewReader(data))
 }
 
-func (s *Service) getThreadsMediaURL(media models.MediaAttachment) string {
-	// Threads requires: JPEG format, aspect ratio 4:5 to 1.91:1, sRGB color space
-	// If image doesn't meet requirements, convert it
-	if media.MimeType == "image/jpeg" && media.Width > 0 && media.Height > 0 {
-		aspectRatio := float64(media.Width) / float64(media.Height)
-		// Check if aspect ratio is within Threads' allowed range (0.8 to 1.91)
-		if aspectRatio >= 0.8 && aspectRatio <= 1.91 {
-			// Image meets requirements, return original URL
-			return s.getPublicMediaURL(media)
-		}
-	}
-
-	// Image needs conversion (wrong format or aspect ratio)
-	// Return URL with query parameter to trigger on-the-fly conversion
-	baseURL := s.getPublicMediaURL(media)
-	if s.publicMediaURL == "" {
-		// Local development - need to prepend domain
-		baseURL = "/media/" + media.ID
-	}
-	// Add query parameter to trigger Threads-optimized conversion
-	return baseURL + "?format=jpg&threads=true"
-}
-
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
-	ext := ""
-	switch media.MimeType {
-	case "image/jpeg", "image/jpg":
-		ext = ".jpg"
-	case "image/png":
-		ext = ".png"
-	case "image/gif":
-		ext = ".gif"
-	case "image/webp":
-		ext = ".webp"
-	}
+	fileName := filepath.Base(media.FilePath)
 	if s.publicMediaURL != "" {
-		return s.publicMediaURL + "/" + media.ID + ext
+		return s.publicMediaURL + "/" + fileName
 	}
-	return "/media/" + media.ID + ext
+	return "/media/" + fileName
 }
 
 func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {
