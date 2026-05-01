@@ -6,10 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'devenv.nix'
+              - 'devenv.yaml'
+              - 'devenv.lock'
+            frontend:
+              - 'frontend/**'
+              - 'devenv.nix'
+              - 'devenv.yaml'
+              - 'devenv.lock'
+            ci:
+              - '.github/workflows/**'
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,17 +61,62 @@ jobs:
         with:
           name: devenv
 
+      - name: Set up Nix store cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
       - name: Install devenv
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Run shared lint suite
+      - name: Set up Go cache
+        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up golangci-lint cache
+        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('backend/.golangci.yml', 'backend/go.sum') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-
+
+      - name: Set up Bun cache
+        if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            frontend/node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Run relevant lint suite
         shell: devenv shell bash -- -e {0}
-        run: lint
+        env:
+          BACKEND_CHANGED: ${{ needs.changes.outputs.backend }}
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+          CI_CHANGED: ${{ needs.changes.outputs.ci }}
+        run: |
+          if [[ "$FRONTEND_CHANGED" == "true" || "$CI_CHANGED" == "true" ]]; then
+            frontend-lint
+            frontend-check
+          fi
+
+          if [[ "$BACKEND_CHANGED" == "true" || "$CI_CHANGED" == "true" ]]; then
+            backend-format-check
+            backend-lint
+          fi
 
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,20 +129,26 @@ jobs:
         with:
           name: devenv
 
+      - name: Set up Nix store cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
       - name: Install devenv
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Create placeholder for embed
-        shell: bash
-        run: mkdir -p backend/cmd/openpost/public && touch backend/cmd/openpost/public/.gitkeep
+      - name: Set up Go cache
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       - name: Run backend tests
         shell: devenv shell bash -- -e {0}
         run: |
+          mkdir -p backend/cmd/openpost/public
+          touch backend/cmd/openpost/public/.gitkeep
           cd backend
-          go mod download
-          go test -v -race -coverprofile=coverage.out ./...
+          go test -v -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -66,9 +156,11 @@ jobs:
           files: backend/coverage.out
           fail_ci_if_error: false
 
-  test-frontend:
-    name: Test Frontend
+  test-backend-race:
+    name: Test Backend Race
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'push' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,30 +173,65 @@ jobs:
         with:
           name: devenv
 
+      - name: Set up Nix store cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
       - name: Install devenv
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Install frontend dependencies
+      - name: Set up Go cache
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Run backend race tests
+        shell: devenv shell bash -- -e {0}
+        run: |
+          mkdir -p backend/cmd/openpost/public
+          touch backend/cmd/openpost/public/.gitkeep
+          cd backend
+          go test -race ./...
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+
+      - name: Set up Nix store cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
+
+      - name: Set up Bun cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            frontend/node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Run frontend tests and build
         shell: devenv shell bash -- -e {0}
         run: |
           cd frontend
           bun install --frozen-lockfile
-
-      - name: Run frontend type checking
-        shell: devenv shell bash -- -e {0}
-        run: |
-          cd frontend
-          bun run check
-
-      - name: Run frontend tests
-        shell: devenv shell bash -- -e {0}
-        run: |
-          cd frontend
           bun run test
-
-      - name: Build frontend
-        shell: devenv shell bash -- -e {0}
-        run: |
-          cd frontend
           bun run build
