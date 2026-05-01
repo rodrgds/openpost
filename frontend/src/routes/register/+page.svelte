@@ -14,6 +14,7 @@
 	import Logo from '$lib/components/Logo.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import CheckCircleIcon from 'lucide-svelte/icons/check-circle-2';
+	import { m } from '$lib/paraglide/messages';
 
 	let email = $state('');
 	let password = $state('');
@@ -27,12 +28,12 @@
 		error = '';
 
 		if (password !== confirmPassword) {
-			error = 'Passwords do not match';
+			error = m.auth_register_password_mismatch();
 			return;
 		}
 
 		if (password.length < 8) {
-			error = 'Password must be at least 8 characters';
+			error = m.auth_register_password_short();
 			return;
 		}
 
@@ -44,14 +45,14 @@
 			registrationSuccess = true;
 			goto('/onboarding');
 		} else {
-			error = result.error || 'Registration failed';
+			error = result.error || m.auth_register_failed();
 			isLoading = false;
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Create Account - OpenPost</title>
+	<title>{m.auth_register_title()}</title>
 </svelte:head>
 
 {#if registrationSuccess}
@@ -63,8 +64,8 @@
 			>
 				<CheckCircleIcon class="h-8 w-8 text-emerald-500" />
 			</div>
-			<h2 class="mb-2 text-xl font-semibold tracking-tight">You're in!</h2>
-			<p class="text-muted-foreground">Setting up your workspace...</p>
+			<h2 class="mb-2 text-xl font-semibold tracking-tight">{m.auth_register_success_title()}</h2>
+			<p class="text-muted-foreground">{m.auth_register_success_description()}</p>
 		</div>
 	</div>
 {:else}
@@ -76,8 +77,8 @@
 		</div>
 		<Card class="w-full max-w-md">
 			<CardHeader>
-				<CardTitle class="text-center text-lg font-semibold">Create Account</CardTitle>
-				<CardDescription class="text-center">Enter your details to get started</CardDescription>
+				<CardTitle class="text-center text-lg font-semibold">{m.auth_register_heading()}</CardTitle>
+				<CardDescription class="text-center">{m.auth_register_description()}</CardDescription>
 			</CardHeader>
 			<CardContent>
 				{#if error}
@@ -90,7 +91,7 @@
 
 				<form onsubmit={handleSubmit} class="space-y-4">
 					<div class="space-y-2">
-						<Label for="email">Email</Label>
+						<Label for="email">{m.common_email()}</Label>
 						<Input
 							type="email"
 							id="email"
@@ -101,40 +102,42 @@
 					</div>
 
 					<div class="space-y-2">
-						<Label for="password">Password</Label>
+						<Label for="password">{m.common_password()}</Label>
 						<Input
 							type="password"
 							id="password"
 							bind:value={password}
 							required
-							placeholder="Minimum 8 characters"
+							placeholder={m.auth_password_min_placeholder()}
 						/>
 					</div>
 
 					<div class="space-y-2">
-						<Label for="confirmPassword">Confirm Password</Label>
+						<Label for="confirmPassword">{m.auth_confirm_password()}</Label>
 						<Input
 							type="password"
 							id="confirmPassword"
 							bind:value={confirmPassword}
 							required
-							placeholder="Re-enter your password"
+							placeholder={m.auth_password_confirm_placeholder()}
 						/>
 					</div>
 
 					<Button type="submit" disabled={isLoading} class="w-full">
 						{#if isLoading}
 							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
-							Creating account...
+							{m.auth_register_loading()}
 						{:else}
-							Create Account
+							{m.auth_register_submit()}
 						{/if}
 					</Button>
 				</form>
 
 				<p class="mt-6 text-center text-sm text-muted-foreground">
-					Already have an account?
-					<a href="/login" class="font-medium text-primary hover:underline">Sign in</a>
+					{m.auth_register_have_account()}
+					<a href="/login" class="font-medium text-primary hover:underline"
+						>{m.auth_register_sign_in()}</a
+					>
 				</p>
 			</CardContent>
 		</Card>

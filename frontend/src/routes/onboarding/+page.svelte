@@ -11,6 +11,7 @@
 	import RocketIcon from 'lucide-svelte/icons/rocket';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
+	import { m } from '$lib/paraglide/messages';
 
 	let workspaceName = $state('Personal');
 	let isLoading = $state(false);
@@ -39,7 +40,7 @@
 			const { data, error: workspacesError } = await client.GET('/workspaces');
 			if (workspacesError) {
 				throw new Error(
-					(workspacesError as { detail?: string })?.detail || 'Failed to load workspaces'
+					(workspacesError as { detail?: string })?.detail || m.onboarding_load_failed()
 				);
 			}
 
@@ -65,7 +66,7 @@
 			const { error: err } = await client.POST('/workspaces', {
 				body: { name: workspaceName.trim() }
 			});
-			if (err) throw new Error((err as any).detail || 'Failed to create workspace');
+			if (err) throw new Error((err as any).detail || m.onboarding_create_failed());
 			goto('/');
 		} catch (e) {
 			error = (e as Error).message;
@@ -76,7 +77,7 @@
 </script>
 
 <svelte:head>
-	<title>Welcome to OpenPost</title>
+	<title>{m.onboarding_title()}</title>
 </svelte:head>
 
 {#if pageLoading}
@@ -97,10 +98,9 @@
 					<RocketIcon class="h-8 w-8 text-primary" />
 				</div>
 			</div>
-			<h1 class="mb-2 text-xl font-semibold tracking-tight">Welcome to OpenPost</h1>
+			<h1 class="mb-2 text-xl font-semibold tracking-tight">{m.onboarding_heading()}</h1>
 			<p class="mb-8 text-muted-foreground">
-				Let's set up your first workspace. This is where you'll organize your posts and connect your
-				social accounts.
+				{m.onboarding_description()}
 			</p>
 
 			<Card>
@@ -115,26 +115,26 @@
 
 					<form onsubmit={handleCreate} class="space-y-4">
 						<div class="space-y-2">
-							<Label for="workspace-name">Workspace name</Label>
+							<Label for="workspace-name">{m.onboarding_workspace_name()}</Label>
 							<Input
 								type="text"
 								id="workspace-name"
 								bind:value={workspaceName}
-								placeholder="e.g. Personal, My Brand"
+								placeholder={m.onboarding_workspace_placeholder()}
 								required
 								autofocus
 							/>
 							<p class="text-sm text-muted-foreground">
-								You can create more workspaces later for different projects or brands.
+								{m.onboarding_workspace_hint()}
 							</p>
 						</div>
 
 						<Button type="submit" disabled={isLoading || !workspaceName.trim()} class="w-full">
 							{#if isLoading}
 								<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
-								Creating...
+								{m.onboarding_loading()}
 							{:else}
-								Get Started
+								{m.onboarding_submit()}
 							{/if}
 						</Button>
 					</form>

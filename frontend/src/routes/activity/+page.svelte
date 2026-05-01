@@ -18,6 +18,8 @@
 	import PencilIcon from 'lucide-svelte/icons/pencil';
 	import PackageIcon from 'lucide-svelte/icons/package';
 	import ScrollTextIcon from 'lucide-svelte/icons/scroll-text';
+	import { m } from '$lib/paraglide/messages';
+	import { getLocaleTag } from '$lib/i18n';
 
 	type JobLog = {
 		id: string;
@@ -49,7 +51,7 @@
 		try {
 			await Promise.all([loadPosts(), loadScheduled(), loadDrafts(), loadJobs()]);
 		} catch (e) {
-			error = (e as Error).message || 'Failed to load logs';
+			error = (e as Error).message || m.activity_failed_load();
 		} finally {
 			loading = false;
 		}
@@ -59,7 +61,7 @@
 		const { data, error: err } = await client.GET('/posts', {
 			params: { query: { limit: 100 } }
 		});
-		if (err || !data) throw new Error('Failed to load posts');
+		if (err || !data) throw new Error(m.activity_failed_posts());
 		posts = data.sort(
 			(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		);
@@ -69,7 +71,7 @@
 		const { data, error: err } = await client.GET('/posts', {
 			params: { query: { status: 'scheduled', limit: 100 } }
 		});
-		if (err || !data) throw new Error('Failed to load scheduled posts');
+		if (err || !data) throw new Error(m.activity_failed_scheduled());
 		scheduledPosts = data.sort(
 			(a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
 		);
@@ -79,7 +81,7 @@
 		const { data, error: err } = await client.GET('/posts', {
 			params: { query: { status: 'draft', limit: 100 } }
 		});
-		if (err || !data) throw new Error('Failed to load drafts');
+		if (err || !data) throw new Error(m.activity_failed_drafts());
 		drafts = data.sort(
 			(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		);
@@ -87,7 +89,7 @@
 
 	async function loadJobs() {
 		const { data, error: err } = await (client as any).GET('/jobs');
-		if (err || !data) throw new Error('Failed to load jobs');
+		if (err || !data) throw new Error(m.activity_failed_jobs());
 		jobs = data;
 	}
 
@@ -100,20 +102,22 @@
 		const diffHours = Math.round(diffMs / 3600000);
 		const diffDays = Math.round(diffMs / 86400000);
 
-		if (Math.abs(diffMins) < 1) return 'just now';
-		if (diffMins > 0 && diffMins < 60) return `in ${diffMins} min`;
-		if (diffMins < 0 && diffMins > -60) return `${Math.abs(diffMins)} min ago`;
-		if (diffHours > 0 && diffHours < 24) return `in ${diffHours}h`;
-		if (diffHours < 0 && diffHours > -24) return `${Math.abs(diffHours)}h ago`;
-		if (diffDays > 0 && diffDays < 7) return `in ${diffDays}d`;
-		if (diffDays < 0 && diffDays > -7) return `${Math.abs(diffDays)}d ago`;
-		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+		if (Math.abs(diffMins) < 1) return m.activity_just_now();
+		if (diffMins > 0 && diffMins < 60) return m.activity_in_minutes({ count: diffMins });
+		if (diffMins < 0 && diffMins > -60)
+			return m.activity_minutes_ago({ count: Math.abs(diffMins) });
+		if (diffHours > 0 && diffHours < 24) return m.activity_in_hours({ count: diffHours });
+		if (diffHours < 0 && diffHours > -24)
+			return m.activity_hours_ago({ count: Math.abs(diffHours) });
+		if (diffDays > 0 && diffDays < 7) return m.activity_in_days({ count: diffDays });
+		if (diffDays < 0 && diffDays > -7) return m.activity_days_ago({ count: Math.abs(diffDays) });
+		return d.toLocaleDateString(getLocaleTag(), { month: 'short', day: 'numeric' });
 	}
 
 	function formatDateTime(iso: string): string {
 		if (!iso) return '-';
 		const d = new Date(iso);
-		return d.toLocaleString(undefined, {
+		return d.toLocaleString(getLocaleTag(), {
 			month: 'short',
 			day: 'numeric',
 			hour: '2-digit',
@@ -126,27 +130,27 @@
 			case 'published':
 				return {
 					icon: CheckCircleIcon,
-					label: 'Published',
+					label: m.activity_status_published(),
 					class:
 						'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400'
 				};
 			case 'failed':
 				return {
 					icon: XCircleIcon,
-					label: 'Failed',
+					label: m.activity_status_failed(),
 					class: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-950/30 dark:text-red-400'
 				};
 			case 'scheduled':
 				return {
 					icon: ClockIcon,
-					label: 'Scheduled',
+					label: m.activity_status_scheduled(),
 					class:
 						'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400'
 				};
 			case 'publishing':
 				return {
 					icon: RefreshIcon,
-					label: 'Publishing',
+					label: m.activity_status_publishing(),
 					class: 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-950/30 dark:text-blue-400'
 				};
 			default:
@@ -164,26 +168,26 @@
 			case 'completed':
 				return {
 					icon: CheckCircleIcon,
-					label: 'Completed',
+					label: m.activity_status_completed(),
 					class:
 						'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400'
 				};
 			case 'failed':
 				return {
 					icon: XCircleIcon,
-					label: 'Failed',
+					label: m.activity_status_failed(),
 					class: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-950/30 dark:text-red-400'
 				};
 			case 'processing':
 				return {
 					icon: RefreshIcon,
-					label: 'Processing',
+					label: m.activity_status_processing(),
 					class: 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-950/30 dark:text-blue-400'
 				};
 			case 'pending':
 				return {
 					icon: ClockIcon,
-					label: 'Pending',
+					label: m.activity_status_pending(),
 					class:
 						'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400'
 				};
@@ -214,19 +218,19 @@
 
 	const stats = $derived([
 		{
-			label: 'Scheduled',
+			label: m.activity_stat_scheduled(),
 			value: scheduledPosts.length,
 			icon: CalendarIcon,
 			color: 'text-amber-600'
 		},
 		{
-			label: 'Drafts',
+			label: m.activity_stat_drafts(),
 			value: drafts.length,
 			icon: FileTextIcon,
 			color: 'text-slate-500'
 		},
 		{
-			label: 'Pending Jobs',
+			label: m.activity_stat_pending_jobs(),
 			value: jobs.filter((j) => j.status === 'pending').length,
 			icon: CpuIcon,
 			color: 'text-blue-600'
@@ -235,19 +239,19 @@
 </script>
 
 <svelte:head>
-	<title>Activity — OpenPost</title>
+	<title>{m.activity_title()} — {m.common_openpost()}</title>
 </svelte:head>
 
 <PageContainer
-	title="Activity"
-	description="Track your posts and background jobs."
+	title={m.activity_title()}
+	description={m.activity_description()}
 	icon={ScrollTextIcon}
 	{loading}
 >
 	{#snippet actions()}
 		<Button variant="outline" size="sm" onclick={loadData} disabled={loading}>
 			<RefreshIcon class="mr-1.5 h-3.5 w-3.5 {loading ? 'animate-spin' : ''}" />
-			Refresh
+			{m.common_refresh()}
 		</Button>
 	{/snippet}
 
@@ -279,9 +283,9 @@
 
 	<Tabs bind:value={activeTab}>
 		<TabsList variant="line" class="mb-6">
-			<TabsTrigger value="schedule">Scheduled</TabsTrigger>
-			<TabsTrigger value="drafts">Drafts</TabsTrigger>
-			<TabsTrigger value="jobs">Jobs</TabsTrigger>
+			<TabsTrigger value="schedule">{m.activity_tab_scheduled()}</TabsTrigger>
+			<TabsTrigger value="drafts">{m.activity_tab_drafts()}</TabsTrigger>
+			<TabsTrigger value="jobs">{m.activity_tab_jobs()}</TabsTrigger>
 		</TabsList>
 
 		<!-- SCHEDULED -->
@@ -289,8 +293,8 @@
 			{#if scheduledPosts.length === 0}
 				<EmptyState
 					icon={CalendarIcon}
-					title="Nothing scheduled"
-					description="Scheduled posts will appear here. Create one from the home page."
+					title={m.activity_empty_scheduled_title()}
+					description={m.activity_empty_scheduled_description()}
 					variant="muted"
 				/>
 			{:else}
@@ -362,8 +366,8 @@
 			{#if drafts.length === 0}
 				<EmptyState
 					icon={FileTextIcon}
-					title="No drafts yet"
-					description="Drafts let you prepare posts before scheduling. Start writing on the home page."
+					title={m.activity_empty_drafts_title()}
+					description={m.activity_empty_drafts_description()}
 					variant="muted"
 				/>
 			{:else}
@@ -378,7 +382,7 @@
 										class="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-600/10 dark:bg-slate-950/30 dark:text-slate-400"
 									>
 										<AlertCircleIcon class="h-3 w-3" />
-										Draft
+										{m.activity_status_draft()}
 									</span>
 									<span class="text-[11px] text-muted-foreground">
 										{formatRelative(post.created_at)}
@@ -395,7 +399,7 @@
 								onclick={() => goto(`/posts/${post.id}`)}
 							>
 								<PencilIcon class="mr-1 h-3.5 w-3.5" />
-								Edit
+								{m.common_edit()}
 							</Button>
 						</div>
 					{/each}
@@ -408,8 +412,8 @@
 			{#if jobs.length === 0}
 				<EmptyState
 					icon={CpuIcon}
-					title="No jobs running"
-					description="Background jobs appear here when you schedule or publish posts."
+					title={m.activity_empty_jobs_title()}
+					description={m.activity_empty_jobs_description()}
 					variant="muted"
 				/>
 			{:else}
@@ -437,12 +441,13 @@
 							<div
 								class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground"
 							>
-								<span>Run at: {formatDateTime(job.run_at)}</span>
+								<span>{m.activity_run_at({ time: formatDateTime(job.run_at) })}</span>
 								<span class="hidden sm:inline">·</span>
-								<span>Attempts: {job.attempts}/{job.max_attempts}</span>
+								<span>{m.activity_attempts({ attempts: job.attempts, max: job.max_attempts })}</span
+								>
 								{#if job.locked_at}
 									<span class="hidden sm:inline">·</span>
-									<span>Locked: {formatRelative(job.locked_at)}</span>
+									<span>{m.activity_locked({ time: formatRelative(job.locked_at) })}</span>
 								{/if}
 							</div>
 

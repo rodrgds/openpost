@@ -14,6 +14,8 @@
 	import { getStatusColor } from '$lib/utils';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/paraglide/messages';
+	import { getLocaleTag } from '$lib/i18n';
 
 	let posts = $state<Post[]>([]);
 	let loading = $state(false);
@@ -29,7 +31,7 @@
 	});
 	let formattedDate = $derived.by(() => {
 		if (!currentDate) return '';
-		return currentDate.toDate(getLocalTimeZone()).toLocaleDateString('en-US', {
+		return currentDate.toDate(getLocalTimeZone()).toLocaleDateString(getLocaleTag(), {
 			weekday: 'long',
 			month: 'long',
 			day: 'numeric',
@@ -59,7 +61,7 @@
 			const { data, error: err } = await client.GET('/posts', {
 				params: { query: { date, ...(workspaceId ? { workspace_id: workspaceId } : {}) } }
 			});
-			if (err) throw new Error('Failed to load posts');
+			if (err) throw new Error(m.day_posts_load_failed());
 			posts = data ?? [];
 		} catch (e) {
 			error = (e as Error).message;
@@ -71,7 +73,7 @@
 
 	function getTime(iso: string): string {
 		const d = new Date(iso);
-		return d.toLocaleTimeString('en-US', {
+		return d.toLocaleTimeString(getLocaleTag(), {
 			hour: '2-digit',
 			minute: '2-digit',
 			hour12: false,
@@ -85,12 +87,12 @@
 	}
 
 	async function handleDelete(postId: string) {
-		if (!confirm('Delete this post?')) return;
+		if (!confirm(m.day_posts_delete_confirm())) return;
 		try {
 			const { error: err } = await (client as any).DELETE('/posts/{id}', {
 				params: { path: { id: postId } }
 			});
-			if (err) throw new Error((err as any).detail || 'Failed to delete');
+			if (err) throw new Error((err as any).detail || m.day_posts_delete_failed());
 			loadPosts(dateStr);
 			ui.triggerRefresh();
 		} catch (e) {
@@ -99,9 +101,9 @@
 	}
 
 	async function handleReschedule(postId: string) {
-		const newDate = prompt('Enter new date (YYYY-MM-DD):');
+		const newDate = prompt(m.day_posts_reschedule_date());
 		if (!newDate) return;
-		const newTime = prompt('Enter new time (HH:MM):');
+		const newTime = prompt(m.day_posts_reschedule_time());
 		if (!newTime) return;
 		try {
 			const scheduledAt = new Date(`${newDate}T${newTime}:00`).toISOString();
@@ -128,7 +130,7 @@
 					{formattedDate}
 				</Dialog.Title>
 				<Dialog.Description>
-					{posts.length} scheduled post{posts.length !== 1 ? 's' : ''}
+					{m.day_posts_scheduled_count({ count: posts.length })}
 				</Dialog.Description>
 			</Dialog.Header>
 			<div class="mt-4 space-y-4">
@@ -153,7 +155,7 @@
 				{:else if posts.length === 0}
 					<div class="flex flex-col items-center gap-3 py-8 text-center text-muted-foreground">
 						<CalendarIcon class="size-10 opacity-40" />
-						<p class="text-sm">No posts scheduled for this day.</p>
+						<p class="text-sm">{m.day_posts_empty()}</p>
 					</div>
 				{:else}
 					<div class="grid max-h-[55dvh] gap-3 overflow-y-auto">
@@ -172,7 +174,7 @@
 													e.stopPropagation();
 													handleReschedule(post.id);
 												}}
-												title="Reschedule"
+												title={m.day_posts_reschedule()}
 											>
 												<PencilIcon class="h-3.5 w-3.5" />
 											</button>
@@ -183,7 +185,7 @@
 													e.stopPropagation();
 													handleDelete(post.id);
 												}}
-												title="Delete"
+												title={m.common_delete()}
 											>
 												<TrashIcon class="h-3.5 w-3.5" />
 											</button>
@@ -220,7 +222,7 @@
 				{#if isFutureDay}
 					<Button class="w-full gap-2" onclick={handleNewPost}>
 						<PlusIcon class="size-4" />
-						New Post for This Day
+						{m.day_posts_new_for_day()}
 					</Button>
 				{/if}
 			</div>

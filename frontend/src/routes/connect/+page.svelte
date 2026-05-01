@@ -12,6 +12,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import Logo from '$lib/components/Logo.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	const instance = instanceStore();
 
@@ -26,7 +27,7 @@
 
 	async function connect() {
 		if (!serverUrl.trim()) {
-			error = 'Please enter your server URL';
+			error = m.connect_missing_url();
 			return;
 		}
 
@@ -38,7 +39,7 @@
 		if (result.success) {
 			goto('/login');
 		} else {
-			error = result.error || 'Could not connect to server';
+			error = result.error || m.connect_failed();
 		}
 
 		isConnecting = false;
@@ -46,7 +47,7 @@
 </script>
 
 <svelte:head>
-	<title>Connect - OpenPost</title>
+	<title>{m.connect_title()}</title>
 </svelte:head>
 
 <div class="flex min-h-[80vh] flex-col items-center justify-center gap-6">
@@ -55,9 +56,9 @@
 	</div>
 	<Card class="w-full max-w-md">
 		<CardHeader>
-			<CardTitle class="text-center text-lg font-semibold">Connect to Server</CardTitle>
+			<CardTitle class="text-center text-lg font-semibold">{m.connect_heading()}</CardTitle>
 			<CardDescription class="text-center">
-				Enter the URL of your self-hosted OpenPost instance
+				{m.connect_description()}
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
@@ -71,22 +72,22 @@
 
 			<form onsubmit={handleSubmit} class="space-y-4">
 				<div class="space-y-2">
-					<Label for="server-url">Server URL</Label>
+					<Label for="server-url">{m.connect_server_url()}</Label>
 					<Input
 						type="url"
 						id="server-url"
 						bind:value={serverUrl}
 						required
-						placeholder="https://openpost.example.com"
+						placeholder={m.connect_server_url_placeholder()}
 						disabled={isConnecting}
 					/>
 					<p class="text-sm text-muted-foreground">
-						The address where your OpenPost server is running
+						{m.connect_server_url_hint()}
 					</p>
 				</div>
 
 				<Button type="submit" disabled={isConnecting} class="w-full">
-					{isConnecting ? 'Connecting...' : 'Connect'}
+					{isConnecting ? m.connect_loading() : m.connect_submit()}
 				</Button>
 			</form>
 		</CardContent>

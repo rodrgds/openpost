@@ -6,6 +6,7 @@
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as CalendarUi from '$lib/components/ui/calendar';
 	import Logo from './Logo.svelte';
+	import LanguageSwitcher from './language-switcher.svelte';
 	import DayPostsModal from './day-posts-modal.svelte';
 	import FileTextIcon from 'lucide-svelte/icons/file-text';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
@@ -31,6 +32,7 @@
 	import { ui } from '$lib/stores/ui.svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
+	import { m } from '$lib/paraglide/messages';
 
 	let authState = $derived($auth);
 	const sidebar = Sidebar.useSidebar();
@@ -180,7 +182,7 @@
 	}
 
 	async function deleteDraft(postId: string) {
-		if (!confirm('Delete this draft?')) return;
+		if (!confirm(m.sidebar_delete_draft_confirm())) return;
 		try {
 			const { error: err } = await (client as any).DELETE('/posts/{id}', {
 				params: { path: { id: postId } }
@@ -213,13 +215,14 @@
 		if (text.startsWith('__openpost_thread__:')) {
 			try {
 				const data = JSON.parse(text.slice('__openpost_thread__:'.length));
-				const firstPost = Array.isArray(data) && data.length > 0 ? data[0] : null;
+				const posts = Array.isArray(data) ? data : Array.isArray(data?.p) ? data.p : [];
+				const firstPost = posts.length > 0 ? posts[0] : null;
 				const content = firstPost?.c ?? '';
-				const suffix = data.length > 1 ? ` (thread: ${data.length} posts)` : '';
+				const suffix = posts.length > 1 ? ` (thread: ${posts.length} posts)` : '';
 				if (content.length + suffix.length <= max) return content + suffix;
 				return content.slice(0, max - suffix.length - 3).trim() + '...' + suffix;
 			} catch {
-				return 'Thread draft';
+				return m.sidebar_thread_draft();
 			}
 		}
 		if (text.length <= max) return text;
@@ -233,8 +236,8 @@
 		if (draft.content.startsWith('__openpost_thread__:')) {
 			try {
 				const data = JSON.parse(draft.content.slice('__openpost_thread__:'.length));
-				if (!Array.isArray(data)) return false;
-				return data.some((item: any) => (item.m ?? []).length > 0);
+				const posts = Array.isArray(data) ? data : Array.isArray(data?.p) ? data.p : [];
+				return posts.some((item: any) => (item.m ?? []).length > 0);
 			} catch {
 				return false;
 			}
@@ -277,7 +280,7 @@
 		<Sidebar.Group class="px-0 pt-2">
 			<Sidebar.GroupLabel
 				class="px-4 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
-				>Schedule</Sidebar.GroupLabel
+				>{m.sidebar_schedule()}</Sidebar.GroupLabel
 			>
 			<Sidebar.GroupContent>
 				<CalendarUi.Calendar
@@ -295,7 +298,7 @@
 			<Sidebar.Group>
 				<Sidebar.GroupLabel
 					class="text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
-					>Upcoming</Sidebar.GroupLabel
+					>{m.sidebar_upcoming()}</Sidebar.GroupLabel
 				>
 				<Sidebar.GroupContent>
 					<Sidebar.Menu>
@@ -305,7 +308,12 @@
 								<span
 									>{loadingSchedule
 										? ''
-										: `${overview.days.reduce((s: number, d: { count: number }) => s + d.count, 0)} scheduled posts`}</span
+										: m.sidebar_scheduled_posts({
+												count: overview.days.reduce(
+													(s: number, d: { count: number }) => s + d.count,
+													0
+												)
+											})}</span
 								>
 							</Sidebar.MenuButton>
 						</Sidebar.MenuItem>
@@ -321,7 +329,7 @@
 			<Sidebar.GroupLabel
 				class="px-4 text-xs font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
 			>
-				Drafts
+				{m.sidebar_drafts()}
 				{#if drafts.length > 0}
 					<span class="ml-1 text-sidebar-foreground/40">({drafts.length})</span>
 				{/if}
@@ -338,7 +346,7 @@
 					</div>
 				{:else if drafts.length === 0}
 					<div class="px-4 py-3 text-sm text-sidebar-foreground/40">
-						No drafts yet. Start writing and your draft will appear here.
+						{m.sidebar_drafts_empty()}
 					</div>
 				{:else}
 					<Sidebar.Menu>
@@ -394,7 +402,7 @@
 								</Avatar.Root>
 								<div class="grid flex-1 text-start text-sm leading-tight">
 									<span class="truncate font-medium text-sidebar-foreground"
-										>{authState.user?.email?.split('@')[0] || 'User'}</span
+										>{authState.user?.email?.split('@')[0] || m.common_untitled_user()}</span
 									>
 									<span class="truncate text-xs text-sidebar-foreground/70"
 										>{authState.user?.email}</span
@@ -419,7 +427,7 @@
 								</Avatar.Root>
 								<div class="grid flex-1 text-start text-sm leading-tight">
 									<span class="truncate font-medium"
-										>{authState.user?.email?.split('@')[0] || 'User'}</span
+										>{authState.user?.email?.split('@')[0] || m.common_untitled_user()}</span
 									>
 									<span class="truncate text-xs text-muted-foreground">{authState.user?.email}</span
 									>
@@ -432,29 +440,33 @@
 						<DropdownMenu.Group>
 							<DropdownMenu.Item onclick={() => goto('/accounts')}>
 								<UsersIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>Accounts</span>
+								<span>{m.sidebar_accounts()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/media')}>
 								<ImageIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>Media</span>
+								<span>{m.sidebar_media()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/prompts')}>
 								<LightbulbIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>Prompts</span>
+								<span>{m.sidebar_prompts()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/settings')}>
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>Settings</span>
+								<span>{m.sidebar_settings()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/activity')}>
 								<ScrollTextIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>Logs</span>
+								<span>{m.sidebar_activity()}</span>
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>
 
 						<DropdownMenu.Separator />
 
 						<DropdownMenu.Group>
+							<div class="px-2 py-1.5">
+								<LanguageSwitcher compact />
+							</div>
+							<DropdownMenu.Separator />
 							<DropdownMenu.Item onclick={toggleMode}>
 								<SunIcon
 									class="mr-2 size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"
@@ -462,7 +474,7 @@
 								<MoonIcon
 									class="absolute mr-2 size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0"
 								/>
-								<span>Toggle theme</span>
+								<span>{m.sidebar_toggle_theme()}</span>
 							</DropdownMenu.Item>
 						</DropdownMenu.Group>
 
@@ -471,14 +483,14 @@
 						{#if IS_CAPACITOR}
 							<DropdownMenu.Item onclick={handleSwitchServer}>
 								<ServerIcon class="mr-2 text-muted-foreground" />
-								<span>Change server</span>
+								<span>{m.sidebar_change_server()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Separator />
 						{/if}
 
 						<DropdownMenu.Item onclick={handleLogout}>
 							<LogOutIcon class="mr-2 text-muted-foreground" />
-							<span>Log out</span>
+							<span>{m.sidebar_log_out()}</span>
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
