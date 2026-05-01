@@ -1,31 +1,37 @@
 <p align="center">
-  <a href="https://github.com/rodrgds/openpost" target="_blank">
+  <a href="https://github.com/rodrgds/openpost">
     <img alt="OpenPost Logo" src="./frontend/static/logo.svg" width="280"/>
   </a>
 </p>
 
 <p align="center">
-<a href="LICENSE">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</a>
-<a href="https://golang.org">
-  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go" alt="Go Version">
-</a>
-<a href="https://svelte.dev">
-  <img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=flat&logo=svelte" alt="Svelte Version">
-</a>
+  <a href="https://github.com/rodrgds/openpost/releases">
+    <img src="https://img.shields.io/github/v/release/rodrgds/openpost?sort=semver&label=Release" alt="Latest Release">
+  </a>
+  <a href="https://github.com/rodrgds/openpost/pkgs/container/openpost">
+    <img src="https://img.shields.io/github/v/release/rodrgds/openpost?sort=semver&label=Image&include_prereleases" alt="Container Image">
+  </a>
+  <a href="https://github.com/rodrgds/openpost/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/rodrgds/openpost/ci.yml?label=CI" alt="CI Status">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
+  </a>
+  <a href="https://github.com/rodrgds/openpost/blob/main/SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Security%20Policy-blue" alt="Security Policy">
+  </a>
 </p>
 
 <div align="center">
   <strong>
-  <h2>A lightweight, self-hosted social media scheduler with web and Android app</h2><br />
+  <h2>A lightweight, self-hosted social media scheduler</h2>
   </strong>
-  The open-source alternative to Typefully, Buffer, and Hypefury.<br />
-  One lightweight binary. No dependencies. Full control.
+  Post to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.<br/>
+  One binary or container. Your data stays on your machine.
 </div>
 
 <div align="center">
-  <br />
+  <br/>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/logos/x-white.svg">
     <img alt="X (Twitter)" src="./assets/logos/x.svg" width="24">
@@ -53,65 +59,123 @@
 </div>
 
 <p align="center">
-  <br />
-  <a href="#-features"><strong>Features</strong></a>
+  <br/>
+  <a href="#-quickstart"><strong>Quickstart</strong></a>
   ·
-  <a href="#-supported-platforms"><strong>Platforms</strong></a>
-  ·
-  <a href="#-quick-start"><strong>Quick Start</strong></a>
+  <a href="#-deployment-options"><strong>Deployment</strong></a>
   ·
   <a href="#-configuration"><strong>Configuration</strong></a>
   ·
-  <a href="#-tech-stack"><strong>Tech Stack</strong></a>
+  <a href="#-provider-setup"><strong>Providers</strong></a>
+  ·
+  <a href="#-security-and-operations"><strong>Operations</strong></a>
+  ·
+  <a href="#-contributing"><strong>Contributing</strong></a>
 </p>
 
-<br />
+<br/>
 
-## 🚀 Features
+## Screenshots
 
-- **Single Binary Deployment** - Everything compiled into one executable. No Docker required (but supported).
-- **Multi-Platform Posting** - Schedule posts to X (Twitter), Mastodon, Bluesky, Threads, and LinkedIn.
-- **Media Uploads** - Attach images and videos to posts. Platform-specific media requirements handled automatically.
-- **Post Threading** - Create multi-post threads that publish sequentially across all platforms.
-- **Custom Mastodon Instances** - Connect accounts from any number of Mastodon servers (configured via JSON env var).
-- **Workspaces & Teams** - Multi-tenant architecture with role-based access control.
-- **Background Scheduling** - SQLite-backed job queue survives server restarts.
-- **Encrypted Tokens** - AES-256-GCM encryption for all OAuth tokens at rest.
-- **Modern UI** - SvelteKit frontend with TailwindCSS, responsive design.
-- **Self-Hosted** - Your data stays on your server. No third-party tracking.
+<!-- Add screenshots here. Recommended: dashboard, compose post, accounts page, scheduled queue -->
+<!-- ![OpenPost Dashboard](./assets/screenshots/dashboard.png) -->
+<!-- ![Compose Post](./assets/screenshots/compose.png) -->
 
-## 📱 Supported Platforms
+_Screenshots coming soon. The UI includes a dashboard, compose post flow, account management, and scheduled queue view._
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| X (Twitter) | ✅ Supported | OAuth 2.0 PKCE |
-| Mastodon | ✅ Supported | Custom instances |
-| Bluesky | ✅ Implemented | App passwords (no setup) |
-| Threads | ✅ Implemented | Meta Graph API |
-| LinkedIn | ✅ Implemented | OAuth 2.0 + Posts API |
+## Why OpenPost
 
-## ⚡ Quick Start
+- **Self-hosted** — Your data stays on your server. No third-party tracking.
+- **Single binary** — Everything compiled into one executable. No external dependencies.
+- **SQLite-backed** — The scheduling queue survives restarts. No Redis required.
+- **Multi-platform** — Post to X, Mastodon, Bluesky, Threads, and LinkedIn.
+- **Encrypted tokens** — All OAuth tokens encrypted at rest with AES-256-GCM.
+- **Threading support** — Create multi-post threads that publish sequentially.
 
-### Prerequisites
+## Quickstart
 
-- Go 1.25+ (for building from source)
-- Bun or npm (for frontend builds)
-- OAuth credentials for the platforms you want to use
+### Fastest path with Docker Compose
 
-### Building from Source
+1. Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  openpost:
+    image: ghcr.io/rodrgds/openpost:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - openpost_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  openpost_data:
+```
+
+2. Copy the example environment file:
 
 ```bash
-# Clone the repository
+curl -L -o .env https://raw.githubusercontent.com/rodrgds/openpost/main/backend/.env.example
+```
+
+3. Edit `.env` and set required secrets:
+
+```bash
+# Generate secure secrets
+openssl rand -base64 32
+```
+
+Required variables:
+- `JWT_SECRET` — Secret key for JWT tokens (32+ chars)
+- `ENCRYPTION_KEY` — AES-256 key for token encryption
+
+Add only the provider credentials you actually need (see [Provider Setup](#-provider-setup)).
+
+4. Start the stack:
+
+```bash
+docker compose up -d
+```
+
+5. Open `http://localhost:8080` and create your account.
+
+### Docker run
+
+```bash
+# Create persistent volume
+docker volume create openpost_data
+
+# Run the container
+docker run -d \
+  --name openpost \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  --mount source=openpost_data,target=/data \
+  --env-file .env \
+  ghcr.io/rodrgds/openpost:latest
+```
+
+### Single binary
+
+Download a release from [GitHub Releases](https://github.com/rodrgds/openpost/releases), or build from source:
+
+```bash
+# Clone and build
 git clone https://github.com/rodrgds/openpost.git
 cd openpost
 
-# Install frontend dependencies and build
-cd frontend
-bun install
-bun run build
+# Build frontend
+cd frontend && bun install && bun run build && cd ..
 
-# Build the Go binary (includes embedded frontend)
-cd ../backend
+# Build backend (embeds frontend)
+cd backend
 cp .env.example .env
 # Edit .env with your credentials
 go build -o openpost ./cmd/openpost
@@ -120,303 +184,387 @@ go build -o openpost ./cmd/openpost
 ./openpost
 ```
 
-The application will start on `http://localhost:8080`.
+The application runs on `http://localhost:8080`.
 
-### One-Liner Build
+## Deployment Options
 
-```bash
-# From project root
-cd frontend && bun install && bun run build && cd ../backend && go build -o openpost ./cmd/openpost
-```
+| Method | Best for | Status |
+|--------|----------|--------|
+| [Docker Compose](#quickstart) | Single-host production, homelabs | **Recommended** |
+| [Docker run](#docker-run) | Quick evaluation | Supported |
+| [Single binary](#single-binary) | Bare-metal, VMs | Supported |
+| [Source build](#single-binary) | Contributors, development | Supported |
+| [Kubernetes](#kubernetes) | Clustered environments | Reference manifest |
 
-### Development Mode
+### Kubernetes
 
-For development, you can run the frontend and backend separately:
-
-```bash
-# Terminal 1: Frontend (with hot reload)
-cd frontend
-bun run dev
-
-# Terminal 2: Backend (with hot reload)
-cd backend
-go run ./cmd/openpost
-```
-
-The frontend dev server runs on `http://localhost:5173` and proxies API calls to the backend.
-
-## 🐳 Docker
-
-```bash
-# Build the image
-docker build -t openpost -f docker/Dockerfile .
-
-# Run
-docker run -d \
-  -p 8080:8080 \
-  -v openpost_data:/data \
-  -e JWT_SECRET=your-secret \
-  -e ENCRYPTION_KEY=your-encryption-key \
-  openpost
-```
-
-## 📦 Docker Registry
-
-### Building and Pushing
-
-```bash
-# Build the image
-docker build -t ghcr.io/rodrgds/openpost:latest -f docker/Dockerfile .
-
-# Tag for version
-docker tag ghcr.io/rodrgds/openpost:latest ghcr.io/rodrgds/openpost:v0.1.0
-
-# Push to registry
-docker push ghcr.io/rodrgds/openpost:latest
-docker push ghcr.io/rodrgds/openpost:v0.1.0
-```
-
-### Using Pre-built Image
+A baseline reference manifest for Kubernetes:
 
 ```yaml
-# docker-compose.yml
-services:
-  openpost:
-    image: ghcr.io/rodrgds/openpost:latest
-    restart: unless-stopped
-    environment:
-      - JWT_SECRET=your-secret
-      - ENCRYPTION_KEY=your-encryption-key
-    volumes:
-      - openpost_data:/data
-    ports:
-      - "8080:8080"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openpost
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openpost-config
+  namespace: openpost
+data:
+  OPENPOST_PORT: "8080"
+  OPENPOST_DB_PATH: "/data/db/openpost.db"
+  OPENPOST_MEDIA_PATH: "/data/media"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openpost-secrets
+  namespace: openpost
+type: Opaque
+stringData:
+  JWT_SECRET: "replace-me"
+  ENCRYPTION_KEY: "replace-me"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openpost-data
+  namespace: openpost
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openpost
+  namespace: openpost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openpost
+  template:
+    metadata:
+      labels:
+        app: openpost
+    spec:
+      containers:
+        - name: openpost
+          image: ghcr.io/rodrgds/openpost:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: openpost-config
+            - secretRef:
+                name: openpost-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openpost-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openpost
+  namespace: openpost
+spec:
+  selector:
+    app: openpost
+  ports:
+    - port: 80
+      targetPort: 8080
 ```
 
-## 🐧 How I Self-Host (NixOS + Docker)
+**Note:** This is a baseline reference. Production clusters should add ingress/TLS, registry authentication, backup jobs, resource limits, and secret management integration.
 
-I personally run OpenPost on my own NixOS server using Docker (via Podman OCI containers). I wrote a custom Nix module that sets up the container with persistent storage, health checks, SOPS secret management, and a Caddy reverse proxy. If you're also on NixOS, feel free to use it as a reference:
+## Configuration
 
-🔗 **[My Nix module for OpenPost](https://github.com/rodrgds/nix-config/blob/main/modules/services/openpost/default.nix)**
+### Required secrets
 
-## ⚙️ Configuration
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Secret key for JWT tokens. Generate with `openssl rand -base64 32` |
+| `ENCRYPTION_KEY` | AES-256 key for encrypting OAuth tokens at rest. Generate with `openssl rand -base64 32` |
 
-All configuration is done via environment variables or a `.env` file:
+### Common settings
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JWT_SECRET` | ✅ Yes | Secret key for JWT tokens (32+ chars) |
-| `ENCRYPTION_KEY` | ✅ Yes | AES-256 key for token encryption |
-| `OPENPOST_MEDIA_PATH` | No | Local media storage path (default: `./media`) |
-| `OPENPOST_MEDIA_URL` | No | URL path for serving media (default: `/media`) |
-| `TWITTER_CLIENT_ID` | For X | Twitter OAuth client ID |
-| `TWITTER_CLIENT_SECRET` | For X | Twitter OAuth secret |
-| `MASTODON_SERVERS` | For Mastodon | JSON array of Mastodon server configs |
-| `MASTODON_REDIRECT_URI` | No | OAuth callback URI (default: OOB) |
-| `LINKEDIN_CLIENT_ID` | For LinkedIn | LinkedIn OAuth client ID |
-| `LINKEDIN_CLIENT_SECRET` | For LinkedIn | LinkedIn OAuth secret |
-| `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES` | No | Disable LinkedIn thread child replies when app lacks `w_member_social_feed` |
-| `THREADS_CLIENT_ID` | For Threads | Meta App ID |
-| `THREADS_CLIENT_SECRET` | For Threads | Meta App Secret |
-| `OPENPOST_PORT` | No | Server port (default: 8080) |
-| `OPENPOST_DB_PATH` | No | SQLite database path |
-| `OPENPOST_FRONTEND_URL` | No | CORS origin for frontend |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENPOST_PORT` | `8080` | Server port |
+| `OPENPOST_DB_PATH` | `openpost.db` | SQLite database path (relative to `/data/db/`) |
+| `OPENPOST_MEDIA_PATH` | `./media` | Media storage path |
+| `OPENPOST_MEDIA_URL` | `/media` | URL path for serving media |
+| `OPENPOST_FRONTEND_URL` | `http://localhost:8080` | CORS origin for frontend |
+| `OPENPOST_CORS_EXTRA_ORIGINS` | (none) | Additional CORS origins (comma-separated) |
 
-**Note:** Bluesky doesn't require any env vars - users connect directly with their handle and app password.
+### Provider configuration
 
-### Generating Secrets
+| Provider | Variables | Setup Required |
+|----------|-----------|----------------|
+| X (Twitter) | `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET` | OAuth app |
+| Mastodon | `MASTODON_SERVERS` (JSON) | OAuth app per instance |
+| Bluesky | (none) | App password only |
+| LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | OAuth app + approval |
+| Threads | `THREADS_CLIENT_ID`, `THREADS_CLIENT_SECRET` | Meta app |
 
-```bash
-# Generate JWT secret
-openssl rand -base64 32
+Bluesky requires no environment variables — users connect with their handle and app password directly in the UI.
 
-# Generate encryption key
-openssl rand -base64 32
-```
+See [backend/.env.example](backend/.env.example) for the full configuration template with provider-specific details.
 
-### OAuth Setup
+## Provider Setup
 
-#### Twitter/X
+### X (Twitter)
 
 1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-2. Create a new App
-3. Enable OAuth 2.0
-4. Set callback URL: `http://localhost:8080/api/v1/accounts/x/callback`
+2. Create a new App with OAuth 2.0 enabled
+3. Set callback URL: `https://your-domain.com/api/v1/accounts/x/callback`
+4. Request scopes: `tweet.read`, `tweet.write`, `users.read`, `offline.access`
 5. Copy Client ID and Secret to your `.env`
 
-#### Mastodon
+### Mastodon
 
-Mastodon supports **multiple servers** via the `MASTODON_SERVERS` environment variable. Each server needs its own OAuth app because Mastodon client credentials are per-instance.
+Mastodon requires per-instance OAuth apps because client credentials are server-specific.
 
-1. For each Mastodon instance, go to Settings → Development → New Application
-2. Set the redirect URI to: `urn:ietf:wg:oauth:2.0:oob` (or your callback URL)
-3. Copy the Client ID and Secret
+1. For each Mastodon instance, go to **Settings → Development → New Application**
+2. Set redirect URI: `urn:ietf:wg:oauth:2.0:oob` (or your production callback URL)
+3. Request scopes: `read`, `write`
 4. Add to your `.env`:
 
 ```env
-MASTODON_REDIRECT_URI=urn:ietf:wg:oauth:2.0:oob
+MASTODON_REDIRECT_URI=https://your-domain.com/api/v1/accounts/mastodon/callback
 MASTODON_SERVERS='[
-  {"name":"Personal","client_id":"abc123","client_secret":"xyz789","instance_url":"https://mastodon.social"},
-  {"name":"Work","client_id":"def456","client_secret":"uvw012","instance_url":"https://fosstodon.org"}
+  {"name":"Personal","client_id":"xxx","client_secret":"yyy","instance_url":"https://mastodon.social"},
+  {"name":"Work","client_id":"aaa","client_secret":"bbb","instance_url":"https://fosstodon.org"}
 ]'
 ```
 
-The `name` is a label shown in the UI. You can configure as many servers as you need.
+The `name` is your label for the server. Add as many as you need.
 
-#### Bluesky
+### Bluesky
 
-Bluesky uses app passwords - no setup needed. Users just enter their handle and app password when connecting:
+No setup required. Users create an app password in [Bluesky Settings](https://bsky.app/settings/app-passwords) and enter it directly in OpenPost.
 
-1. Go to [Bluesky App Passwords](https://bsky.app/settings/app-passwords)
-2. Create a new app password
-3. In OpenPost, click Connect on Bluesky and enter your handle + app password
-
-See [docs/bluesky-integration.md](docs/bluesky-integration.md) for more details.
-
-#### LinkedIn
+### LinkedIn
 
 1. Go to [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)
-2. Create a new app and request "Share on LinkedIn" product
-3. Request approval for `w_member_social_feed` (Social Actions create) in your app products/permissions
-4. Add redirect URL: `http://localhost:8080/api/v1/accounts/linkedin/callback`
+2. Create an app and request **Share on LinkedIn** product
+3. Request approval for `w_member_social_feed` in your app permissions
+4. Add redirect URL: `https://your-domain.com/api/v1/accounts/linkedin/callback`
 5. Copy Client ID and Secret to your `.env`
 
-**Important:** LinkedIn thread replies (posting comments on the first post) require `w_member_social_feed` approval. If your app only has `w_member_social`, first posts may succeed but replies/comments will fail with `ACCESS_DENIED: partnerApiSocialActions.CREATE`.
+**Important:** Thread replies (posting as comments on the first post) require `w_member_social_feed` approval. Without it, replies fail with `ACCESS_DENIED`. If you can't get approval, set `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES=true`.
 
-See [docs/linkedin-integration.md](docs/linkedin-integration.md) for detailed setup instructions.
-
-#### Threads
+### Threads
 
 1. Go to [Meta for Developers](https://developers.facebook.com/)
-2. Create a new app (Business type) and add Threads API product
-3. Add redirect URL: `http://localhost:8080/api/v1/accounts/threads/callback`
-4. Copy App ID and App Secret to your `.env` as `THREADS_CLIENT_ID` and `THREADS_CLIENT_SECRET`
+2. Create a Business app and add **Threads API** product
+3. Add redirect URL: `https://your-domain.com/api/v1/accounts/threads/callback`
+4. Copy App ID and App Secret as `THREADS_CLIENT_ID` and `THREADS_CLIENT_SECRET`
 
-See [docs/threads-integration.md](docs/threads-integration.md) for detailed setup instructions.
+**Important:** Threads requires publicly accessible URLs for media uploads. Your `/media/{id}` endpoint must be reachable from the internet.
 
-## 🏗️ Tech Stack
+See [docs/](docs/) for detailed platform-specific documentation.
+
+## Security and Operations
+
+### Secrets
+
+- **Never commit `.env`** to version control
+- Use Docker secrets, Kubernetes secrets, or a secrets manager in production
+- Rotate OAuth client secrets and app passwords periodically
+
+### Persistence
+
+OpenPost stores all data under `/data`:
+
+- `/data/db/openpost.db` — SQLite database
+- `/data/media/` — Uploaded images and videos
+
+**Backup both the database and media directory.**
+
+### Backups
+
+```bash
+# Backup database
+cp /data/db/openpost.db openpost-backup-$(date +%Y%m%d).db
+
+# Backup media
+tar -czf media-backup-$(date +%Y%m%d).tar.gz /data/media/
+```
+
+### Upgrades
+
+1. Check the [Changelog](CHANGELOG.md) for breaking changes
+2. Back up your `/data` directory
+3. Pull the new image or download the new binary
+4. Restart the service
+5. Verify health: `curl http://localhost:8080/api/v1/health`
+
+### Vulnerability Reporting
+
+See [SECURITY.md](SECURITY.md) for the security policy and disclosure process.
+
+## Reverse Proxy and TLS
+
+### Caddy (recommended)
+
+```Caddyfile
+openpost.yourdomain.com {
+    reverse_proxy localhost:8080
+    encode gzip
+}
+```
+
+### Nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name openpost.yourdomain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /media/ {
+        proxy_pass http://localhost:8080;
+    }
+}
+```
+
+### Traefik
+
+```yaml
+services:
+  openpost:
+    image: ghcr.io/rodrgds/openpost:latest
+    # ...
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openpost.rule=Host(`openpost.yourdomain.com`)"
+      - "traefik.http.routers.openpost.tls=true"
+      - "traefik.http.services.openpost.loadbalancer.server.port=8080"
+```
+
+### OAuth callback URLs
+
+When using a reverse proxy, update your OAuth callback URLs:
+
+| Provider | Callback URL |
+|----------|---------------|
+| X | `https://your-domain.com/api/v1/accounts/x/callback` |
+| Mastodon | `https://your-domain.com/api/v1/accounts/mastodon/callback` |
+| LinkedIn | `https://your-domain.com/api/v1/accounts/linkedin/callback` |
+| Threads | `https://your-domain.com/api/v1/accounts/threads/callback` |
+
+Update the corresponding environment variables (`TWITTER_REDIRECT_URI`, etc.) in your `.env`.
+
+## Tech Stack
 
 **Frontend:**
 - SvelteKit 5 (with runes)
 - TailwindCSS 4
 - Paraglide (i18n)
-- Vitest (testing)
 
 **Backend:**
 - Go 1.25+ (Echo framework)
 - SQLite (Bun ORM)
-- Background job queue (SQLite-backed polling)
+- Background job queue (SQLite-backed)
 
 **Deployment:**
 - Single Go binary with embedded static files
-- Docker support
-- Zero external dependencies (no Redis, no PostgreSQL required)
+- Docker container image
+- No external dependencies (no Redis, no PostgreSQL)
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 openpost/
-├── frontend/                  # SvelteKit frontend (web + Android app)
+├── frontend/               # SvelteKit frontend
 │   ├── src/
-│   │   ├── lib/
-│   │   │   ├── api/       # API client (openapi-fetch)
-│   │   │   ├── components/# UI components
-│   │   │   └── stores/    # Auth, UI state
+│   │   ├── lib/           # API client, components, stores
 │   │   └── routes/        # SvelteKit routes
-│   ├── android/            # Android native app (Capacitor)
-│   └── package.json
-│
+│   └── android/           # Android app (Capacitor)
 ├── backend/
 │   ├── cmd/openpost/       # Main entry point
-│   │   └── public/        # Embedded SvelteKit build output (not source)
-│   ├── internal/
-│   │   ├── api/            # HTTP handlers & middleware
-│   │   │   ├── handlers/  # Posts, Auth, Media, OAuth handlers
-│   │   │   └── middleware/
-│   │   │       └── auth.go# JWT authentication middleware
-│   │   ├── config/         # Configuration loading
-│   │   ├── database/       # SQLite setup
-│   │   ├── models/         # Bun ORM models
-│   │   │   ├── models.go
-│   │   │   └── models_test.go
-│   │   ├── platform/       # Platform adapter interface + implementations
-│   │   │   ├── adapter.go # PlatformAdapter interface
-│   │   │   ├── http.go    # Shared HTTP helpers
-│   │   │   ├── x.go       # Twitter/X adapter
-│   │   │   ├── mastodon.go# Mastodon adapter
-│   │   │   ├── bluesky.go # Bluesky adapter
-│   │   │   ├── linkedin.go# LinkedIn adapter
-│   │   │   └── threads.go # Threads adapter
-│   │   ├── queue/          # Background job worker
-│   │   └── services/       # Business logic
-│   │       ├── auth/       # JWT & password handling
-│   │       │   ├── auth.go
-│   │       │   └── auth_test.go
-│   │       ├── crypto/     # Token encryption
-│   │       │   ├── encrypt.go
-│   │       │   └── encrypt_test.go
-│   │       ├── mediastore/ # Local/S3 media storage
-│   │       ├── publisher/  # Post publishing logic
-│   │       └── tokenmanager/ # Token refresh management
-│   ├── .golangci.yml       # Linter configuration
-│   ├── go.mod              # Go module definition
-│   └── go.sum              # Go module checksums
-│
+│   └── internal/
+│       ├── api/            # HTTP handlers
+│       ├── config/         # Configuration
+│       ├── database/       # SQLite setup
+│       ├── models/         # ORM models
+│       ├── platform/       # Platform adapters (X, Mastodon, Bluesky, etc.)
+│       ├── queue/          # Background worker
+│       └── services/       # Business logic
 ├── docs/                   # Platform integration docs
-├── AGENTS.md               # AI agent guidelines
-├── PLAN.md                 # Implementation roadmap
+├── docker-compose.yml      # Quickstart Compose file
+├── CHANGELOG.md            # Version history
 └── README.md
 ```
 
-## 🔐 Security
+## Contributing
 
-- **Tokens are encrypted at rest** using AES-256-GCM
-- **Passwords hashed** with bcrypt
-- **JWT authentication** with configurable expiry
-- **No external services** - all data stays on your server
-- **OAuth PKCE** for Twitter authentication
+We welcome contributions! Please read our contributing guidelines:
 
-## 🗺️ Roadmap
+- [CONTRIBUTING.md](CONTRIBUTING.md) — How to contribute
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Community standards
+- [AGENTS.md](AGENTS.md) — Developer guidelines and architecture
 
-See [PLAN.md](PLAN.md) for the complete implementation status and roadmap.
-
-### Current Status (MVP)
-
-- [x] User authentication (register/login)
-- [x] Workspace management (multi-tenant)
-- [x] Twitter/X OAuth
-- [x] Mastodon OAuth (multi-server support)
-- [x] Bluesky OAuth (AT Protocol)
-- [x] LinkedIn OAuth
-- [x] Threads OAuth (Meta Graph API)
-- [x] Post scheduling with background worker
-- [x] Media upload support
-- [x] Post threading (multi-post threads)
-- [x] Single binary deployment
-- [x] Token refresh for all platforms
-- [x] Platform adapter architecture
-
-### Coming Soon
-
-- [ ] Post analytics
-- [ ] Email notifications
-- [ ] Webhook support
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [AGENTS.md](AGENTS.md) for development guidelines.
+### Quick contribution steps
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Make your changes
+4. Run tests and linting
+5. Commit using [Conventional Commits](https://www.conventionalcommits.org/):
+   - `feat:` for new features
+   - `fix:` for bug fixes
+   - `chore:` for maintenance
+   - `refactor:` for code improvements
+6. Open a Pull Request
 
-## 📄 License
+## Roadmap and Releases
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- [CHANGELOG.md](CHANGELOG.md) — What's changed in each release
+- [ROADMAP.md](ROADMAP.md) — Upcoming features and status
+- [GitHub Releases](https://github.com/rodrgds/openpost/releases) — Download binaries and images
 
-## 🙏 Acknowledgments
+## License
+
+MIT — see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
 
 - Inspired by [Postiz](https://github.com/gitroomhq/postiz-app) and [Typefully](https://typefully.com)
 - Built with [Echo](https://echo.labstack.com/), [SvelteKit](https://kit.svelte.dev/), and [Bun ORM](https://bun.uptrace.dev/)

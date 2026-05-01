@@ -49,6 +49,7 @@ When an AI agent is invoked to assist with this repository, it MUST adhere to th
 ### A. Commit & Branch Conventions
 - **Always use Conventional Commits** (e.g., `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`). Follow https://www.conventionalcommits.org/
 - **Always use Conventional Branches** (e.g., `feature/add-login`, `fix/header-alignment`, `hotfix/emergency-patch`)
+- **Always update the Changelog** for any major features, bug fixes, or breaking changes. Use the `## [Unreleased]` section to document changes since the last release.
 - **Go Backend:** Use Echo for HTTP handlers and Huma for OpenAPI endpoints. Follow the dependency injection pattern in `main.go`. Maintain separation of concerns: Handlers -> Services -> Database.
 - **Platform Adapters:** Implement `PlatformAdapter` interface. Never put platform logic outside the `internal/platform/` package. Use shared HTTP helpers from `http.go`.
 - **SvelteKit Frontend:** Always use standard Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`, `$bindable`). Use `+page.svelte`/`+page.ts` structures. Use the openapi-fetch typed client against `/api/v1` routes.
