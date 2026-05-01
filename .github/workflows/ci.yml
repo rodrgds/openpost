@@ -43,8 +43,8 @@ jobs:
             ci:
               - '.github/workflows/**'
 
-  lint:
-    name: Lint
+  setup-nix-store:
+    name: Setup Nix Store
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
@@ -60,15 +60,52 @@ jobs:
         with:
           name: devenv
 
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v7
+      - name: Restore shared Nix store
+        id: nix-cache-restore
+        uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ github.job }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
           restore-prefixes-first-match: |
-            nix-${{ runner.os }}-${{ github.job }}-
-          restore-prefixes-all-matches: |
-            nix-${{ runner.os }}-
-          gc-max-store-size-linux: 2G
+            nix-${{ runner.os }}-devenv-
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
+
+      - name: Warm devenv shell
+        shell: bash
+        run: devenv shell -- true
+
+      - name: Save shared Nix store
+        if: steps.nix-cache-restore.outputs.hit-primary-key != 'true'
+        uses: nix-community/cache-nix-action/save@v7
+        with:
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          gc-max-store-size-linux: 3G
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: [changes, setup-nix-store]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+
+      - name: Restore shared Nix store
+        uses: nix-community/cache-nix-action/restore@v7
+        with:
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-devenv-
 
       - name: Install devenv
         shell: bash
@@ -121,7 +158,7 @@ jobs:
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, setup-nix-store]
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout code
@@ -135,15 +172,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v7
+      - name: Restore shared Nix store
+        uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ github.job }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
           restore-prefixes-first-match: |
-            nix-${{ runner.os }}-${{ github.job }}-
-          restore-prefixes-all-matches: |
-            nix-${{ runner.os }}-
-          gc-max-store-size-linux: 2G
+            nix-${{ runner.os }}-devenv-
 
       - name: Install devenv
         shell: bash
@@ -172,7 +206,7 @@ jobs:
   test-backend-race:
     name: Test Backend Race
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, setup-nix-store]
     if: github.event_name == 'push' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true')
     steps:
       - name: Checkout code
@@ -186,15 +220,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v7
+      - name: Restore shared Nix store
+        uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ github.job }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
           restore-prefixes-first-match: |
-            nix-${{ runner.os }}-${{ github.job }}-
-          restore-prefixes-all-matches: |
-            nix-${{ runner.os }}-
-          gc-max-store-size-linux: 2G
+            nix-${{ runner.os }}-devenv-
 
       - name: Install devenv
         shell: bash
@@ -217,7 +248,7 @@ jobs:
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, setup-nix-store]
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout code
@@ -231,15 +262,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v7
+      - name: Restore shared Nix store
+        uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-${{ github.job }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
           restore-prefixes-first-match: |
-            nix-${{ runner.os }}-${{ github.job }}-
-          restore-prefixes-all-matches: |
-            nix-${{ runner.os }}-
-          gc-max-store-size-linux: 2G
+            nix-${{ runner.os }}-devenv-
 
       - name: Install devenv
         shell: bash
