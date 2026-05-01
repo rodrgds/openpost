@@ -300,14 +300,42 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	}
 
 	var mediaAttachments []models.MediaAttachment
-	if err := s.db.NewSelect().
-		TableExpr("post_media AS pm").
-		ColumnExpr("ma.*").
-		Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
-		Where("pm.post_id = ?", post.ID).
-		Order("pm.display_order ASC").
-		Scan(ctx, &mediaAttachments); err != nil {
-		return fmt.Errorf("fetching media: %v", err)
+	variant, variantErr := s.loadVariant(ctx, post.ID, dest.SocialAccountID)
+	if variantErr != nil {
+		return variantErr
+	}
+
+	// Determine which media to use: variant override or parent post media
+	hasExplicitVariantMedia := false
+	if variant != nil && variant.IsUnsynced && variant.MediaIDs != "" {
+		hasExplicitVariantMedia = true
+		var variantMediaIDs []string
+		if err := json.Unmarshal([]byte(variant.MediaIDs), &variantMediaIDs); err != nil {
+			log.Printf("[Publisher] Failed to unmarshal variant media IDs for %s: %v", variant.ID, err)
+			// fallback to parent media if unmarshal fails
+			hasExplicitVariantMedia = false
+		} else if len(variantMediaIDs) > 0 {
+			if err := s.db.NewSelect().
+				Model(&mediaAttachments).
+				Where("id IN (?)", bun.List(variantMediaIDs)).
+				OrderExpr("CASE id " + buildOrderClause(variantMediaIDs) + " END").
+				Scan(ctx); err != nil {
+				return fmt.Errorf("fetching variant media: %v", err)
+			}
+		}
+	}
+
+	// If no variant media or variant not unsynced, use parent post media
+	if !hasExplicitVariantMedia && len(mediaAttachments) == 0 {
+		if err := s.db.NewSelect().
+			TableExpr("post_media AS pm").
+			ColumnExpr("ma.*").
+			Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
+			Where("pm.post_id = ?", post.ID).
+			Order("pm.display_order ASC").
+			Scan(ctx, &mediaAttachments); err != nil {
+			return fmt.Errorf("fetching media: %v", err)
+		}
 	}
 
 	var platformMediaIDs []string
@@ -337,9 +365,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		ReplyToID:        replyToID,
 	}
 
-	if variant, err := s.loadVariant(ctx, post.ID, dest.SocialAccountID); err != nil {
-		return err
-	} else if variant != nil && variant.IsUnsynced {
+	if variant != nil && variant.IsUnsynced {
 		if variant.Content != "" {
 			req.Content = variant.Content
 		}
@@ -435,4 +461,17 @@ func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, 
 	}
 
 	return parentDest.ExternalID, nil
+}
+
+func buildOrderClause(ids []string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i, id := range ids {
+		// Escape single quotes just in case, though these should be UUIDs
+		safeID := strings.ReplaceAll(id, "'", "''")
+		fmt.Fprintf(&sb, "WHEN '%s' THEN %d ", safeID, i)
+	}
+	return sb.String()
 }

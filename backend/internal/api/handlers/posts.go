@@ -1015,6 +1015,57 @@ type UpdatePostOutput struct {
 	Body *PostDetailResponse
 }
 
+const threadDraftPrefix = "__openpost_thread__:"
+
+func isThreadDraft(content string) bool {
+	return len(content) > len(threadDraftPrefix) && content[:len(threadDraftPrefix)] == threadDraftPrefix
+}
+
+type threadDraftData struct {
+	P []struct {
+		K string   `json:"k"`
+		C string   `json:"c"`
+		M []string `json:"m"`
+	} `json:"p"`
+	V map[string]map[string]string `json:"v"`
+}
+
+func getThreadPostIDsTx(ctx context.Context, tx bun.Tx, rootPostID string, includeRoot bool) ([]string, error) {
+	cte := `WITH RECURSIVE thread AS (
+		SELECT id FROM posts WHERE id = ?
+		UNION ALL
+		SELECT p.id FROM posts p JOIN thread t ON p.parent_post_id = t.id
+	) SELECT id FROM thread`
+
+	var ids []string
+	if err := tx.NewRaw(cte, rootPostID).Scan(ctx, &ids); err != nil {
+		return nil, fmt.Errorf("failed to fetch thread posts: %w", err)
+	}
+	if includeRoot || len(ids) == 0 {
+		return ids, nil
+	}
+	return ids[1:], nil
+}
+
+func deletePostsCascadeTx(ctx context.Context, tx bun.Tx, postIDs []string) error {
+	if len(postIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.NewDelete().Model(&models.PostMedia{}).Where("post_id IN (?)", bun.List(postIDs)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete post media: %w", err)
+	}
+	if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id IN (?)", bun.List(postIDs)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete destinations: %w", err)
+	}
+	if _, err := tx.NewDelete().Model(&models.PostVariant{}).Where("post_id IN (?)", bun.List(postIDs)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete variants: %w", err)
+	}
+	if _, err := tx.NewDelete().Model(&models.Post{}).Where("id IN (?)", bun.List(postIDs)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete posts: %w", err)
+	}
+	return nil
+}
+
 //nolint:gocyclo
 func (h *PostHandler) UpdatePost(api huma.API) {
 	huma.Register(api, huma.Operation{
@@ -1056,6 +1107,83 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			if input.Body.Content != nil {
 				post.Content = *input.Body.Content
+
+				descendantIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, false)
+				if err != nil {
+					return err
+				}
+				if err := deletePostsCascadeTx(txCtx, tx, descendantIDs); err != nil {
+					return err
+				}
+
+				// Handle thread draft updates
+				if isThreadDraft(post.Content) {
+					var draft threadDraftData
+					if err := json.Unmarshal([]byte(post.Content[len(threadDraftPrefix):]), &draft); err == nil && len(draft.P) > 1 {
+						var inheritedAccountIDs []string
+						if input.Body.SocialAccountIDs != nil {
+							inheritedAccountIDs = append(inheritedAccountIDs, input.Body.SocialAccountIDs...)
+						} else {
+							var parentDests []models.PostDestination
+							if err := tx.NewSelect().
+								Model(&parentDests).
+								Column("social_account_id").
+								Where("post_id = ?", post.ID).
+								Scan(txCtx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+								return fmt.Errorf("failed to load destinations for thread draft: %w", err)
+							}
+							inheritedAccountIDs = make([]string, 0, len(parentDests))
+							for _, pd := range parentDests {
+								inheritedAccountIDs = append(inheritedAccountIDs, pd.SocialAccountID)
+							}
+						}
+
+						parentID := post.ID
+						for i := 1; i < len(draft.P); i++ {
+							child := &models.Post{
+								ID:                 uuid.New().String(),
+								WorkspaceID:        post.WorkspaceID,
+								CreatedByID:        post.CreatedByID,
+								Content:            draft.P[i].C,
+								Status:             post.Status,
+								ThreadSequence:     i,
+								ParentPostID:       parentID,
+								RandomDelayMinutes: post.RandomDelayMinutes,
+								ScheduledAt:        post.ScheduledAt,
+								ActualRunAt:        post.ActualRunAt,
+								CreatedAt:          post.CreatedAt,
+							}
+							if _, err := tx.NewInsert().Model(child).Exec(txCtx); err != nil {
+								return fmt.Errorf("failed to recreate thread child %d: %w", i, err)
+							}
+							parentID = child.ID
+
+							for _, accID := range inheritedAccountIDs {
+								dest := models.PostDestination{
+									ID:              uuid.New().String(),
+									PostID:          child.ID,
+									SocialAccountID: accID,
+									Status:          "pending",
+								}
+								if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
+									return err
+								}
+							}
+
+							// Recreate media for children
+							for j, mediaID := range draft.P[i].M {
+								pm := models.PostMedia{
+									PostID:       child.ID,
+									MediaID:      mediaID,
+									DisplayOrder: j,
+								}
+								if _, err := tx.NewInsert().Model(&pm).Exec(txCtx); err != nil {
+									return err
+								}
+							}
+						}
+					}
+				}
 			}
 
 			// ------------------------------------------------------------------
@@ -1137,6 +1265,23 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				}
 			}
 
+			descendantIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, false)
+			if err != nil {
+				return err
+			}
+			if len(descendantIDs) > 0 {
+				if _, err := tx.NewUpdate().
+					Model((*models.Post)(nil)).
+					Set("status = ?", post.Status).
+					Set("scheduled_at = ?", post.ScheduledAt).
+					Set("random_delay_minutes = ?", post.RandomDelayMinutes).
+					Set("actual_run_at = ?", post.ActualRunAt).
+					Where("id IN (?)", bun.List(descendantIDs)).
+					Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to sync thread descendants: %w", err)
+				}
+			}
+
 			// ------------------------------------------------------------------
 			// 2. Update destinations (always processed)
 			// ------------------------------------------------------------------
@@ -1153,6 +1298,29 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					}
 					if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to add destination: %w", err)
+					}
+				}
+
+				descendantIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, false)
+				if err != nil {
+					return err
+				}
+				if len(descendantIDs) > 0 {
+					if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id IN (?)", bun.List(descendantIDs)).Exec(txCtx); err != nil {
+						return fmt.Errorf("failed to remove old thread destinations: %w", err)
+					}
+					for _, childID := range descendantIDs {
+						for _, accID := range input.Body.SocialAccountIDs {
+							dest := models.PostDestination{
+								ID:              uuid.New().String(),
+								PostID:          childID,
+								SocialAccountID: accID,
+								Status:          "pending",
+							}
+							if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
+								return fmt.Errorf("failed to add thread destination: %w", err)
+							}
+						}
 					}
 				}
 			}
@@ -1303,17 +1471,15 @@ func (h *PostHandler) DeletePost(api huma.API) {
 		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-			if _, err := tx.NewDelete().Model(&models.PostMedia{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
-				return fmt.Errorf("failed to delete post media: %w", err)
-			}
-			if _, err := tx.NewDelete().Model(&models.PostDestination{}).Where("post_id = ?", post.ID).Exec(txCtx); err != nil {
-				return fmt.Errorf("failed to delete destinations: %w", err)
+			allIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, true)
+			if err != nil {
+				return err
 			}
 			if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
 				return fmt.Errorf("failed to delete jobs: %w", err)
 			}
-			if _, err := tx.NewDelete().Model(&post).Where("id = ?", post.ID).Exec(txCtx); err != nil {
-				return fmt.Errorf("failed to delete post: %w", err)
+			if err := deletePostsCascadeTx(txCtx, tx, allIDs); err != nil {
+				return err
 			}
 			return nil
 		})
