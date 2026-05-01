@@ -28,10 +28,38 @@ describe('draft-utils', () => {
 			const encoded = encodeThreadDraft(posts);
 			expect(encoded.startsWith(THREAD_DRAFT_PREFIX)).toBe(true);
 			const decoded = decodeThreadDraft(encoded);
-			expect(decoded).toEqual([
-				{ content: 'Hello', mediaIds: ['m1'] },
-				{ content: 'World', mediaIds: [] }
-			]);
+			expect(decoded).toEqual({
+				posts: [
+					{ key: 'a', content: 'Hello', mediaIds: ['m1'] },
+					{ key: 'b', content: 'World', mediaIds: [] }
+				],
+				variants: {}
+			});
+		});
+
+		it('preserves per-account thread variants', () => {
+			const posts = [
+				{ key: 'a', content: 'Hello', mediaIds: ['m1'] },
+				{ key: 'b', content: 'World', mediaIds: [] }
+			];
+			const encoded = encodeThreadDraft(posts, {
+				acc1: {
+					a: 'Olá',
+					b: 'Mundo'
+				}
+			});
+			expect(decodeThreadDraft(encoded)).toEqual({
+				posts: [
+					{ key: 'a', content: 'Hello', mediaIds: ['m1'] },
+					{ key: 'b', content: 'World', mediaIds: [] }
+				],
+				variants: {
+					acc1: {
+						a: 'Olá',
+						b: 'Mundo'
+					}
+				}
+			});
 		});
 	});
 
@@ -50,6 +78,33 @@ describe('draft-utils', () => {
 		});
 		it('returns null for invalid JSON', () => {
 			expect(decodeThreadDraft(THREAD_DRAFT_PREFIX + 'invalid')).toBeNull();
+		});
+
+		it('supports legacy array-based variant drafts', () => {
+			const decoded = decodeThreadDraft(
+				THREAD_DRAFT_PREFIX +
+					JSON.stringify({
+						p: [
+							{ c: 'Hello', m: [] },
+							{ c: 'World', m: [] }
+						],
+						v: {
+							acc1: ['Olá', 'Mundo']
+						}
+					})
+			);
+			expect(decoded).toEqual({
+				posts: [
+					{ key: expect.any(String), content: 'Hello', mediaIds: [] },
+					{ key: expect.any(String), content: 'World', mediaIds: [] }
+				],
+				variants: {
+					acc1: {
+						'0': 'Olá',
+						'1': 'Mundo'
+					}
+				}
+			});
 		});
 	});
 

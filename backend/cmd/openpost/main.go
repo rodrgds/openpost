@@ -126,7 +126,7 @@ func main() {
 	}
 	mediaHandler := handlers.NewMediaHandler(db, storage, authService)
 
-	worker := queue.NewWorker(db, "worker-1", 5*time.Second, publishSvc, storage)
+	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, storage)
 
 	apiGroup := e.Group("/api/v1")
 	humaConfig := huma.DefaultConfig("OpenPost API", "1.0.0")

@@ -77,6 +77,27 @@
 	let editSetName = $state('');
 	let editSetDefault = $state(false);
 	let editSetAccountIds = $state<string[]>([]);
+	let editSetLoading = $state(false);
+
+	function resetCreateSetForm() {
+		newSetName = '';
+		newSetDefault = false;
+		newSetAccountIds = [];
+	}
+
+	function closeEditSetDialog() {
+		editSetDialogOpen = false;
+		editingSet = null;
+		editSetName = '';
+		editSetDefault = false;
+		editSetAccountIds = [];
+	}
+
+	function syncSetSelectionsWithAccounts(nextAccounts: SocialAccount[]) {
+		const validIds = new Set(nextAccounts.map((account) => account.id));
+		newSetAccountIds = newSetAccountIds.filter((id) => validIds.has(id));
+		editSetAccountIds = editSetAccountIds.filter((id) => validIds.has(id));
+	}
 
 	async function loadAccounts() {
 		if (!selectedWorkspaceId) return;
@@ -86,9 +107,11 @@
 				params: { query: { workspace_id: selectedWorkspaceId } }
 			});
 			accounts = data ?? [];
+			syncSetSelectionsWithAccounts(accounts);
 		} catch (e) {
 			console.error('Failed to load accounts:', e);
 			accounts = [];
+			syncSetSelectionsWithAccounts([]);
 		} finally {
 			accountsLoading = false;
 		}
@@ -102,6 +125,18 @@
 				params: { query: { workspace_id: selectedWorkspaceId } }
 			});
 			sets = (data ?? []) as unknown as SocialMediaSet[];
+			const currentEditingSet = editingSet;
+			if (currentEditingSet) {
+				const refreshedSet = sets.find((set) => set.id === currentEditingSet.id) ?? null;
+				if (!refreshedSet) {
+					closeEditSetDialog();
+				} else {
+					editingSet = refreshedSet;
+					editSetAccountIds = refreshedSet.accounts.map((account) => account.social_account_id);
+					editSetDefault = refreshedSet.is_default;
+					editSetName = refreshedSet.name;
+				}
+			}
 		} catch (e) {
 			console.error('Failed to load sets:', e);
 			sets = [];
@@ -145,9 +180,7 @@
 				}
 			});
 			createSetDialogOpen = false;
-			newSetName = '';
-			newSetDefault = false;
-			newSetAccountIds = [];
+			resetCreateSetForm();
 			await loadSets();
 		} catch (e) {
 			error = (e as Error).message;
@@ -158,7 +191,7 @@
 
 	async function updateSet() {
 		if (!editingSet || !editSetName.trim()) return;
-		createSetLoading = true;
+		editSetLoading = true;
 		try {
 			await (client as any).PATCH('/sets/{id}', {
 				params: { path: { id: editingSet.id } },
@@ -185,13 +218,12 @@
 				});
 			}
 
-			editSetDialogOpen = false;
-			editingSet = null;
+			closeEditSetDialog();
 			await loadSets();
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
-			createSetLoading = false;
+			editSetLoading = false;
 		}
 	}
 
@@ -251,6 +283,11 @@
 		if (selectedWorkspaceId) {
 			loadAccounts();
 			loadSets();
+		} else {
+			accounts = [];
+			sets = [];
+			resetCreateSetForm();
+			closeEditSetDialog();
 		}
 	});
 
@@ -466,7 +503,11 @@
 					<DropdownMenu.Label class="text-xs text-muted-foreground">Workspaces</DropdownMenu.Label>
 					{#each workspaces as workspace (workspace.id)}
 						<DropdownMenu.Item
-							onSelect={() => (selectedWorkspaceId = workspace.id)}
+							onSelect={() => {
+								selectedWorkspaceId = workspace.id;
+								resetCreateSetForm();
+								closeEditSetDialog();
+							}}
 							class="gap-2 p-2"
 						>
 							<span
@@ -523,7 +564,7 @@
 									</div>
 								</div>
 								<div
-									class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+									class="flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
 								>
 									{#if set.is_default}
 										<span
@@ -861,7 +902,7 @@
 			{/if}
 			<div class="flex justify-end gap-2">
 				<Dialog.Close>
-					<Button variant="outline" type="button">Cancel</Button>
+					<Button variant="outline" type="button" onclick={resetCreateSetForm}>Cancel</Button>
 				</Dialog.Close>
 				<Button type="submit" disabled={createSetLoading || !newSetName.trim()}>
 					{createSetLoading ? 'Creating...' : 'Create Set'}
@@ -927,10 +968,10 @@
 				{/if}
 				<div class="flex justify-end gap-2">
 					<Dialog.Close>
-						<Button variant="outline" type="button">Cancel</Button>
+						<Button variant="outline" type="button" onclick={closeEditSetDialog}>Cancel</Button>
 					</Dialog.Close>
-					<Button type="submit" disabled={createSetLoading || !editSetName.trim()}>
-						{createSetLoading ? 'Saving...' : 'Save Changes'}
+					<Button type="submit" disabled={editSetLoading || !editSetName.trim()}>
+						{editSetLoading ? 'Saving...' : 'Save Changes'}
 					</Button>
 				</div>
 			</form>

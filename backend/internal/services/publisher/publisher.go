@@ -3,7 +3,9 @@ package publisher
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +17,8 @@ import (
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
+
+var errLinkedInThreadReplySkipped = errors.New("linkedin thread reply skipped")
 
 type Service struct {
 	db                           *bun.DB
@@ -57,6 +61,12 @@ func (s *Service) HandlePublishJob(ctx context.Context, jobPayload string) error
 	post := new(models.Post)
 	if err := s.db.NewSelect().Model(post).Where("id = ?", payload.PostID).Scan(ctx); err != nil {
 		return err
+	}
+	if _, err := s.db.NewUpdate().Model(post).
+		Set("status = ?", "publishing").
+		Where("id = ?", post.ID).
+		Exec(ctx); err != nil {
+		log.Printf("[Publisher] Failed to mark post %s as publishing: %v", post.ID, err)
 	}
 
 	var threadPosts []*models.Post
@@ -193,6 +203,17 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 		var successfulInThisPost []string
 		for _, dest := range dests {
 			if err := s.publishToDestination(ctx, post, &dest); err != nil {
+				if errors.Is(err, errLinkedInThreadReplySkipped) {
+					if _, dbErr := s.db.NewUpdate().Model(&dest).
+						Set("status = ?", "success").
+						Set("error_message = ?", "").
+						Where("id = ?", dest.ID).
+						Exec(ctx); dbErr != nil {
+						log.Printf("[Publisher] Failed to update skipped LinkedIn destination %s status: %v", dest.ID, dbErr)
+					}
+					successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
+					continue
+				}
 				log.Printf("[Publisher] Thread post %s failed at destination %s: %v", post.ID, dest.ID, err)
 				if _, dbErr := s.db.NewUpdate().Model(&dest).
 					Set("status = ?", "failed").
@@ -304,7 +325,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	replyToID := ""
 	if post.ThreadSequence > 0 && post.ParentPostID != "" {
 		if s.disableLinkedInThreadReplies && account.Platform == "linkedin" {
-			return fmt.Errorf("linkedin thread replies are disabled by OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES")
+			return errLinkedInThreadReplySkipped
 		}
 		replyToID, _ = s.getPreviousPostExternalID(ctx, post.ID, dest.SocialAccountID)
 	}
@@ -314,6 +335,14 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		PlatformMediaIDs: platformMediaIDs,
 		MediaAltTexts:    mediaAltTexts,
 		ReplyToID:        replyToID,
+	}
+
+	if variant, err := s.loadVariant(ctx, post.ID, dest.SocialAccountID); err != nil {
+		return err
+	} else if variant != nil && variant.IsUnsynced {
+		if variant.Content != "" {
+			req.Content = variant.Content
+		}
 	}
 
 	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
@@ -366,6 +395,20 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 	}
 
 	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, bytes.NewReader(data))
+}
+
+func (s *Service) loadVariant(ctx context.Context, postID, socialAccountID string) (*models.PostVariant, error) {
+	var variant models.PostVariant
+	if err := s.db.NewSelect().Model(&variant).
+		Where("post_id = ? AND social_account_id = ?", postID, socialAccountID).
+		Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fetching post variant: %w", err)
+	}
+
+	return &variant, nil
 }
 
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {

@@ -40,6 +40,7 @@ func (w *BackgroundWorker) Start(ctx context.Context) {
 	defer ticker.Stop()
 
 	log.Printf("Worker %s started polling every %v\n", w.workerID, w.interval)
+	w.processDueJobs(ctx)
 
 	for {
 		select {
@@ -48,7 +49,7 @@ func (w *BackgroundWorker) Start(ctx context.Context) {
 			close(w.done)
 			return
 		case <-ticker.C:
-			w.processNextJob(ctx)
+			w.processDueJobs(ctx)
 		}
 	}
 }
@@ -58,8 +59,15 @@ func (w *BackgroundWorker) Stop() {
 	<-w.done
 }
 
-func (w *BackgroundWorker) processNextJob(ctx context.Context) {
-	// Attempt to lock a pending job atomically
+func (w *BackgroundWorker) processDueJobs(ctx context.Context) {
+	for {
+		if !w.processNextJobIfAvailable(ctx) {
+			return
+		}
+	}
+}
+
+func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 	job := new(models.Job)
 
 	err := w.db.NewRaw(`
@@ -75,13 +83,17 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 	`, w.workerID).Scan(ctx, job)
 
 	if err != nil {
-		// Check if it's just no jobs available vs a real error
 		if err.Error() != "sql: no rows in result set" {
 			log.Printf("[Worker %s] database error polling for jobs: %v\n", w.workerID, err)
 		}
-		return
+		return false
 	}
 
+	w.handleLockedJob(ctx, job)
+	return true
+}
+
+func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job) {
 	log.Printf("[Worker %s] processing job: %s (Type: %s)\n", w.workerID, job.ID, job.Type)
 
 	processErr := w.executeJob(ctx, job)
@@ -93,7 +105,6 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 			job.Status = "failed"
 		} else {
 			job.Status = "pending"
-			// Exponential backoff: 1 min, 2 min, 4 min, 8 min...
 			backoff := time.Duration(1<<(job.Attempts-1)) * time.Minute
 			job.RunAt = time.Now().Add(backoff)
 		}
@@ -108,7 +119,6 @@ func (w *BackgroundWorker) processNextJob(ctx context.Context) {
 		return
 	}
 
-	// Mark as completed
 	if _, dbErr := w.db.NewUpdate().Model(job).
 		Set("status = ?", "completed").
 		Where("id = ?", job.ID).

@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -420,8 +422,21 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListAccountsInput) (*ListAccountsOutput, error) {
-		var accounts []models.SocialAccount
+		userID := middleware.GetUserID(ctx)
+		var members []models.WorkspaceMember
 		err := h.db.NewSelect().
+			Model(&members).
+			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
+			Scan(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to check workspace access")
+		}
+		if len(members) == 0 {
+			return nil, huma.Error403Forbidden("workspace not accessible")
+		}
+
+		var accounts []models.SocialAccount
+		err = h.db.NewSelect().
 			Model(&accounts).
 			Where("workspace_id = ?", input.WorkspaceID).
 			Where("is_active = ?", true).
@@ -467,18 +482,52 @@ func (h *OAuthHandler) DisconnectAccount(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *DisconnectAccountInput) (*struct{}, error) {
-		result, err := h.db.NewUpdate().
-			Model((*models.SocialAccount)(nil)).
-			Set("is_active = ?", false).
+		userID := middleware.GetUserID(ctx)
+
+		var account models.SocialAccount
+		err := h.db.NewSelect().
+			Model(&account).
 			Where("id = ?", input.AccountID).
-			Exec(ctx)
+			Scan(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to disconnect account")
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("account not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to fetch account")
 		}
 
-		rows, _ := result.RowsAffected()
-		if rows == 0 {
-			return nil, huma.Error404NotFound("account not found")
+		var members []models.WorkspaceMember
+		err = h.db.NewSelect().
+			Model(&members).
+			Where("workspace_id = ? AND user_id = ?", account.WorkspaceID, userID).
+			Scan(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to check workspace access")
+		}
+		if len(members) == 0 {
+			return nil, huma.Error403Forbidden("workspace not accessible")
+		}
+
+		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			if _, err := tx.NewUpdate().
+				Model((*models.SocialAccount)(nil)).
+				Set("is_active = ?", false).
+				Where("id = ?", input.AccountID).
+				Exec(txCtx); err != nil {
+				return err
+			}
+
+			if _, err := tx.NewDelete().
+				Model((*models.SocialMediaSetAccount)(nil)).
+				Where("social_account_id = ?", input.AccountID).
+				Exec(txCtx); err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to disconnect account")
 		}
 
 		return nil, nil

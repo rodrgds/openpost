@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -61,6 +62,14 @@ type ListSetsOutput struct {
 	Body []SetResponse
 }
 
+type setAccountRow struct {
+	SetID           string `bun:"set_id"`
+	SocialAccountID string `bun:"social_account_id"`
+	Platform        string `bun:"platform"`
+	AccountUsername string `bun:"account_username"`
+	IsMain          bool   `bun:"is_main"`
+}
+
 func (h *SetHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
 	var members []models.WorkspaceMember
 	err := h.db.NewSelect().
@@ -76,6 +85,75 @@ func (h *SetHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, user
 	return nil
 }
 
+func (h *SetHandler) validateAccountsBelongToWorkspace(ctx context.Context, workspaceID string, accountIDs []string) error {
+	if len(accountIDs) == 0 {
+		return nil
+	}
+
+	uniqueIDs := make([]string, 0, len(accountIDs))
+	seen := make(map[string]struct{}, len(accountIDs))
+	for _, accountID := range accountIDs {
+		if _, ok := seen[accountID]; ok {
+			continue
+		}
+		seen[accountID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, accountID)
+	}
+
+	count, err := h.db.NewSelect().
+		Model((*models.SocialAccount)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("is_active = ?", true).
+		Where("id IN (?)", bun.List(uniqueIDs)).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to validate social accounts")
+	}
+	if count != len(uniqueIDs) {
+		return huma.Error400BadRequest("one or more accounts are invalid, disconnected, or outside this workspace")
+	}
+	return nil
+}
+
+func (h *SetHandler) loadSetAccounts(ctx context.Context, setIDs []string) (map[string][]SetAccountResponse, error) {
+	if len(setIDs) == 0 {
+		return map[string][]SetAccountResponse{}, nil
+	}
+
+	var rows []setAccountRow
+	err := h.db.NewSelect().
+		TableExpr("social_media_set_accounts AS ssa").
+		ColumnExpr("ssa.set_id, ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
+		Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
+		Where("ssa.set_id IN (?)", bun.List(setIDs)).
+		Where("sa.is_active = ?", true).
+		OrderExpr("ssa.set_id ASC, sa.platform ASC, sa.account_username ASC, ssa.social_account_id ASC").
+		Scan(ctx, &rows)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, huma.Error500InternalServerError("failed to fetch set accounts")
+	}
+
+	accountsBySet := make(map[string][]SetAccountResponse, len(setIDs))
+	for _, row := range rows {
+		accountsBySet[row.SetID] = append(accountsBySet[row.SetID], SetAccountResponse{
+			SocialAccountID: row.SocialAccountID,
+			Platform:        row.Platform,
+			AccountUsername: row.AccountUsername,
+			IsMain:          row.IsMain,
+		})
+	}
+
+	return accountsBySet, nil
+}
+
+func (h *SetHandler) loadSingleSetAccounts(ctx context.Context, setID string) ([]SetAccountResponse, error) {
+	accountsBySet, err := h.loadSetAccounts(ctx, []string{setID})
+	if err != nil {
+		return nil, err
+	}
+	return accountsBySet[setID], nil
+}
+
 func (h *SetHandler) CreateSet(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-set",
@@ -89,6 +167,9 @@ func (h *SetHandler) CreateSet(api huma.API) {
 		userID := middleware.GetUserID(ctx)
 
 		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.AccountIDs); err != nil {
 			return nil, err
 		}
 
@@ -179,31 +260,9 @@ func (h *SetHandler) ListSets(api huma.API) {
 			setIDs[i] = s.ID
 		}
 
-		var setAccounts []struct {
-			SetID           string `bun:"set_id"`
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			AccountUsername string `bun:"account_username"`
-			IsMain          bool   `bun:"is_main"`
-		}
-		err = h.db.NewSelect().
-			TableExpr("social_media_set_accounts AS ssa").
-			ColumnExpr("ssa.set_id, ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
-			Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
-			Where("ssa.set_id IN (?)", bun.List(setIDs)).
-			Scan(ctx, &setAccounts) //nolint:errcheck
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, huma.Error500InternalServerError("failed to fetch set accounts")
-		}
-
-		accountsBySet := make(map[string][]SetAccountResponse)
-		for _, sa := range setAccounts {
-			accountsBySet[sa.SetID] = append(accountsBySet[sa.SetID], SetAccountResponse{
-				SocialAccountID: sa.SocialAccountID,
-				Platform:        sa.Platform,
-				AccountUsername: sa.AccountUsername,
-				IsMain:          sa.IsMain,
-			})
+		accountsBySet, err := h.loadSetAccounts(ctx, setIDs)
+		if err != nil {
+			return nil, err
 		}
 
 		result := make([]SetResponse, len(sets))
@@ -258,27 +317,9 @@ func (h *SetHandler) GetSet(api huma.API) {
 			return nil, err
 		}
 
-		var setAccounts []struct {
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			AccountUsername string `bun:"account_username"`
-			IsMain          bool   `bun:"is_main"`
-		}
-		_ = h.db.NewSelect(). //nolint:ineffassign
-					TableExpr("social_media_set_accounts AS ssa").
-					ColumnExpr("ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
-					Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
-					Where("ssa.set_id = ?", input.PathID).
-					Scan(ctx, &setAccounts) //nolint:errcheck
-
-		accounts := make([]SetAccountResponse, len(setAccounts))
-		for i, sa := range setAccounts {
-			accounts[i] = SetAccountResponse{
-				SocialAccountID: sa.SocialAccountID,
-				Platform:        sa.Platform,
-				AccountUsername: sa.AccountUsername,
-				IsMain:          sa.IsMain,
-			}
+		accounts, err := h.loadSingleSetAccounts(ctx, input.PathID)
+		if err != nil {
+			return nil, err
 		}
 
 		return &GetSetOutput{Body: &SetResponse{
@@ -332,6 +373,9 @@ func (h *SetHandler) UpdateSet(api huma.API) {
 		if err := h.checkWorkspaceAccess(ctx, set.WorkspaceID, userID); err != nil {
 			return nil, err
 		}
+		if input.Body.Name != nil && strings.TrimSpace(*input.Body.Name) == "" {
+			return nil, huma.Error400BadRequest("set name cannot be empty")
+		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			if input.Body.IsDefault != nil && *input.Body.IsDefault {
@@ -361,27 +405,9 @@ func (h *SetHandler) UpdateSet(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to update set")
 		}
 
-		var setAccounts []struct {
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			AccountUsername string `bun:"account_username"`
-			IsMain          bool   `bun:"is_main"`
-		}
-		h.db.NewSelect().
-			TableExpr("social_media_set_accounts AS ssa").
-			ColumnExpr("ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
-			Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
-			Where("ssa.set_id = ?", input.PathID).
-			Scan(ctx, &setAccounts) //nolint:errcheck
-
-		accounts := make([]SetAccountResponse, len(setAccounts))
-		for i, sa := range setAccounts {
-			accounts[i] = SetAccountResponse{
-				SocialAccountID: sa.SocialAccountID,
-				Platform:        sa.Platform,
-				AccountUsername: sa.AccountUsername,
-				IsMain:          sa.IsMain,
-			}
+		accounts, err := h.loadSingleSetAccounts(ctx, input.PathID)
+		if err != nil {
+			return nil, err
 		}
 
 		return &UpdateSetOutput{Body: &SetResponse{
@@ -492,6 +518,9 @@ func (h *SetHandler) AddSetAccounts(api huma.API) {
 		if err := h.checkWorkspaceAccess(ctx, set.WorkspaceID, userID); err != nil {
 			return nil, err
 		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, set.WorkspaceID, input.Body.AccountIDs); err != nil {
+			return nil, err
+		}
 
 		isMain := false
 		if input.Body.IsMain != nil {
@@ -527,27 +556,9 @@ func (h *SetHandler) AddSetAccounts(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to add accounts to set")
 		}
 
-		var setAccounts []struct {
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			AccountUsername string `bun:"account_username"`
-			IsMain          bool   `bun:"is_main"`
-		}
-		h.db.NewSelect().
-			TableExpr("social_media_set_accounts AS ssa").
-			ColumnExpr("ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
-			Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
-			Where("ssa.set_id = ?", input.PathID).
-			Scan(ctx, &setAccounts) //nolint:errcheck
-
-		accounts := make([]SetAccountResponse, len(setAccounts))
-		for i, sa := range setAccounts {
-			accounts[i] = SetAccountResponse{
-				SocialAccountID: sa.SocialAccountID,
-				Platform:        sa.Platform,
-				AccountUsername: sa.AccountUsername,
-				IsMain:          sa.IsMain,
-			}
+		accounts, err := h.loadSingleSetAccounts(ctx, input.PathID)
+		if err != nil {
+			return nil, err
 		}
 
 		return &AddSetAccountsOutput{Body: &SetResponse{
@@ -607,27 +618,9 @@ func (h *SetHandler) RemoveSetAccount(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to remove account from set")
 		}
 
-		var setAccounts []struct {
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			AccountUsername string `bun:"account_username"`
-			IsMain          bool   `bun:"is_main"`
-		}
-		h.db.NewSelect().
-			TableExpr("social_media_set_accounts AS ssa").
-			ColumnExpr("ssa.social_account_id, sa.platform, sa.account_username, ssa.is_main").
-			Join("JOIN social_accounts AS sa ON sa.id = ssa.social_account_id").
-			Where("ssa.set_id = ?", input.PathID).
-			Scan(ctx, &setAccounts) //nolint:errcheck
-
-		accounts := make([]SetAccountResponse, len(setAccounts))
-		for i, sa := range setAccounts {
-			accounts[i] = SetAccountResponse{
-				SocialAccountID: sa.SocialAccountID,
-				Platform:        sa.Platform,
-				AccountUsername: sa.AccountUsername,
-				IsMain:          sa.IsMain,
-			}
+		accounts, err := h.loadSingleSetAccounts(ctx, input.PathID)
+		if err != nil {
+			return nil, err
 		}
 
 		return &RemoveSetAccountOutput{Body: &SetResponse{

@@ -6,7 +6,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import * as Popover from '$lib/components/ui/popover';
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import PlatformPreview from './platform-preview.svelte';
@@ -23,6 +22,7 @@
 	import SendIcon from 'lucide-svelte/icons/send';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
 	import UnlinkIcon from 'lucide-svelte/icons/unlink';
+	import Link2Icon from 'lucide-svelte/icons/link-2';
 	import GripVerticalIcon from 'lucide-svelte/icons/grip-vertical';
 	import Trash2Icon from 'lucide-svelte/icons/trash-2';
 	import TypeIcon from 'lucide-svelte/icons/type';
@@ -31,6 +31,8 @@
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { ReorderableList } from 'svelte-reorderable-list';
 	import * as Sheet from '$lib/components/ui/sheet';
+	import { m } from '$lib/paraglide/messages';
+	import { getLocaleTag } from '$lib/i18n';
 	import {
 		type PostItem,
 		makeEmptyPost,
@@ -111,8 +113,8 @@
 	let currentPrompt = $state<{ text: string; category: string } | null>(null);
 	let loadingPrompt = $state(false);
 
-	let variants = $state<Map<string, string>>(new Map());
-	let showVariantsDialog = $state(false);
+	let variants = $state<Map<string, Record<string, string>>>(new Map());
+	let activeVariantAccountId = $state<string | null>(null);
 
 	let isDraggingFile = $state(false);
 	let isUploading = $state(false);
@@ -170,6 +172,17 @@
 	const isThread = $derived(posts.length > 1);
 
 	const selectedAccounts = $derived(accounts.filter((a) => selectedAccountIds.includes(a.id)));
+	const activeVariantAccount = $derived(
+		activeVariantAccountId ? (accounts.find((a) => a.id === activeVariantAccountId) ?? null) : null
+	);
+	const activeVariantIsUnsynced = $derived(
+		activeVariantAccountId ? variants.has(activeVariantAccountId) : false
+	);
+	const activeEditorContent = $derived(
+		activeVariantAccountId
+			? (getVariantContent(activeVariantAccountId, activePost.key) ?? activePost.content)
+			: activePost.content
+	);
 
 	const selectedPlatformLimits = $derived.by(() => {
 		const seen = new Set<string>();
@@ -207,6 +220,33 @@
 		return 'text-muted-foreground';
 	}
 
+	function arraysEqual(left: string[], right: string[]): boolean {
+		if (left.length !== right.length) return false;
+		return left.every((value, index) => value === right[index]);
+	}
+
+	function sanitizeSelectedAccounts(validAccounts: SocialAccount[]) {
+		const validIds = new Set(validAccounts.map((account) => account.id));
+		const nextSelectedIds = selectedAccountIds.filter((id) => validIds.has(id));
+		if (!arraysEqual(nextSelectedIds, selectedAccountIds)) {
+			selectedAccountIds = nextSelectedIds;
+		}
+
+		const nextVariants = new Map<string, Record<string, string>>();
+		for (const [accountID, value] of variants.entries()) {
+			if (validIds.has(accountID)) {
+				nextVariants.set(accountID, value);
+			}
+		}
+		if (nextVariants.size !== variants.size) {
+			variants = nextVariants;
+		}
+
+		if (activeVariantAccountId && !validIds.has(activeVariantAccountId)) {
+			activeVariantAccountId = null;
+		}
+	}
+
 	function getCharCounterStrokeColor(count: number, max: number): string {
 		const pct = count / max;
 		if (pct >= 1) return '#ef4444';
@@ -240,6 +280,80 @@
 		return date.toISOString();
 	}
 
+	function getSaveSnapshot(): string {
+		const variantEntries = Array.from(variants.entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([accountId, values]) => [
+				accountId,
+				Object.fromEntries(Object.entries(values).sort(([a], [b]) => a.localeCompare(b)))
+			]);
+		const selectedAccountsSnapshot = [...selectedAccountIds].sort();
+		return JSON.stringify({
+			draft: getDraftSnapshot(posts),
+			selectedAccounts: selectedAccountsSnapshot,
+			variants: variantEntries
+		});
+	}
+
+	function canUnsyncAccount(account: SocialAccount | null | undefined): boolean {
+		if (!account) return false;
+		if (!isThread) return true;
+		return getPlatformKey(account.platform) !== 'linkedin';
+	}
+
+	function getVariantContent(accountId: string, postKey: string): string | null {
+		const values = variants.get(accountId);
+		if (!values) return null;
+		return values[postKey] ?? posts.find((post) => post.key === postKey)?.content ?? '';
+	}
+
+	function getVariantPayloadForSave(): Record<string, Record<string, string>> {
+		return Object.fromEntries(
+			Array.from(variants.entries()).map(([accountId, values]) => [accountId, values])
+		);
+	}
+
+	function makeVariantRecord(sourcePosts: PostItem[]): Record<string, string> {
+		return Object.fromEntries(sourcePosts.map((post) => [post.key, post.content]));
+	}
+
+	function normalizeVariantRecord(
+		record: Record<string, string> | undefined,
+		sourcePosts: PostItem[]
+	): Record<string, string> {
+		return Object.fromEntries(
+			sourcePosts.map((post) => [post.key, record?.[post.key] ?? post.content])
+		);
+	}
+
+	function variantRecordEquals(
+		left: Record<string, string> | undefined,
+		right: Record<string, string>,
+		sourcePosts: PostItem[]
+	): boolean {
+		if (Object.keys(left ?? {}).length !== Object.keys(right).length) return false;
+		return sourcePosts.every((post) => (left?.[post.key] ?? post.content) === right[post.key]);
+	}
+
+	function getEditorContentForPost(post: PostItem): string {
+		if (!activeVariantAccountId) return post.content;
+		return getVariantContent(activeVariantAccountId, post.key) ?? post.content;
+	}
+
+	function normalizeVariantsMap(
+		nextVariants: Map<string, Record<string, string>>,
+		sourcePosts: PostItem[] = posts
+	): Map<string, Record<string, string>> {
+		const normalized = new Map<string, Record<string, string>>();
+		for (const accountId of selectedAccountIds) {
+			const values = nextVariants.get(accountId);
+			if (values) {
+				normalized.set(accountId, normalizeVariantRecord(values, sourcePosts));
+			}
+		}
+		return normalized;
+	}
+
 	// --------------------------------------------------------------------------
 	// Initialization
 	// --------------------------------------------------------------------------
@@ -251,6 +365,7 @@
 			activePostIndex = 0;
 			lastSavedSnapshot = '';
 			variants = new Map();
+			activeVariantAccountId = null;
 			selectedAccountIds = [];
 			selectedSetId = null;
 			const tomorrow = today(getLocalTimeZone()).add({ days: 1 });
@@ -278,14 +393,16 @@
 
 		if (isThreadDraft(post.content)) {
 			const threadData = decodeThreadDraft(post.content);
-			if (threadData && threadData.length > 0) {
-				posts = threadData.map((item) => ({
-					key: makeEmptyPost().key,
+			if (threadData && threadData.posts.length > 0) {
+				posts = threadData.posts.map((item) => ({
+					key: item.key,
 					content: item.content,
 					mediaIds: item.mediaIds
 				}));
+				variants = normalizeVariantsMap(new Map(Object.entries(threadData.variants)), posts);
 			} else {
 				posts = [makeEmptyPost()];
+				variants = new Map();
 			}
 		} else {
 			posts = [
@@ -295,10 +412,10 @@
 					mediaIds: post.media?.map((m) => m.media_id) ?? []
 				}
 			];
+			variants = new Map();
 		}
 		activePostIndex = 0;
-		lastSavedSnapshot = getDraftSnapshot(posts);
-		variants = new Map();
+		activeVariantAccountId = null;
 		selectedSetId = null;
 
 		if (post.scheduled_at && post.scheduled_at !== '0001-01-01T00:00:00Z') {
@@ -313,6 +430,10 @@
 
 		await loadAccounts(selectedWorkspaceId, selectedAccountIds);
 		await loadSets(selectedWorkspaceId, false);
+		if (!isThreadDraft(post.content)) {
+			await loadVariants(post.id);
+		}
+		lastSavedSnapshot = getSaveSnapshot();
 	}
 
 	onMount(async () => {
@@ -352,6 +473,33 @@
 		}
 	});
 
+	$effect(() => {
+		const selected = new Set(selectedAccountIds);
+		let changed = false;
+		const nextVariants = new Map<string, Record<string, string>>();
+		for (const [accountId, value] of variants.entries()) {
+			if (selected.has(accountId)) {
+				const normalized = normalizeVariantRecord(value, posts);
+				nextVariants.set(accountId, normalized);
+				if (!variantRecordEquals(value, normalized, posts)) changed = true;
+			} else {
+				changed = true;
+			}
+		}
+		if (changed) {
+			variants = nextVariants;
+		}
+		if (activeVariantAccountId && !selected.has(activeVariantAccountId)) {
+			activeVariantAccountId = null;
+		}
+		if (activeVariantAccountId) {
+			const activeAccount = accounts.find((account) => account.id === activeVariantAccountId);
+			if (!canUnsyncAccount(activeAccount)) {
+				activeVariantAccountId = null;
+			}
+		}
+	});
+
 	// --------------------------------------------------------------------------
 	// Data loading
 	// --------------------------------------------------------------------------
@@ -371,10 +519,12 @@
 			} else {
 				selectedAccountIds = accounts.map((a) => a.id);
 			}
+			sanitizeSelectedAccounts(accounts);
 		} catch (e) {
 			console.error('Failed to load accounts:', e);
 			accounts = [];
 			selectedAccountIds = [];
+			sanitizeSelectedAccounts([]);
 		}
 	}
 
@@ -385,6 +535,17 @@
 				params: { query: { workspace_id: workspaceId } }
 			});
 			sets = (data ?? []) as unknown as SocialMediaSet[];
+			if (selectedSetId) {
+				const selectedSet = sets.find((set) => set.id === selectedSetId) ?? null;
+				if (!selectedSet) {
+					selectedSetId = null;
+				} else {
+					const nextSelectedIds = selectedSet.accounts.map((account) => account.social_account_id);
+					if (!arraysEqual(nextSelectedIds, selectedAccountIds)) {
+						applySet(selectedSet);
+					}
+				}
+			}
 			if (autoApplyDefault && !selectedSetId) {
 				const defaultSet = sets.find((s) => s.is_default);
 				if (defaultSet) {
@@ -400,12 +561,14 @@
 
 	function applySet(set: SocialMediaSet) {
 		selectedAccountIds = set.accounts.map((a) => a.social_account_id);
+		scheduleAutoSave();
 	}
 
 	function handleWorkspaceChange(value: string) {
 		selectedWorkspaceId = value;
 		selectedSetId = null;
 		variants = new Map();
+		activeVariantAccountId = null;
 		loadAccounts(value);
 		loadSets(value);
 	}
@@ -417,23 +580,35 @@
 			if (set) applySet(set);
 		} else {
 			selectedAccountIds = accounts.map((a) => a.id);
+			scheduleAutoSave();
 		}
 	}
 
 	function toggleAccount(id: string) {
 		if (selectedAccountIds.includes(id)) {
 			selectedAccountIds = selectedAccountIds.filter((a) => a !== id);
+			if (variants.has(id)) {
+				const nextVariants = new Map(variants);
+				nextVariants.delete(id);
+				variants = nextVariants;
+			}
+			if (activeVariantAccountId === id) {
+				activeVariantAccountId = null;
+			}
 		} else {
 			selectedAccountIds = [...selectedAccountIds, id];
 		}
+		scheduleAutoSave();
 	}
 
 	function selectAllAccounts() {
 		selectedAccountIds = accounts.map((a) => a.id);
+		scheduleAutoSave();
 	}
 
 	function clearAllAccounts() {
 		selectedAccountIds = [];
+		scheduleAutoSave();
 	}
 
 	// --------------------------------------------------------------------------
@@ -443,7 +618,7 @@
 		if (autoSaveTimer) clearTimeout(autoSaveTimer);
 		autoSaveTimer = setTimeout(() => {
 			if (!hasContent) return;
-			const snapshot = getDraftSnapshot(posts);
+			const snapshot = getSaveSnapshot();
 			if (snapshot !== lastSavedSnapshot) {
 				saveDraft();
 			}
@@ -456,7 +631,9 @@
 		error = '';
 
 		try {
-			const draftContent = isThread ? encodeThreadDraft(posts) : posts[0].content;
+			const draftContent = isThread
+				? encodeThreadDraft(posts, getVariantPayloadForSave())
+				: posts[0].content;
 			const draftMediaIds = isThread ? posts.flatMap((p) => p.mediaIds) : posts[0].mediaIds;
 
 			const defaultDelay = workspaceCtx.settings.random_delay_minutes;
@@ -486,7 +663,11 @@
 				if (data?.id) draftId = data.id;
 			}
 
-			lastSavedSnapshot = getDraftSnapshot(posts);
+			if (draftId && !isThread) {
+				await persistVariants(draftId);
+			}
+
+			lastSavedSnapshot = getSaveSnapshot();
 			ui.triggerRefresh();
 		} catch (e) {
 			console.error('Failed to auto-save draft:', e);
@@ -504,15 +685,15 @@
 		success = '';
 
 		if (!selectedWorkspaceId) {
-			error = 'Please select a workspace';
+			error = m.compose_please_select_workspace();
 			return;
 		}
 		if (!hasContent) {
-			error = 'Please enter some content';
+			error = m.compose_please_enter_content();
 			return;
 		}
 		if (selectedAccountIds.length === 0) {
-			error = 'Please select at least one account';
+			error = m.compose_select_account();
 			return;
 		}
 
@@ -522,7 +703,7 @@
 		} else {
 			scheduledAt = getScheduledAt();
 			if (!scheduledAt) {
-				error = 'Please select a date and time';
+				error = m.compose_select_date_time();
 				return;
 			}
 		}
@@ -536,7 +717,7 @@
 					(p) => p.content.trim().length > 0 || p.mediaIds.length > 0
 				);
 				if (validPosts.length < 2) {
-					error = 'A thread must have at least 2 posts with content or media';
+					error = m.compose_thread_minimum();
 					isSubmitting = false;
 					return;
 				}
@@ -554,18 +735,8 @@
 					}
 				});
 				if (err) throw new Error((err as any).detail || 'Failed to create thread');
-
 				if (data?.post_ids && variants.size > 0) {
-					const firstPostId = data.post_ids[0];
-					const variantPayload = Array.from(variants.entries()).map(([accId, variantContent]) => ({
-						social_account_id: accId,
-						content: variantContent,
-						is_unsynced: true
-					}));
-					await (client as any).PUT('/posts/{id}/variants', {
-						params: { path: { id: firstPostId } },
-						body: { variants: variantPayload }
-					});
+					await persistThreadVariants(data.post_ids, validPosts);
 				}
 			} else {
 				const postId = draftId;
@@ -596,20 +767,12 @@
 					if (data?.id) draftId = data.id;
 				}
 
-				if (draftId && variants.size > 0) {
-					const variantPayload = Array.from(variants.entries()).map(([accId, variantContent]) => ({
-						social_account_id: accId,
-						content: variantContent,
-						is_unsynced: true
-					}));
-					await (client as any).PUT('/posts/{id}/variants', {
-						params: { path: { id: draftId } },
-						body: { variants: variantPayload }
-					});
+				if (draftId) {
+					await persistVariants(draftId);
 				}
 			}
 
-			success = publishNow ? 'Publishing now... Check Logs for status.' : 'Scheduled!';
+			success = publishNow ? m.compose_publishing_now() : m.compose_scheduled_success();
 			ui.triggerRefresh();
 
 			if (isEditMode && onSuccess) {
@@ -620,6 +783,7 @@
 				draftId = null;
 				lastSavedSnapshot = '';
 				variants = new Map();
+				activeVariantAccountId = null;
 				setTimeout(() => (success = ''), 3000);
 			}
 		} catch (e) {
@@ -635,6 +799,7 @@
 	function addPost() {
 		const newIndex = activePostIndex + 1;
 		posts = [...posts.slice(0, newIndex), makeEmptyPost(), ...posts.slice(newIndex)];
+		variants = normalizeVariantsMap(variants, posts);
 		activePostIndex = newIndex;
 		scheduleAutoSave();
 		tick().then(() => {
@@ -645,6 +810,7 @@
 	function removePost(index: number) {
 		if (posts.length <= 1) return;
 		posts = posts.filter((_, i) => i !== index);
+		variants = normalizeVariantsMap(variants, posts);
 		if (activePostIndex >= posts.length) {
 			activePostIndex = posts.length - 1;
 		}
@@ -653,6 +819,7 @@
 
 	function handleReorder(newItems: PostItem[]) {
 		posts = newItems;
+		variants = normalizeVariantsMap(variants, newItems);
 		activePostIndex = Math.min(activePostIndex, newItems.length - 1);
 		scheduleAutoSave();
 	}
@@ -799,26 +966,103 @@
 	// --------------------------------------------------------------------------
 	// Variants
 	// --------------------------------------------------------------------------
-	function handleVariantChange(accountId: string, value: string) {
+	function handleVariantChange(accountId: string, index: number, value: string) {
 		const newVariants = new Map(variants);
-		if (value === posts[0].content) {
-			newVariants.delete(accountId);
-		} else {
-			newVariants.set(accountId, value);
-		}
+		const postKey = posts[index]?.key;
+		if (!postKey) return;
+		const current = {
+			...normalizeVariantRecord(newVariants.get(accountId), posts),
+			[postKey]: value
+		};
+		newVariants.set(accountId, current);
 		variants = newVariants;
+		scheduleAutoSave();
 	}
 
-	function toggleUnsync(accountId: string) {
-		if (variants.has(accountId)) {
-			const newVariants = new Map(variants);
-			newVariants.delete(accountId);
-			variants = newVariants;
-		} else {
-			const account = accounts.find((a) => a.id === accountId);
-			if (account) {
-				variants = new Map([...variants, [accountId, posts[0].content]]);
-				showVariantsDialog = true;
+	async function loadVariants(postId: string) {
+		try {
+			const { data, error: err } = await (client as any).GET('/posts/{id}/variants', {
+				params: { path: { id: postId } }
+			});
+			if (err) throw err;
+			const nextVariants = new Map<string, Record<string, string>>();
+			for (const variant of data?.variants ?? []) {
+				if (variant.is_unsynced) {
+					nextVariants.set(variant.social_account_id, {
+						[posts[0]?.key ?? makeEmptyPost().key]: variant.content
+					});
+				}
+			}
+			variants = nextVariants;
+		} catch (e) {
+			console.error('Failed to load variants:', e);
+			variants = new Map();
+		}
+	}
+
+	async function persistVariants(postId: string) {
+		if (isThread) return;
+
+		const { error: deleteErr } = await (client as any).DELETE('/posts/{id}/variants', {
+			params: { path: { id: postId } }
+		});
+		if (deleteErr) {
+			throw new Error((deleteErr as any).detail || 'Failed to reset variants');
+		}
+
+		if (variants.size === 0) return;
+
+		const variantPayload = Array.from(variants.entries()).map(([accountId, values]) => ({
+			social_account_id: accountId,
+			content: values[posts[0]?.key ?? ''] ?? posts[0]?.content ?? '',
+			is_unsynced: true
+		}));
+		const { error: upsertErr } = await (client as any).PUT('/posts/{id}/variants', {
+			params: { path: { id: postId } },
+			body: { variants: variantPayload }
+		});
+		if (upsertErr) {
+			throw new Error((upsertErr as any).detail || 'Failed to save variants');
+		}
+	}
+
+	function activateVariantTab(accountId: string | null) {
+		activeVariantAccountId = accountId;
+	}
+
+	function unsyncAccount(accountId: string) {
+		if (!variants.has(accountId)) {
+			variants = new Map([...variants, [accountId, makeVariantRecord(posts)]]);
+		}
+		activeVariantAccountId = accountId;
+		scheduleAutoSave();
+	}
+
+	function resyncAccount(accountId: string) {
+		if (!variants.has(accountId)) return;
+		const nextVariants = new Map(variants);
+		nextVariants.delete(accountId);
+		variants = nextVariants;
+		activeVariantAccountId = null;
+		scheduleAutoSave();
+	}
+
+	async function persistThreadVariants(postIds: string[], sourcePosts: PostItem[]) {
+		for (let index = 0; index < postIds.length; index++) {
+			const postKey = sourcePosts[index]?.key;
+			if (!postKey) continue;
+			const payload = Array.from(variants.entries()).map(([accountId, values]) => ({
+				social_account_id: accountId,
+				content: values[postKey] ?? sourcePosts[index]?.content ?? '',
+				is_unsynced: true
+			}));
+			if (payload.length === 0) continue;
+			const { error: upsertErr } = await (client as any).PUT('/posts/{id}/variants', {
+				params: { path: { id: postIds[index] } },
+				body: { variants: payload }
+			});
+			if (upsertErr) {
+				throw new Error((upsertErr as any).detail || 'Failed to save thread variants');
 			}
 		}
 	}
@@ -860,14 +1104,14 @@
 	}
 
 	function formatScheduledDisplay(): string {
-		if (!selectedDate || !selectedTime) return 'Schedule';
+		if (!selectedDate || !selectedTime) return m.compose_schedule();
 		const now = today(getLocalTimeZone());
 		const diffDays = selectedDate.compare(now);
 
-		if (diffDays === 0) return `Today ${selectedTime}`;
-		if (diffDays === 1) return `Tomorrow ${selectedTime}`;
+		if (diffDays === 0) return `${m.common_today()} ${selectedTime}`;
+		if (diffDays === 1) return `${m.common_tomorrow()} ${selectedTime}`;
 		const date = selectedDate.toDate(getLocalTimeZone());
-		return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${selectedTime}`;
+		return `${date.toLocaleDateString(getLocaleTag(), { month: 'short', day: 'numeric' })} ${selectedTime}`;
 	}
 
 	// --------------------------------------------------------------------------
@@ -876,6 +1120,14 @@
 	function setPostContent(index: number, value: string) {
 		posts = posts.map((p, pi) => (pi === index ? { ...p, content: value } : p));
 		scheduleAutoSave();
+	}
+
+	function setEditorContent(index: number, value: string) {
+		if (activeVariantAccountId && activeVariantIsUnsynced) {
+			handleVariantChange(activeVariantAccountId, index, value);
+			return;
+		}
+		setPostContent(index, value);
 	}
 
 	function setActivePost(index: number) {
@@ -890,7 +1142,9 @@
 	<div class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4 md:py-3">
 		<div class="flex flex-wrap items-center gap-2">
 			{#if isEditMode && onCancel}
-				<Button variant="ghost" size="sm" class="text-xs" onclick={onCancel}>Back</Button>
+				<Button variant="ghost" size="sm" class="text-xs" onclick={onCancel}
+					>{m.common_back()}</Button
+				>
 			{/if}
 
 			<!-- Workspace selector -->
@@ -900,7 +1154,8 @@
 						{#snippet child({ props })}
 							<Button {...props} variant="ghost" size="sm" class="gap-1 text-xs">
 								<span class="hidden text-muted-foreground sm:inline">
-									{workspaces.find((w) => w.id === selectedWorkspaceId)?.name ?? 'Workspace'}
+									{workspaces.find((w) => w.id === selectedWorkspaceId)?.name ??
+										m.compose_workspace()}
 								</span>
 								<span class="text-muted-foreground sm:hidden">
 									{workspaces
@@ -914,10 +1169,10 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-52" align="start">
 						<DropdownMenu.Label class="text-xs tracking-wider text-muted-foreground uppercase"
-							>Workspace</DropdownMenu.Label
+							>{m.compose_workspace()}</DropdownMenu.Label
 						>
 						<DropdownMenu.Separator />
-						{#each workspaces as ws}
+						{#each workspaces as ws (ws.id)}
 							<DropdownMenu.Item
 								onclick={() => handleWorkspaceChange(ws.id)}
 								class="gap-2 {selectedWorkspaceId === ws.id ? 'bg-muted' : ''}"
@@ -942,7 +1197,7 @@
 						{#snippet child({ props })}
 							<Button {...props} variant="ghost" size="sm" class="gap-1 text-xs">
 								<span class="text-muted-foreground"
-									>{sets.find((s) => s.id === selectedSetId)?.name ?? 'All'}</span
+									>{sets.find((s) => s.id === selectedSetId)?.name ?? m.common_all()}</span
 								>
 								<ChevronDownIcon class="h-3 w-3" />
 							</Button>
@@ -950,7 +1205,7 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-56" align="start">
 						<DropdownMenu.Label class="text-xs tracking-wider text-muted-foreground uppercase"
-							>Social Set</DropdownMenu.Label
+							>{m.compose_social_set()}</DropdownMenu.Label
 						>
 						<DropdownMenu.Separator />
 						<DropdownMenu.Item
@@ -958,11 +1213,11 @@
 							class="gap-2 {selectedSetId === null ? 'bg-muted' : ''}"
 						>
 							<div class="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
-								<span class="text-xs">All</span>
+								<span class="text-xs">{m.common_all()}</span>
 							</div>
-							<span class="text-sm">All accounts</span>
+							<span class="text-sm">{m.compose_all_accounts()}</span>
 						</DropdownMenu.Item>
-						{#each sets as set}
+						{#each sets as set (set.id)}
 							<DropdownMenu.Item
 								onclick={() => handleSetChange(set.id)}
 								class="gap-2 {selectedSetId === set.id ? 'bg-muted' : ''}"
@@ -995,7 +1250,7 @@
 							<Button {...props} variant="ghost" size="sm" class="gap-1.5 text-xs">
 								<span class="hidden text-muted-foreground sm:inline">
 									{selectedAccountIds.length === accounts.length
-										? 'All accounts'
+										? m.compose_all_accounts()
 										: `${selectedAccountIds.length} account${selectedAccountIds.length !== 1 ? 's' : ''}`}
 								</span>
 								<span class="text-muted-foreground sm:hidden"
@@ -1007,18 +1262,19 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-64" align="start">
 						<div class="flex items-center justify-between px-2 py-1.5">
-							<span class="text-sm font-medium text-muted-foreground">Publish to</span>
+							<span class="text-sm font-medium text-muted-foreground">{m.compose_publish_to()}</span
+							>
 							<div class="flex gap-1">
 								<Button variant="ghost" size="xs" onclick={selectAllAccounts} class="h-5 text-xs"
-									>All</Button
+									>{m.common_all()}</Button
 								>
 								<Button variant="ghost" size="xs" onclick={clearAllAccounts} class="h-5 text-xs"
-									>None</Button
+									>{m.common_none()}</Button
 								>
 							</div>
 						</div>
 						<DropdownMenu.Separator />
-						{#each accounts as account}
+						{#each accounts as account (account.id)}
 							{@const isSelected = selectedAccountIds.includes(account.id)}
 							{@const isUnsynced = variants.has(account.id)}
 							<DropdownMenu.CheckboxItem
@@ -1033,14 +1289,10 @@
 											>@{account.account_username}</span
 										>{/if}
 								</div>
-								{#if isUnsynced}<span class="text-xs text-amber-500">custom</span>{/if}
+								{#if isUnsynced}<span class="text-xs text-amber-500">{m.compose_custom()}</span
+									>{/if}
 							</DropdownMenu.CheckboxItem>
 						{/each}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => (showVariantsDialog = true)} class="gap-2">
-							<UnlinkIcon class="h-3.5 w-3.5" />
-							<span class="text-sm">Customize per platform</span>
-						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			{/if}
@@ -1054,10 +1306,113 @@
 					size="icon"
 					class="h-8 w-8 lg:hidden"
 					onclick={() => (showMobilePreview = true)}
-					title="Show preview"
+					title={m.compose_show_preview()}
 				>
 					<EyeIcon class="h-4 w-4" />
 				</Button>
+
+				<div
+					class="flex max-w-[min(62vw,30rem)] items-center gap-1 overflow-x-auto overflow-y-hidden py-1 pr-2 pl-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:max-w-[min(58vw,34rem)] lg:max-w-[40rem] lg:pr-3 [&::-webkit-scrollbar]:hidden"
+				>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors {activeVariantAccountId ===
+									null
+										? 'border-foreground bg-foreground text-background'
+										: 'border-border bg-background text-foreground hover:border-foreground/30'}"
+									onclick={() => activateVariantTab(null)}
+									title={m.compose_all_synced()}
+								>
+									<Link2Icon class="h-3.5 w-3.5" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content><p class="text-sm">{m.compose_all_synced()}</p></Tooltip.Content>
+					</Tooltip.Root>
+
+					{#each selectedAccounts as account (account.id)}
+						{@const isUnsynced = variants.has(account.id)}
+						{@const accountCanUnsync = canUnsyncAccount(account)}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										{...props}
+										type="button"
+										class="relative z-0 flex h-8 w-8 shrink-0 items-center justify-center overflow-visible rounded-full border transition-colors {activeVariantAccountId ===
+										account.id
+											? isUnsynced
+												? 'border-amber-500/70 bg-amber-500/12 text-amber-700'
+												: 'border-foreground bg-foreground text-background'
+											: 'border-border bg-background text-foreground hover:border-foreground/30'} {!accountCanUnsync
+											? 'opacity-55'
+											: ''}"
+										onclick={() => activateVariantTab(accountCanUnsync ? account.id : null)}
+										title={getPlatformName(account.platform)}
+									>
+										<PlatformIcon platform={getPlatformKey(account.platform)} class="h-3.5 w-3.5" />
+										{#if isUnsynced}
+											<span
+												class="absolute -right-1 -bottom-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm ring-2 ring-background"
+											>
+												<UnlinkIcon class="h-2 w-2" />
+											</span>
+										{/if}
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p class="text-sm">
+									{#if accountCanUnsync}
+										{getPlatformName(account.platform)}{account.account_username
+											? ` @${account.account_username}`
+											: ''}{isUnsynced
+											? ` · ${m.compose_custom_state()}`
+											: ` · ${m.compose_synced_state()}`}
+									{:else}
+										{m.compose_thread_reply_limited({
+											platform: getPlatformName(account.platform)
+										})}
+									{/if}
+								</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+					{/each}
+				</div>
+
+				{#if activeVariantAccount && canUnsyncAccount(activeVariantAccount)}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:border-foreground/30"
+									onclick={() =>
+										activeVariantIsUnsynced
+											? resyncAccount(activeVariantAccount.id)
+											: unsyncAccount(activeVariantAccount.id)}
+									title={activeVariantIsUnsynced ? m.compose_sync_back() : m.compose_unsync()}
+								>
+									{#if activeVariantIsUnsynced}
+										<Link2Icon class="h-3.5 w-3.5" />
+									{:else}
+										<UnlinkIcon class="h-3.5 w-3.5" />
+									{/if}
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p class="text-sm">
+								{activeVariantIsUnsynced ? m.compose_sync_back() : m.compose_unsync()}
+							</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+				{/if}
 			{/if}
 
 			<!-- Prompt -->
@@ -1076,7 +1431,9 @@
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content>
-					<p class="text-sm">{showPromptCard ? 'Dismiss inspiration' : 'Need inspiration?'}</p>
+					<p class="text-sm">
+						{showPromptCard ? m.compose_dismiss_inspiration() : m.compose_need_inspiration()}
+					</p>
 				</Tooltip.Content>
 			</Tooltip.Root>
 
@@ -1095,11 +1452,11 @@
 							{#if suggestingSlot}<span
 									class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current"
 								></span>{:else}<ShuffleIcon class="h-3 w-3" />{/if}
-							<span class="hidden sm:inline">Suggest</span>
+							<span class="hidden sm:inline">{m.compose_suggest()}</span>
 						</Button>
 					{/snippet}
 				</Tooltip.Trigger>
-				<Tooltip.Content><p class="text-sm">Fill next available time slot</p></Tooltip.Content>
+				<Tooltip.Content><p class="text-sm">{m.compose_fill_next_slot()}</p></Tooltip.Content>
 			</Tooltip.Root>
 
 			<!-- Schedule picker -->
@@ -1121,7 +1478,7 @@
 				<Popover.Content class="w-auto max-w-[calc(100vw-2rem)] p-0" align="end">
 					<div class="p-3 md:p-4">
 						<div class="mb-3 flex items-center justify-between">
-							<span class="text-sm font-medium">Schedule</span>
+							<span class="text-sm font-medium">{m.compose_schedule()}</span>
 						</div>
 						<Calendar
 							type="single"
@@ -1133,7 +1490,7 @@
 						/>
 						<div class="mt-3 max-h-48 overflow-y-auto">
 							<div class="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-								{#each timeSlots as time}
+								{#each timeSlots as time (time)}
 									<Button
 										variant={selectedTime === time ? 'default' : 'outline'}
 										size="sm"
@@ -1162,7 +1519,7 @@
 				{#if isSubmitting}<LoaderIcon class="h-3.5 w-3.5 animate-spin" />{:else}<SendIcon
 						class="h-3.5 w-3.5"
 					/>{/if}
-				<span class="hidden sm:inline">Schedule</span>
+				<span class="hidden sm:inline">{m.compose_schedule()}</span>
 			</Button>
 
 			<!-- Publish now -->
@@ -1174,8 +1531,8 @@
 				class="gap-1.5"
 			>
 				{#if isSubmitting}<LoaderIcon class="h-3.5 w-3.5 animate-spin" />{/if}
-				<span class="hidden sm:inline">Publish Now</span>
-				<span class="sm:hidden">Now</span>
+				<span class="hidden sm:inline">{m.compose_publish_now()}</span>
+				<span class="sm:hidden">{m.compose_publish_now()}</span>
 			</Button>
 		</div>
 	</div>
@@ -1214,7 +1571,7 @@
 								class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 								onclick={fetchRandomPrompt}
 								disabled={loadingPrompt}
-								title="Shuffle"
+								title={m.compose_shuffle()}
 							>
 								<ShuffleIcon class="h-3.5 w-3.5" />
 							</button>
@@ -1222,7 +1579,7 @@
 								type="button"
 								class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 								onclick={dismissPrompt}
-								title="Close"
+								title={m.compose_close()}
 							>
 								<XIcon class="h-3.5 w-3.5" />
 							</button>
@@ -1235,7 +1592,7 @@
 						{:else if currentPrompt}
 							<p class="text-sm leading-relaxed text-foreground/80">{currentPrompt.text}</p>
 						{:else}
-							<p class="text-sm text-muted-foreground">No prompts available.</p>
+							<p class="text-sm text-muted-foreground">{m.compose_no_prompts()}</p>
 						{/if}
 					</div>
 				{/if}
@@ -1282,19 +1639,50 @@
 											<textarea
 												id="post-textarea-{i}"
 												use:textareaAction={i}
-												value={post.content}
+												value={getEditorContentForPost(post)}
 												oninput={(e) => {
 													const target = e.target as HTMLTextAreaElement;
-													setPostContent(i, target.value);
+													setEditorContent(i, target.value);
 													autoResize(target);
 												}}
 												onpaste={(e) => handlePaste(e, i)}
 												onfocus={() => setActivePost(i)}
-												placeholder={i === 0 ? "What's on your mind?" : 'Add to your thread...'}
+												placeholder={activeVariantAccountId
+													? activeVariantIsUnsynced
+														? m.compose_write_custom_version({
+																platform: getPlatformName(activeVariantAccount?.platform ?? '')
+															})
+														: m.compose_unsync_to_edit_placeholder()
+													: i === 0
+														? m.compose_whats_on_your_mind()
+														: m.compose_add_to_thread()}
 												class="w-full resize-none border-0 bg-transparent py-2 pr-3 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none md:py-3 md:pr-4 md:text-lg"
 												style="min-height: {i === 0 ? '120px' : '56px'};"
-												disabled={isSubmitting}
+												disabled={isSubmitting ||
+													(!!activeVariantAccountId && !activeVariantIsUnsynced)}
 											></textarea>
+
+											{#if activeVariantAccountId && activePostIndex === i && !activeVariantIsUnsynced}
+												<div class="absolute inset-x-0 bottom-0 px-1 pb-2">
+													<div
+														class="rounded-xl border border-dashed border-border/80 bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm"
+													>
+														<div class="flex flex-wrap items-center justify-between gap-2">
+															<span>{m.compose_editor_locked_synced()}</span>
+															<Button
+																variant="outline"
+																size="sm"
+																class="h-7 gap-1 text-xs"
+																onclick={() =>
+																	activeVariantAccountId && unsyncAccount(activeVariantAccountId)}
+															>
+																<UnlinkIcon class="h-3.5 w-3.5" />
+																{m.compose_unsync_to_edit()}
+															</Button>
+														</div>
+													</div>
+												</div>
+											{/if}
 
 											{#if isUploading && activePostIndex === i}
 												<div
@@ -1310,7 +1698,7 @@
 											<div
 												class="mb-3 {post.mediaIds.length === 1 ? '' : 'grid grid-cols-2 gap-1.5'}"
 											>
-												{#each post.mediaIds as mediaId, mi}
+												{#each post.mediaIds as mediaId, mi (mediaId)}
 													{@const isFirstOfThree = post.mediaIds.length === 3 && mi === 0}
 													<div
 														class="group/media relative overflow-hidden rounded-lg {isFirstOfThree
@@ -1412,7 +1800,10 @@
 													{#snippet child({ props })}
 														<div {...props} class="flex cursor-default items-center gap-1.5">
 															<svg
-																class="h-4 w-4 {getCharCounterColor(post.content.length, maxChars)}"
+																class="h-4 w-4 {getCharCounterColor(
+																	getEditorContentForPost(post).length,
+																	maxChars
+																)}"
 																viewBox="0 0 20 20"
 															>
 																<circle
@@ -1429,17 +1820,23 @@
 																	cy="10"
 																	r="8"
 																	fill="none"
-																	stroke={getCharCounterStrokeColor(post.content.length, maxChars)}
+																	stroke={getCharCounterStrokeColor(
+																		getEditorContentForPost(post).length,
+																		maxChars
+																	)}
 																	stroke-width="2.5"
 																	stroke-linecap="round"
 																	stroke-dasharray={50.27}
 																	stroke-dashoffset={50.27 *
-																		Math.max(0, 1 - post.content.length / maxChars)}
+																		Math.max(
+																			0,
+																			1 - getEditorContentForPost(post).length / maxChars
+																		)}
 																	transform="rotate(-90 10 10)"
 																/>
 															</svg>
 															<span class="text-[10px] text-muted-foreground/60 tabular-nums"
-																>{post.content.length}/{maxChars}</span
+																>{getEditorContentForPost(post).length}/{maxChars}</span
 															>
 														</div>
 													{/snippet}
@@ -1449,7 +1846,7 @@
 														<p class="text-xs font-medium text-muted-foreground">
 															Character limits
 														</p>
-														{#each selectedPlatformLimits as pl}
+														{#each selectedPlatformLimits as pl (pl.key)}
 															<div class="flex items-center justify-between gap-2 text-xs">
 																<div class="flex items-center gap-1.5">
 																	<PlatformIcon platform={pl.key} class="h-3 w-3" /><span
@@ -1457,10 +1854,11 @@
 																	>
 																</div>
 																<span
-																	class="tabular-nums {post.content.length > pl.limit
+																	class="tabular-nums {getEditorContentForPost(post).length >
+																	pl.limit
 																		? 'text-red-500'
 																		: 'text-muted-foreground'}"
-																	>{post.content.length}/{pl.limit}</span
+																	>{getEditorContentForPost(post).length}/{pl.limit}</span
 																>
 															</div>
 														{/each}
@@ -1473,7 +1871,7 @@
 												class="flex items-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
 												onclick={addPost}
 											>
-												<PlusIcon class="h-3 w-3" />Add post
+												<PlusIcon class="h-3 w-3" />{m.compose_add_post()}
 											</button>
 										</div>
 
@@ -1507,7 +1905,7 @@
 						<button
 							type="button"
 							class="text-xs text-muted-foreground hover:text-foreground"
-							onclick={() => (showPreview = false)}>Hide</button
+							onclick={() => (showPreview = false)}>{m.compose_hide()}</button
 						>
 					</div>
 					<div class="space-y-5">
@@ -1524,10 +1922,10 @@
 									</div>
 									{#if isThread}
 										<div class="space-y-3">
-											{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post, pi}
+											{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post (post.key)}
 												<PlatformPreview
 													platform={pl.key}
-													content={variants.get(account.id) ?? post.content}
+													content={getVariantContent(account.id, post.key) ?? post.content}
 													mediaIds={post.mediaIds}
 													username={account.account_username || 'username'}
 													displayName={account.account_username || 'Display Name'}
@@ -1541,7 +1939,7 @@
 											mediaIds={activePost.mediaIds}
 											username={account.account_username || 'username'}
 											displayName={account.account_username || 'Display Name'}
-											variantContent={variants.get(account.id) ?? null}
+											variantContent={getVariantContent(account.id, activePost.key) ?? null}
 											isUnsynced={variants.has(account.id)}
 										/>
 									{/if}
@@ -1559,7 +1957,7 @@
 					type="button"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => (showPreview = true)}
-					title="Show preview"
+					title={m.compose_show_preview()}
 				>
 					<PlatformIcon platform={getPlatformKey(selectedAccounts[0].platform)} class="h-4 w-4" />
 				</button>
@@ -1591,10 +1989,10 @@
 							</div>
 							{#if isThread}
 								<div class="space-y-3">
-									{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post, pi}
+									{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post (post.key)}
 										<PlatformPreview
 											platform={pl.key}
-											content={variants.get(account.id) ?? post.content}
+											content={getVariantContent(account.id, post.key) ?? post.content}
 											mediaIds={post.mediaIds}
 											username={account.account_username || 'username'}
 											displayName={account.account_username || 'Display Name'}
@@ -1608,7 +2006,7 @@
 									mediaIds={activePost.mediaIds}
 									username={account.account_username || 'username'}
 									displayName={account.account_username || 'Display Name'}
-									variantContent={variants.get(account.id) ?? null}
+									variantContent={getVariantContent(account.id, activePost.key) ?? null}
 									isUnsynced={variants.has(account.id)}
 								/>
 							{/if}
@@ -1619,50 +2017,3 @@
 		</div>
 	</Sheet.Content>
 </Sheet.Root>
-
-<!-- ====================================================================== -->
-<!-- Variants Dialog -->
-<!-- ====================================================================== -->
-<Dialog.Root bind:open={showVariantsDialog}>
-	<Dialog.Content class="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-		<Dialog.Header>
-			<Dialog.Title class="flex items-center gap-2">
-				<UnlinkIcon class="h-4 w-4" />Customize per platform
-			</Dialog.Title>
-		</Dialog.Header>
-		<div class="space-y-4 py-2">
-			<p class="text-sm text-muted-foreground">
-				Override content for specific platforms. Leave empty to use the default content.
-			</p>
-			{#each selectedAccountIds as accId}
-				{@const account = accounts.find((a) => a.id === accId)}
-				{#if account}
-					<div class="space-y-1.5">
-						<div class="flex items-center gap-2">
-							<PlatformIcon platform={getPlatformKey(account.platform)} class="h-4 w-4" />
-							<span class="text-sm font-medium">{getPlatformName(account.platform)}</span>
-							{#if variants.has(account.id)}<span
-									class="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">Customized</span
-								>{/if}
-						</div>
-						<textarea
-							value={variants.get(accId) ?? posts[0].content}
-							oninput={(e) => handleVariantChange(accId, (e.target as HTMLTextAreaElement).value)}
-							rows={3}
-							placeholder="Use default content..."
-							class="w-full resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-primary"
-						></textarea>
-						<div class="flex justify-end">
-							<span class="text-sm text-muted-foreground"
-								>{(variants.get(accId) ?? posts[0].content).length} characters</span
-							>
-						</div>
-					</div>
-				{/if}
-			{/each}
-		</div>
-		<Dialog.Footer>
-			<Button onclick={() => (showVariantsDialog = false)} size="sm">Done</Button>
-		</Dialog.Footer>
-	</Dialog.Content>
-</Dialog.Root>

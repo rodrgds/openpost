@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uptrace/bun"
 )
@@ -19,7 +20,7 @@ var migrationFiles embed.FS
 type SchemaMigration struct {
 	bun.BaseModel `bun:"table:schema_migrations"`
 	Version       int64 `bun:",pk"`
-	AppliedAt     int64 `bun:",notnull,default:strftime('%s','now')"`
+	AppliedAt     int64 `bun:",notnull"`
 }
 
 // RunMigrations executes all pending migrations in order.
@@ -114,7 +115,7 @@ func runMigration(ctx context.Context, db *bun.DB, m migration) error {
 		// Record migration
 		record := &SchemaMigration{
 			Version:   m.version,
-			AppliedAt: 0, // will use default
+			AppliedAt: time.Now().Unix(),
 		}
 		if _, err := tx.NewInsert().Model(record).Exec(txCtx); err != nil {
 			return fmt.Errorf("failed to record migration: %w", err)

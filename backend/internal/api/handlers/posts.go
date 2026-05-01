@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -121,14 +123,58 @@ type WorkspaceResp struct {
 	WorkspaceCreatedAt string `json:"created_at" doc:"Creation time (ISO 8601)"`
 }
 
+func (h *PostHandler) validateAccountsBelongToWorkspace(ctx context.Context, workspaceID string, accountIDs []string) error {
+	if len(accountIDs) == 0 {
+		return nil
+	}
+
+	uniqueIDs := make([]string, 0, len(accountIDs))
+	seen := make(map[string]struct{}, len(accountIDs))
+	for _, accountID := range accountIDs {
+		if _, ok := seen[accountID]; ok {
+			continue
+		}
+		seen[accountID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, accountID)
+	}
+
+	count, err := h.db.NewSelect().
+		Model((*models.SocialAccount)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("is_active = ?", true).
+		Where("id IN (?)", bun.List(uniqueIDs)).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to validate social accounts")
+	}
+	if count != len(uniqueIDs) {
+		return huma.Error400BadRequest("one or more social accounts are invalid, disconnected, or outside this workspace")
+	}
+	return nil
+}
+
 // applyRandomDelay applies a random delay of ±N minutes to the scheduled time.
 func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
 	if randomDelayMinutes <= 0 {
 		return scheduledAt
 	}
-	// Generate random offset between -N and +N minutes
-	offset := uuid.New().ID()%uint32(2*randomDelayMinutes+1) - uint32(randomDelayMinutes)
-	return scheduledAt.Add(time.Duration(offset) * time.Minute)
+
+	maxOffset := 2*randomDelayMinutes + 1
+	randomOffset := secureRandomInt(maxOffset) - randomDelayMinutes
+	return scheduledAt.Add(time.Duration(randomOffset) * time.Minute)
+}
+
+func secureRandomInt(n int) int {
+	if n <= 1 {
+		return 0
+	}
+
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err == nil {
+		return int(binary.BigEndian.Uint64(buf[:]) % uint64(n))
+	}
+
+	return int(time.Now().UnixNano() % int64(n))
 }
 
 //nolint:gocyclo
@@ -143,6 +189,12 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *CreatePostInput) (*CreatePostOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
+			return nil, err
+		}
 
 		status := statusDraft
 		if input.Body.ScheduledAt != nil {
@@ -623,8 +675,8 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		workspacePart += fmt.Sprintf(` GROUP BY %s, p.workspace_id`, dateFn)
 
 		combinedQuery = platformPart + ` UNION ALL ` + workspacePart + ` ORDER BY date`
-		_ = append(combinedArgs, platformArgs...)  //nolint:ineffassign
-		_ = append(combinedArgs, workspaceArgs...) //nolint:ineffassign
+		combinedArgs = append(combinedArgs, platformArgs...)
+		combinedArgs = append(combinedArgs, workspaceArgs...)
 
 		if err = h.db.NewRaw(combinedQuery, combinedArgs...).Scan(ctx, &combinedRows); err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch schedule details")
@@ -701,6 +753,12 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *CreateThreadInput) (*CreateThreadOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
+			return nil, err
+		}
 
 		if len(input.Body.Posts) < 2 {
 			return nil, huma.Error400BadRequest("a thread must have at least 2 posts")
@@ -988,6 +1046,11 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 
 		if post.Status == "published" {
 			return nil, huma.Error400BadRequest("cannot edit a published post")
+		}
+		if input.Body.SocialAccountIDs != nil {
+			if err := h.validateAccountsBelongToWorkspace(ctx, post.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
+				return nil, err
+			}
 		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
