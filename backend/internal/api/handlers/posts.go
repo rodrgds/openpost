@@ -1478,10 +1478,7 @@ func (h *PostHandler) DeletePost(api huma.API) {
 			if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
 				return fmt.Errorf("failed to delete jobs: %w", err)
 			}
-			if err := deletePostsCascadeTx(txCtx, tx, allIDs); err != nil {
-				return err
-			}
-			return nil
+			return deletePostsCascadeTx(txCtx, tx, allIDs)
 		})
 		if err != nil {
 			return nil, huma.Error500InternalServerError(err.Error())
