@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -61,8 +60,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Set up Nix store cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
 
       - name: Install devenv
         shell: bash
@@ -129,8 +132,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Set up Nix store cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
 
       - name: Install devenv
         shell: bash
@@ -173,8 +180,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Set up Nix store cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
 
       - name: Install devenv
         shell: bash
@@ -211,8 +222,12 @@ jobs:
         with:
           name: devenv
 
-      - name: Set up Nix store cache
-        uses: DeterminateSystems/magic-nix-cache-action@v13
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
 
       - name: Install devenv
         shell: bash

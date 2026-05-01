@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Changed
-- Optimized GitHub Actions CI by caching Nix/devenv outputs, Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
+- Optimized GitHub Actions CI by caching the Nix store plus Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
 
 ## [0.4.4] - 2026-04-19
 
