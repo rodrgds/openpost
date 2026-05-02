@@ -13,6 +13,8 @@ All notable changes to this project are documented in this file.
 - Optimized GitHub Actions CI by priming a shared Nix store cache before lint/test jobs, caching Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
 - README reduced to a shorter front door that points detailed setup and operations content at the docs site.
 - Docs site base-path handling now defaults to `/` for custom-domain hosting, with `OPENPOST_DOCS_BASE` available as an explicit override for repository-path deployments like `/openpost/`.
+- README docs links now point at the custom docs domain `https://op.rgo.pt`.
+- Docs now include a Nix module deployment page backed by a build-time sync of the production module from `rodrgds/nix-config`.
 
 ## [0.4.4] - 2026-04-19
 

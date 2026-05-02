@@ -20,6 +20,7 @@ const docsSidebar = [
 		items: [
 			{ text: 'Docker Compose', link: '/installation/docker-compose' },
 			{ text: 'Single Binary', link: '/installation/binary' },
+			{ text: 'Nix Module', link: '/installation/nix-module' },
 			{ text: 'Reverse Proxy', link: '/installation/reverse-proxy' },
 		],
 	},

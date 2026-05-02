@@ -60,9 +60,9 @@
 
 <p align="center">
   <br/>
-  <a href="https://rodrgds.github.io/openpost/"><strong>Documentation</strong></a>
+  <a href="https://op.rgo.pt/"><strong>Documentation</strong></a>
   ·
-  <a href="https://rodrgds.github.io/openpost/guide/quickstart"><strong>Quickstart</strong></a>
+  <a href="https://op.rgo.pt/guide/quickstart"><strong>Quickstart</strong></a>
   ·
   <a href="https://github.com/rodrgds/openpost/releases"><strong>Releases</strong></a>
 </p>
@@ -95,13 +95,13 @@ Set fresh values for `JWT_SECRET` and `ENCRYPTION_KEY` before using OpenPost out
 
 ## Documentation
 
-- [Landing and docs site](https://rodrgds.github.io/openpost/)
-- [Quickstart](https://rodrgds.github.io/openpost/guide/quickstart)
-- [Installation](https://rodrgds.github.io/openpost/installation/docker-compose)
-- [Configuration](https://rodrgds.github.io/openpost/configuration/environment-variables)
-- [Providers](https://rodrgds.github.io/openpost/providers/overview)
-- [Operations](https://rodrgds.github.io/openpost/operations/troubleshooting)
-- [Development](https://rodrgds.github.io/openpost/development/setup)
+- [Landing and docs site](https://op.rgo.pt/)
+- [Quickstart](https://op.rgo.pt/guide/quickstart)
+- [Installation](https://op.rgo.pt/installation/docker-compose)
+- [Configuration](https://op.rgo.pt/configuration/environment-variables)
+- [Providers](https://op.rgo.pt/providers/overview)
+- [Operations](https://op.rgo.pt/operations/troubleshooting)
+- [Development](https://op.rgo.pt/development/setup)
 
 ## Contributing
 
