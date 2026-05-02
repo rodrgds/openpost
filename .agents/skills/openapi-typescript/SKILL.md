@@ -1,3 +1,11 @@
+---
+name: openapi-typescript
+description: Type-safe OpenAPI consumption in TypeScript using openapi-typescript and openapi-fetch.
+version: 1.0.0
+user-invocable: false
+argument-hint: ""
+---
+
 # openapi-typescript + openapi-fetch
 
 Type-safe OpenAPI consumption in TypeScript. Generates runtime-free types from OpenAPI specs and provides a typed fetch client.

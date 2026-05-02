@@ -1,3 +1,11 @@
+---
+name: huma
+description: Huma - Go REST/RPC API Framework. Use with Echo adapter (humaecho) for OpenAPI 3.1 generation.
+version: 1.0.0
+user-invocable: false
+argument-hint: ""
+---
+
 # Huma - Go REST/RPC API Framework
 
 Huma generates OpenAPI 3.1 from Go types with zero annotations beyond struct tags. Use the Echo adapter (`humaecho`) for this project.
