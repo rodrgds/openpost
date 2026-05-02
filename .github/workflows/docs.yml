@@ -36,6 +36,8 @@ jobs:
 
       - name: Build VitePress site
         working-directory: docs-site
+        env:
+          OPENPOST_DOCS_BASE: ${{ vars.OPENPOST_DOCS_BASE }}
         run: bun run docs:build
 
       - name: Upload GitHub Pages artifact

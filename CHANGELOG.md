@@ -12,6 +12,7 @@ All notable changes to this project are documented in this file.
 ### Changed
 - Optimized GitHub Actions CI by priming a shared Nix store cache before lint/test jobs, caching Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
 - README reduced to a shorter front door that points detailed setup and operations content at the docs site.
+- Docs site base-path handling now defaults to `/` for custom-domain hosting, with `OPENPOST_DOCS_BASE` available as an explicit override for repository-path deployments like `/openpost/`.
 
 ## [0.4.4] - 2026-04-19
 

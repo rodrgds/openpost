@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitepress';
 
-const docsBase = process.env.OPENPOST_DOCS_BASE ?? (process.env.GITHUB_ACTIONS ? '/openpost/' : '/');
+// Default to root-path hosting so custom-domain deployments work without extra config.
+// Repository-path deployments (for example, GitHub Pages at /openpost/) should set OPENPOST_DOCS_BASE explicitly.
+const docsBase = process.env.OPENPOST_DOCS_BASE?.trim() || '/';
 
 const docsSidebar = [
 	{
