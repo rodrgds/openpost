@@ -4,8 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- VitePress documentation site scaffold under `docs-site/`, including landing page, sidebar/navigation config, OpenPost-themed styling, and first-pass operator/contributor docs.
+- Shared asset sync pipeline that copies canonical repo assets into frontend and docs public directories.
+- GitHub Pages workflow for building and deploying the docs site.
+
 ### Changed
 - Optimized GitHub Actions CI by priming a shared Nix store cache before lint/test jobs, caching Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
+- README reduced to a shorter front door that points detailed setup and operations content at the docs site.
 
 ## [0.4.4] - 2026-04-19
 

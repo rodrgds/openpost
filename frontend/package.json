@@ -4,9 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"build:capacitor": "VITE_APP_MODE=capacitor vite build && npx cap sync android",
+		"dev": "node ../scripts/sync-assets.mjs && vite dev",
+		"build": "node ../scripts/sync-assets.mjs && vite build",
+		"build:capacitor": "node ../scripts/sync-assets.mjs && VITE_APP_MODE=capacitor vite build && npx cap sync android",
 		"preview": "vite preview",
 		"generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
 		"generate:artifacts": "bun run generate:i18n && bun run generate:types",

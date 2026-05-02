@@ -1,0 +1,14 @@
+{
+  "name": "openpost-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev --host 0.0.0.0 --port 4174",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview --host 0.0.0.0 --port 4174"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitepress": "latest"
+  }
+}

@@ -9,21 +9,18 @@ Thank you for your interest in contributing to OpenPost! This document outlines 
 git clone https://github.com/rodrgds/openpost.git
 cd openpost
 
-# Install frontend dependencies
-cd frontend && bun install && cd ..
+# Install dependencies
+devenv shell
+install
 
 # Copy environment file
-cd backend && cp .env.example .env
+cp backend/.env.example backend/.env
 
-# Run in development mode
-# Terminal 1: Frontend (hot reload)
-cd frontend && bun run dev
-
-# Terminal 2: Backend (hot reload)
-cd backend && go run ./cmd/openpost
+# Run app + backend + docs site
+dev
 ```
 
-The frontend runs on `http://localhost:5173` and proxies API calls to the backend on `http://localhost:8080`.
+The frontend runs on `http://localhost:5173`, the backend on `http://localhost:8080`, and the VitePress docs site on `http://localhost:4174`.
 
 ## Development Setup
 
@@ -151,7 +148,7 @@ Use Conventional Branches:
 
 ### Documentation
 
-- Improve existing docs in `docs/`
+- Improve the documentation site in `docs-site/`
 - Add platform-specific setup guides
 - Fix typos and clarify existing content
 
@@ -166,7 +163,7 @@ Use Conventional Branches:
 
 - **Discussions:** Use GitHub Discussions for questions
 - **Issues:** Use GitHub Issues for bugs and features
-- **Documentation:** Check the [docs/](docs/) directory
+- **Documentation:** Check the [docs-site/](docs-site/) source and the published docs site
 
 ## Recognition
 

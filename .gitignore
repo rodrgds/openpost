@@ -41,10 +41,13 @@ node_modules/
 frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/
+frontend/static/assets/
 frontend/package-lock.json
 frontend/yarn.lock
 frontend/pnpm-lock.yaml
 frontend/bun.lock
+docs-site/public/assets/
+docs-site/.vitepress/dist/
 
 # Logs
 *.log

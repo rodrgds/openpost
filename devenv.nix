@@ -25,7 +25,7 @@
 
   # Scripts available in the shell
   scripts = {
-    dev.exec = ''
+    app.exec = ''
       # Start frontend dev server directly — exec replaces the subshell with bun,
       # so $! is bun's PID directly (no wrapper shell process in between).
       (cd frontend && bun install && exec bun run dev) &
@@ -40,8 +40,36 @@
       backend-run
     '';
 
+    docs.exec = ''
+      cd docs-site
+      bun install
+      bun run docs:dev
+    '';
+
+    dev.exec = ''
+      (cd frontend && bun install && exec bun run dev) &
+      FRONTEND_PID=$!
+
+      (cd docs-site && bun install && exec bun run docs:dev) &
+      DOCS_PID=$!
+
+      cleanup() {
+        kill -9 $FRONTEND_PID 2>/dev/null || true
+        kill -9 $DOCS_PID 2>/dev/null || true
+      }
+      trap cleanup EXIT
+
+      backend-run
+    '';
+
     build.exec = ''
       frontend-build && backend-build
+    '';
+
+    docs-build.exec = ''
+      cd docs-site
+      bun install
+      bun run docs:build
     '';
 
     test-all.exec = ''
@@ -63,7 +91,8 @@
     '';
 
     install.exec = ''
-      frontend-build
+      (cd frontend && bun install)
+      (cd docs-site && bun install)
       (cd backend && go mod download)
     '';
 
@@ -90,11 +119,14 @@
     echo "  Bun:    $(bun --version 2>/dev/null || echo 'not installed')"
     echo ""
     echo "  Commands:"
-    echo "    dev          - Start frontend and backend dev servers"
+    echo "    app          - Start frontend and backend dev servers"
+    echo "    docs         - Start the VitePress docs site"
+    echo "    dev          - Start frontend, backend, and docs together"
     echo "    build        - Build production binary"
+    echo "    docs-build   - Build the VitePress docs site"
     echo "    test-all     - Run all tests"
     echo "    clean        - Clean build artifacts"
-    echo "    install      - Install dependencies"
+    echo "    install      - Install frontend, docs, and backend dependencies"
     echo "    setup        - Create .env from example"
     echo "    docker-build - Build Docker image"
     echo "    docker-run   - Run Docker container"

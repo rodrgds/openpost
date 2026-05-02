@@ -1,0 +1,14 @@
+{
+  "name": "openpost",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "sync:assets": "node scripts/sync-assets.mjs",
+    "docs:dev": "bun run sync:assets && cd docs-site && bun run docs:dev",
+    "docs:build": "bun run sync:assets && cd docs-site && bun run docs:build",
+    "docs:preview": "cd docs-site && bun run docs:preview",
+    "frontend:dev": "cd frontend && bun run dev",
+    "frontend:build": "cd frontend && bun run build"
+  }
+}
