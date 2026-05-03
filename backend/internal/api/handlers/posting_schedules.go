@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -26,15 +27,18 @@ func NewPostingScheduleHandler(db *bun.DB, authService *auth.Service) *PostingSc
 }
 
 type PostingScheduleResponse struct {
-	ID          string `json:"id" doc:"Schedule ID"`
-	WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
-	SetID       string `json:"set_id,omitempty" doc:"Optional set ID"`
-	UTCHour     int    `json:"utc_hour" doc:"Hour in UTC (0-23)"`
-	UTCMinute   int    `json:"utc_minute" doc:"Minute in UTC (0-59)"`
-	DayOfWeek   int    `json:"day_of_week" doc:"Day of week (0=Sunday, 6=Saturday) in UTC"`
-	Label       string `json:"label,omitempty" doc:"Display label (e.g., Morning, Lunch)"`
-	IsActive    bool   `json:"is_active" doc:"Whether this slot is active"`
-	CreatedAt   string `json:"created_at" doc:"Creation time (ISO 8601)"`
+	ID             string `json:"id" doc:"Schedule ID"`
+	WorkspaceID    string `json:"workspace_id" doc:"Workspace ID"`
+	SetID          string `json:"set_id,omitempty" doc:"Optional set ID"`
+	UTCHour        int    `json:"utc_hour" doc:"Hour in UTC (0-23)"`
+	UTCMinute      int    `json:"utc_minute" doc:"Minute in UTC (0-59)"`
+	DayOfWeek      int    `json:"day_of_week" doc:"Day of week (0=Sunday, 6=Saturday) in UTC"`
+	LocalHour      int    `json:"local_hour" doc:"Hour in workspace local time (0-23)"`
+	LocalMinute    int    `json:"local_minute" doc:"Minute in workspace local time (0-59)"`
+	LocalDayOfWeek int    `json:"local_day_of_week" doc:"Day of week in workspace local time (0=Sunday, 6=Saturday)"`
+	Label          string `json:"label,omitempty" doc:"Display label (e.g., Morning, Lunch)"`
+	IsActive       bool   `json:"is_active" doc:"Whether this slot is active"`
+	CreatedAt      string `json:"created_at" doc:"Creation time (ISO 8601)"`
 }
 
 type ListPostingSchedulesInput struct {
@@ -70,6 +74,15 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 			return nil, huma.Error403Forbidden("you do not have access to this workspace")
 		}
 
+		var workspace models.Workspace
+		if err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.WorkspaceID).Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch workspace")
+		}
+		loc, err := time.LoadLocation(workspace.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
+
 		var schedules []models.PostingSchedule
 		query := h.db.NewSelect().
 			Model(&schedules).
@@ -87,17 +100,7 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 
 		resp := make([]PostingScheduleResponse, len(schedules))
 		for i, s := range schedules {
-			resp[i] = PostingScheduleResponse{
-				ID:          s.ID,
-				WorkspaceID: s.WorkspaceID,
-				SetID:       s.SetID,
-				UTCHour:     s.UTCHour,
-				UTCMinute:   s.UTCMinute,
-				DayOfWeek:   s.DayOfWeek,
-				Label:       s.Label,
-				IsActive:    s.IsActive,
-				CreatedAt:   s.CreatedAt.Format(time.RFC3339),
-			}
+			resp[i] = postingScheduleResponseForWorkspace(time.Now(), loc, s)
 		}
 
 		return &ListPostingSchedulesOutput{Body: resp}, nil
@@ -106,12 +109,15 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 
 type CreatePostingScheduleInput struct {
 	Body struct {
-		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
-		SetID       string `json:"set_id,omitempty" doc:"Optional set ID"`
-		UTCHour     int    `json:"utc_hour" doc:"Hour in UTC (0-23)"`
-		UTCMinute   int    `json:"utc_minute" doc:"Minute in UTC (0-59)"`
-		DayOfWeek   int    `json:"day_of_week" doc:"Day of week (0=Sunday, 6=Saturday)"`
-		Label       string `json:"label,omitempty" doc:"Display label"`
+		WorkspaceID    string `json:"workspace_id" doc:"Workspace ID"`
+		SetID          string `json:"set_id,omitempty" doc:"Optional set ID"`
+		UTCHour        int    `json:"utc_hour" doc:"Hour in UTC (0-23)"`
+		UTCMinute      int    `json:"utc_minute" doc:"Minute in UTC (0-59)"`
+		DayOfWeek      int    `json:"day_of_week" doc:"Day of week (0=Sunday, 6=Saturday)"`
+		LocalHour      *int   `json:"local_hour,omitempty" doc:"Hour in workspace local time (0-23)"`
+		LocalMinute    *int   `json:"local_minute,omitempty" doc:"Minute in workspace local time (0-59)"`
+		LocalDayOfWeek *int   `json:"local_day_of_week,omitempty" doc:"Day of week in workspace local time (0=Sunday, 6=Saturday)"`
+		Label          string `json:"label,omitempty" doc:"Display label"`
 	}
 }
 
@@ -119,6 +125,7 @@ type CreatePostingScheduleOutput struct {
 	Body PostingScheduleResponse
 }
 
+//nolint:gocyclo
 func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-posting-schedule",
@@ -154,13 +161,41 @@ func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 			return nil, huma.Error403Forbidden("you do not have access to this workspace")
 		}
 
+		var workspace models.Workspace
+		if err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch workspace")
+		}
+		loc, err := time.LoadLocation(workspace.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
+
+		utcDayOfWeek := input.Body.DayOfWeek
+		utcHour := input.Body.UTCHour
+		utcMinute := input.Body.UTCMinute
+		if input.Body.LocalDayOfWeek != nil || input.Body.LocalHour != nil || input.Body.LocalMinute != nil {
+			if input.Body.LocalDayOfWeek == nil || input.Body.LocalHour == nil || input.Body.LocalMinute == nil {
+				return nil, huma.Error400BadRequest("local_day_of_week, local_hour, and local_minute must be provided together")
+			}
+			if *input.Body.LocalDayOfWeek < 0 || *input.Body.LocalDayOfWeek > 6 {
+				return nil, huma.Error400BadRequest("local_day_of_week must be between 0 (Sunday) and 6 (Saturday)")
+			}
+			if *input.Body.LocalHour < 0 || *input.Body.LocalHour > 23 {
+				return nil, huma.Error400BadRequest("local_hour must be between 0 and 23")
+			}
+			if *input.Body.LocalMinute < 0 || *input.Body.LocalMinute > 59 {
+				return nil, huma.Error400BadRequest("local_minute must be between 0 and 59")
+			}
+			utcDayOfWeek, utcHour, utcMinute = convertLocalScheduleToUTC(loc, *input.Body.LocalDayOfWeek, *input.Body.LocalHour, *input.Body.LocalMinute)
+		}
+
 		schedule := &models.PostingSchedule{
 			ID:          uuid.New().String(),
 			WorkspaceID: input.Body.WorkspaceID,
 			SetID:       input.Body.SetID,
-			UTCHour:     input.Body.UTCHour,
-			UTCMinute:   input.Body.UTCMinute,
-			DayOfWeek:   input.Body.DayOfWeek,
+			UTCHour:     utcHour,
+			UTCMinute:   utcMinute,
+			DayOfWeek:   utcDayOfWeek,
 			Label:       input.Body.Label,
 			IsActive:    true,
 			CreatedAt:   time.Now().UTC(),
@@ -170,17 +205,7 @@ func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to create schedule")
 		}
 
-		return &CreatePostingScheduleOutput{Body: PostingScheduleResponse{
-			ID:          schedule.ID,
-			WorkspaceID: schedule.WorkspaceID,
-			SetID:       schedule.SetID,
-			UTCHour:     schedule.UTCHour,
-			UTCMinute:   schedule.UTCMinute,
-			DayOfWeek:   schedule.DayOfWeek,
-			Label:       schedule.Label,
-			IsActive:    schedule.IsActive,
-			CreatedAt:   schedule.CreatedAt.Format(time.RFC3339),
-		}}, nil
+		return &CreatePostingScheduleOutput{Body: postingScheduleResponseForWorkspace(time.Now(), loc, *schedule)}, nil
 	})
 }
 
@@ -269,17 +294,7 @@ func (h *PostingScheduleHandler) UpdateSchedule(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to update schedule")
 		}
 
-		return &UpdatePostingScheduleOutput{Body: PostingScheduleResponse{
-			ID:          schedule.ID,
-			WorkspaceID: schedule.WorkspaceID,
-			SetID:       schedule.SetID,
-			UTCHour:     schedule.UTCHour,
-			UTCMinute:   schedule.UTCMinute,
-			DayOfWeek:   schedule.DayOfWeek,
-			Label:       schedule.Label,
-			IsActive:    schedule.IsActive,
-			CreatedAt:   schedule.CreatedAt.Format(time.RFC3339),
-		}}, nil
+		return &UpdatePostingScheduleOutput{Body: postingScheduleResponseFromModel(schedule)}, nil
 	})
 }
 
@@ -366,6 +381,126 @@ type NextAvailableSlotOutput struct {
 	}
 }
 
+type localizedScheduleSlot struct {
+	Schedule     models.PostingSchedule
+	LocalWeekday int
+	LocalHour    int
+	LocalMinute  int
+}
+
+func localizeScheduleSlot(_ time.Time, _ *time.Location, schedule models.PostingSchedule) localizedScheduleSlot {
+	return localizedScheduleSlot{
+		Schedule:     schedule,
+		LocalWeekday: schedule.DayOfWeek,
+		LocalHour:    schedule.UTCHour,
+		LocalMinute:  schedule.UTCMinute,
+	}
+}
+
+func sameMinute(a, b time.Time) bool {
+	return a.UTC().Truncate(time.Minute).Equal(b.UTC().Truncate(time.Minute))
+}
+
+func postingScheduleResponseFromModel(schedule models.PostingSchedule) PostingScheduleResponse {
+	return PostingScheduleResponse{
+		ID:          schedule.ID,
+		WorkspaceID: schedule.WorkspaceID,
+		SetID:       schedule.SetID,
+		UTCHour:     schedule.UTCHour,
+		UTCMinute:   schedule.UTCMinute,
+		DayOfWeek:   schedule.DayOfWeek,
+		Label:       schedule.Label,
+		IsActive:    schedule.IsActive,
+		CreatedAt:   schedule.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+func postingScheduleResponseForWorkspace(reference time.Time, loc *time.Location, schedule models.PostingSchedule) PostingScheduleResponse {
+	resp := postingScheduleResponseFromModel(schedule)
+	localized := localizeScheduleSlot(reference, loc, schedule)
+	resp.LocalHour = localized.LocalHour
+	resp.LocalMinute = localized.LocalMinute
+	resp.LocalDayOfWeek = localized.LocalWeekday
+	return resp
+}
+
+func convertLocalScheduleToUTC(_ *time.Location, localDayOfWeek, localHour, localMinute int) (int, int, int) {
+	return localDayOfWeek, localHour, localMinute
+}
+
+//nolint:gocyclo
+func findNextAvailableSlotTime(
+	now time.Time,
+	loc *time.Location,
+	schedules []models.PostingSchedule,
+	scheduledPosts []models.Post,
+	draftGapMinutes int,
+) (*models.PostingSchedule, time.Time) {
+	localizedSlots := make([]localizedScheduleSlot, 0, len(schedules))
+	for _, schedule := range schedules {
+		localizedSlots = append(localizedSlots, localizeScheduleSlot(now, loc, schedule))
+	}
+
+	for dayOffset := 0; dayOffset < 30; dayOffset++ {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, dayOffset)
+		dayEnd := dayStart.Add(24 * time.Hour)
+
+		dayPosts := make([]time.Time, 0)
+		for _, post := range scheduledPosts {
+			localScheduledAt := post.ScheduledAt.In(loc)
+			if !localScheduledAt.Before(dayStart) && localScheduledAt.Before(dayEnd) {
+				dayPosts = append(dayPosts, localScheduledAt)
+			}
+		}
+		sort.Slice(dayPosts, func(i, j int) bool { return dayPosts[i].Before(dayPosts[j]) })
+
+		dayCandidates := make([]struct {
+			schedule models.PostingSchedule
+			when     time.Time
+		}, 0)
+
+		for _, slot := range localizedSlots {
+			if slot.LocalWeekday != int(dayStart.Weekday()) {
+				continue
+			}
+			slotTime := time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), slot.LocalHour, slot.LocalMinute, 0, 0, loc)
+			if !slotTime.After(now) {
+				continue
+			}
+
+			occupied := false
+			for _, scheduledAt := range dayPosts {
+				if sameMinute(scheduledAt, slotTime) {
+					occupied = true
+					break
+				}
+			}
+			if !occupied {
+				dayCandidates = append(dayCandidates, struct {
+					schedule models.PostingSchedule
+					when     time.Time
+				}{schedule: slot.Schedule, when: slotTime})
+			}
+		}
+
+		sort.Slice(dayCandidates, func(i, j int) bool { return dayCandidates[i].when.Before(dayCandidates[j].when) })
+		if len(dayCandidates) > 0 {
+			return &dayCandidates[0].schedule, dayCandidates[0].when
+		}
+
+		if draftGapMinutes <= 0 || len(dayPosts) == 0 {
+			continue
+		}
+
+		fallbackTime := dayPosts[len(dayPosts)-1].Add(time.Duration(draftGapMinutes) * time.Minute)
+		if fallbackTime.After(now) && fallbackTime.Before(dayEnd) {
+			return nil, fallbackTime
+		}
+	}
+
+	return nil, time.Time{}
+}
+
 func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "suggest-posting-schedule",
@@ -401,13 +536,6 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch workspace")
 		}
 
-		loc, err := time.LoadLocation(workspace.Timezone)
-		if err != nil {
-			loc = time.UTC
-		}
-
-		now := time.Now().In(loc)
-
 		// Define optimal posting times in local timezone
 		suggestionTemplates := map[int][]struct {
 			Hour   int
@@ -436,14 +564,11 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 		schedules := make([]models.PostingSchedule, 0, len(templates)*7)
 		for dayOfWeek := 0; dayOfWeek <= 6; dayOfWeek++ {
 			for _, t := range templates {
-				localTime := time.Date(now.Year(), now.Month(), now.Day(), t.Hour, t.Minute, 0, 0, loc)
-				utcTime := localTime.UTC()
-
 				schedules = append(schedules, models.PostingSchedule{
 					ID:          uuid.New().String(),
 					WorkspaceID: input.Body.WorkspaceID,
-					UTCHour:     utcTime.Hour(),
-					UTCMinute:   utcTime.Minute(),
+					UTCHour:     t.Hour,
+					UTCMinute:   t.Minute,
 					DayOfWeek:   dayOfWeek,
 					Label:       t.Label,
 					IsActive:    true,
@@ -471,17 +596,7 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 
 		resp := make([]PostingScheduleResponse, len(schedules))
 		for i, s := range schedules {
-			resp[i] = PostingScheduleResponse{
-				ID:          s.ID,
-				WorkspaceID: s.WorkspaceID,
-				SetID:       s.SetID,
-				UTCHour:     s.UTCHour,
-				UTCMinute:   s.UTCMinute,
-				DayOfWeek:   s.DayOfWeek,
-				Label:       s.Label,
-				IsActive:    s.IsActive,
-				CreatedAt:   s.CreatedAt.Format(time.RFC3339),
-			}
+			resp[i] = postingScheduleResponseFromModel(s)
 		}
 
 		return &SuggestScheduleOutput{Body: struct {
@@ -533,9 +648,6 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 		}
 
 		now := time.Now().In(loc)
-		currentDayOfWeek := int(now.Weekday())
-		currentHour := now.Hour()
-		currentMinute := now.Minute()
 
 		// Query active schedules
 		var schedules []models.PostingSchedule
@@ -564,47 +676,20 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 			}}, nil
 		}
 
-		// Find next available slot
-		var nextSlot *models.PostingSchedule
-		var daysToAdd int
-		minMinutesDiff := 24 * 60 * 7 // One week in minutes
-
-		for dayOffset := 0; dayOffset < 8; dayOffset++ {
-			checkDay := (currentDayOfWeek + dayOffset) % 7
-
-			for _, s := range schedules {
-				if s.DayOfWeek != checkDay {
-					continue
-				}
-
-				// Convert schedule UTC time to workspace timezone
-				scheduleUTC := time.Date(now.Year(), now.Month(), now.Day(), s.UTCHour, s.UTCMinute, 0, 0, time.UTC)
-				scheduleLocal := scheduleUTC.In(loc)
-				scheduleHour := scheduleLocal.Hour()
-				scheduleMinute := scheduleLocal.Minute()
-
-				// Calculate total minutes from now
-				totalMinutes := dayOffset*24*60 + (scheduleHour*60 + scheduleMinute) - (currentHour*60 + currentMinute)
-
-				// If same day, check if slot is in the future
-				if dayOffset == 0 && totalMinutes <= 0 {
-					continue
-				}
-
-				if totalMinutes < minMinutesDiff {
-					minMinutesDiff = totalMinutes
-					nextSlot = &s
-					daysToAdd = dayOffset
-				}
-			}
-
-			// If we found a slot, break
-			if nextSlot != nil {
-				break
-			}
+		var scheduledPosts []models.Post
+		postQuery := h.db.NewSelect().
+			Model(&scheduledPosts).
+			Where("workspace_id = ?", input.WorkspaceID).
+			Where("status = ?", "scheduled").
+			Where("scheduled_at >= ?", now.UTC().Add(-24*time.Hour)).
+			Order("scheduled_at ASC")
+		if err := postQuery.Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error500InternalServerError("failed to fetch scheduled posts")
 		}
 
-		if nextSlot == nil {
+		nextSlot, nextSlotTime := findNextAvailableSlotTime(now, loc, schedules, scheduledPosts, workspace.DraftGapMinutes)
+
+		if nextSlotTime.IsZero() {
 			return &NextAvailableSlotOutput{Body: struct {
 				Slot     *PostingScheduleResponse `json:"slot,omitempty" doc:"Next available schedule slot"`
 				SlotTime string                   `json:"slot_time" doc:"The suggested time in ISO 8601 format"`
@@ -612,33 +697,23 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 			}{
 				Slot:     nil,
 				SlotTime: "",
-				Message:  "No available slots found in the next week",
+				Message:  "No available slots found in the next month",
 			}}, nil
 		}
-
-		// Calculate the actual slot time
-		slotTime := now.AddDate(0, 0, daysToAdd)
-		// Convert schedule UTC time to local time
-		scheduleUTC := time.Date(slotTime.Year(), slotTime.Month(), slotTime.Day(), nextSlot.UTCHour, nextSlot.UTCMinute, 0, 0, time.UTC)
-		slotTime = scheduleUTC.In(loc)
 
 		return &NextAvailableSlotOutput{Body: struct {
 			Slot     *PostingScheduleResponse `json:"slot,omitempty" doc:"Next available schedule slot"`
 			SlotTime string                   `json:"slot_time" doc:"The suggested time in ISO 8601 format"`
 			Message  string                   `json:"message" doc:"Message about the result"`
 		}{
-			Slot: &PostingScheduleResponse{
-				ID:          nextSlot.ID,
-				WorkspaceID: nextSlot.WorkspaceID,
-				SetID:       nextSlot.SetID,
-				UTCHour:     nextSlot.UTCHour,
-				UTCMinute:   nextSlot.UTCMinute,
-				DayOfWeek:   nextSlot.DayOfWeek,
-				Label:       nextSlot.Label,
-				IsActive:    nextSlot.IsActive,
-				CreatedAt:   nextSlot.CreatedAt.Format(time.RFC3339),
-			},
-			SlotTime: slotTime.Format(time.RFC3339),
+			Slot: func() *PostingScheduleResponse {
+				if nextSlot == nil {
+					return nil
+				}
+				slot := postingScheduleResponseFromModel(*nextSlot)
+				return &slot
+			}(),
+			SlotTime: nextSlotTime.Format(time.RFC3339),
 			Message:  "Next available slot found",
 		}}, nil
 	})

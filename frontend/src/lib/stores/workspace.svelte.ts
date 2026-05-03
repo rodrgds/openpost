@@ -6,13 +6,13 @@ interface WorkspaceSettings {
 	week_start: number;
 	media_cleanup_days: number;
 	random_delay_minutes: number;
+	draft_gap_minutes: number;
 	slot_start_hour: number;
 	slot_end_hour: number;
 	slot_interval_minutes: number;
 }
 
 const STORAGE_KEY = 'openpost_current_workspace';
-
 class WorkspaceContext {
 	currentWorkspace = $state<Workspace | null>(null);
 	workspaces = $state<Workspace[]>([]);
@@ -21,6 +21,7 @@ class WorkspaceContext {
 		week_start: 1,
 		media_cleanup_days: 0,
 		random_delay_minutes: 0,
+		draft_gap_minutes: 60,
 		slot_start_hour: 5,
 		slot_end_hour: 23,
 		slot_interval_minutes: 15
@@ -83,6 +84,7 @@ class WorkspaceContext {
 					week_start: data.week_start ?? 1,
 					media_cleanup_days: data.media_cleanup_days ?? 0,
 					random_delay_minutes: data.random_delay_minutes ?? 0,
+					draft_gap_minutes: data.draft_gap_minutes ?? 60,
 					slot_start_hour: data.slot_start_hour ?? 5,
 					slot_end_hour: data.slot_end_hour ?? 23,
 					slot_interval_minutes: data.slot_interval_minutes ?? 15
@@ -109,6 +111,8 @@ class WorkspaceContext {
 				this.settings.media_cleanup_days = updates.media_cleanup_days;
 			if (updates.random_delay_minutes !== undefined)
 				this.settings.random_delay_minutes = updates.random_delay_minutes;
+			if (updates.draft_gap_minutes !== undefined)
+				this.settings.draft_gap_minutes = updates.draft_gap_minutes;
 			if (updates.slot_start_hour !== undefined)
 				this.settings.slot_start_hour = updates.slot_start_hour;
 			if (updates.slot_end_hour !== undefined) this.settings.slot_end_hour = updates.slot_end_hour;

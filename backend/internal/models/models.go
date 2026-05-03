@@ -15,6 +15,7 @@ type Workspace struct {
 	WeekStart           int       `bun:",default:1" json:"week_start"`             // 0=Sunday, 1=Monday
 	MediaCleanupDays    int       `bun:",default:0" json:"media_cleanup_days"`     // 0 = disabled
 	RandomDelayMinutes  int       `bun:",default:0" json:"random_delay_minutes"`   // ±N minutes natural posting
+	DraftGapMinutes     int       `bun:",default:60" json:"draft_gap_minutes"`     // Minimum gap when spilling past configured schedule slots
 	SlotStartHour       int       `bun:",default:5" json:"slot_start_hour"`        // 0-23
 	SlotEndHour         int       `bun:",default:23" json:"slot_end_hour"`         // 0-23
 	SlotIntervalMinutes int       `bun:",default:15" json:"slot_interval_minutes"` // 1-180

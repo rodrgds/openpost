@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file.
 - VitePress documentation site scaffold under `docs-site/`, including landing page, sidebar/navigation config, OpenPost-themed styling, and first-pass operator/contributor docs.
 - Shared asset sync pipeline that copies canonical repo assets into frontend and docs public directories.
 - GitHub Pages workflow for building and deploying the docs site.
+- Token refresh job scheduling plus backend tests covering queued refresh execution and provider-specific refresh credentials.
+- Dedicated account-connection success callback page for returning OAuth users to `/accounts`.
+- Workspace migration scaffold for configurable draft gap minutes.
+- Workspace setting for `draft_gap_minutes`, used by suggested queue times when a day's configured schedule slots are already occupied.
 
 ### Changed
 - Optimized GitHub Actions CI by priming a shared Nix store cache before lint/test jobs, caching Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
@@ -15,6 +19,11 @@ All notable changes to this project are documented in this file.
 - Docs site base-path handling now defaults to `/` for custom-domain hosting, with `OPENPOST_DOCS_BASE` available as an explicit override for repository-path deployments like `/openpost/`.
 - README docs links now point at the custom docs domain `https://op.rgo.pt`.
 - Docs now include a Nix module deployment page backed by a build-time sync of the production module from `rodrgds/nix-config`.
+- Token refresh handling now declares platform capabilities explicitly, retries publish attempts on any supported expired account, and routes OAuth success redirects through the new callback screen.
+- Workspace settings no longer auto-overwrite shared timezone and week-start values from the first browser locale that opens a workspace.
+- Posting schedule settings now use a local-time weekly grid with per-day toggles and row-based time management instead of a flat UTC slot list.
+- Suggested posting times now consider already scheduled posts and fall back to the configured minimum draft gap when a day has no unused schedule slots left.
+- Weekly posting schedules now preserve the configured workspace-local time across DST changes instead of drifting by the current UTC offset.
 
 ## [0.4.4] - 2026-04-19
 
