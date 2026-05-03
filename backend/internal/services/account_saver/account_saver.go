@@ -3,12 +3,14 @@ package account_saver
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
 
@@ -75,6 +77,10 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, platformName, workspaceI
 
 	if _, err := s.db.NewInsert().Model(account).Exec(ctx); err != nil {
 		return nil, err
+	}
+
+	if err := tokenmanager.ScheduleRefreshJob(ctx, s.db, account.ID, expiresAt); err != nil {
+		log.Printf("[AccountSaver] Failed to schedule refresh job for account %s: %v", account.ID, err)
 	}
 
 	return account, nil

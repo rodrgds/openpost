@@ -89,10 +89,21 @@ func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, _ map[s
 	}, nil
 }
 
-func (l *LinkedInAdapter) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
+func (l *LinkedInAdapter) RefreshCapability() RefreshCapability {
+	return RefreshCapability{
+		Supported:        true,
+		CredentialSource: RefreshCredentialRefreshToken,
+	}
+}
+
+func (l *LinkedInAdapter) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResult, error) {
+	if input.RefreshToken == "" {
+		return nil, fmt.Errorf("linkedin refresh requires a refresh token")
+	}
+
 	values := map[string]string{
 		"grant_type":    "refresh_token",
-		"refresh_token": refreshToken,
+		"refresh_token": input.RefreshToken,
 		"client_id":     l.clientID,
 		"client_secret": l.clientSecret,
 	}

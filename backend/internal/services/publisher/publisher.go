@@ -373,11 +373,11 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 
 	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
 	if err != nil {
-		if account.Platform == "bluesky" && isExpiredTokenError(err) {
-			log.Printf("[Publisher] Bluesky token expired for account %s, forcing refresh and retry", account.ID)
+		if isExpiredTokenError(err) {
+			log.Printf("[Publisher] Token expired for %s account %s, forcing refresh and retry", account.Platform, account.ID)
 			refreshedToken, refreshErr := s.tm.ForceRefreshAccessToken(ctx, account.ID)
 			if refreshErr != nil {
-				return fmt.Errorf("bluesky token refresh failed after expiry: %w", refreshErr)
+				return fmt.Errorf("%s token refresh failed after expiry: %w", account.Platform, refreshErr)
 			}
 			externalID, err = provider.Publish(ctx, refreshedToken, account.AccountID, req)
 			if err != nil {

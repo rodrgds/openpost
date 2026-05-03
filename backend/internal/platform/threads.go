@@ -121,10 +121,21 @@ func (t *ThreadsAdapter) exchangeLongLivedToken(ctx context.Context, shortLivedT
 	}, nil
 }
 
-func (t *ThreadsAdapter) RefreshToken(ctx context.Context, accessToken string) (*TokenResult, error) {
+func (t *ThreadsAdapter) RefreshCapability() RefreshCapability {
+	return RefreshCapability{
+		Supported:        true,
+		CredentialSource: RefreshCredentialAccessToken,
+	}
+}
+
+func (t *ThreadsAdapter) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResult, error) {
+	if input.AccessToken == "" {
+		return nil, fmt.Errorf("threads refresh requires an access token")
+	}
+
 	params := url.Values{
 		"grant_type":   {"th_refresh_token"},
-		"access_token": {accessToken},
+		"access_token": {input.AccessToken},
 	}
 
 	respBody, err := DoRequest(ctx, "GET", "https://graph.threads.net/refresh_access_token?"+params.Encode(), nil, nil)

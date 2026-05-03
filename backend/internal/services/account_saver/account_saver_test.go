@@ -3,9 +3,11 @@ package account_saver
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -27,13 +29,18 @@ func createTestDB(t *testing.T) *bun.DB {
 		IfNotExists().
 		Exec(context.Background())
 	require.NoError(t, err)
+	_, err = db.NewCreateTable().
+		Model((*models.Job)(nil)).
+		IfNotExists().
+		Exec(context.Background())
+	require.NoError(t, err)
 
 	return db
 }
 
 // openInMemorySQLite creates an in-memory SQLite database.
 func openInMemorySQLite() (*sql.DB, error) {
-	return sql.Open("sqlite3", "file::memory:?cache=shared")
+	return sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared", uuid.NewString()))
 }
 
 // TestSaveAccount_X tests saving an X (Twitter) account.
@@ -88,6 +95,11 @@ func TestSaveAccount_X(t *testing.T) {
 
 	// Verify expiration is set (within reasonable range)
 	require.WithinDuration(t, time.Now().UTC().Add(2*time.Hour), account.TokenExpiresAt, 10*time.Second)
+
+	var jobs []models.Job
+	err = db.NewSelect().Model(&jobs).Where("type = ?", "refresh_token").Scan(ctx)
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
 }
 
 // TestSaveAccount_Mastodon tests saving a Mastodon account.

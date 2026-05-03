@@ -32,12 +32,7 @@ func (tm *TokenManager) SetProvider(platformName string, adapter platform.Adapte
 }
 
 func (tm *TokenManager) GetValidAccessToken(ctx context.Context, accountID string) (string, error) {
-	account := new(models.SocialAccount)
-	err := tm.db.NewSelect().
-		Model(account).
-		Where("id = ?", accountID).
-		Scan(ctx)
-
+	account, err := tm.loadAccount(ctx, accountID)
 	if err != nil {
 		return "", err
 	}
@@ -50,19 +45,29 @@ func (tm *TokenManager) GetValidAccessToken(ctx context.Context, accountID strin
 		return tm.crypto.Decrypt(account.AccessTokenEnc)
 	}
 
-	if account.TokenExpiresAt.Before(time.Now().UTC().Add(5 * time.Minute)) {
-		return tm.refreshToken(ctx, account)
+	now := time.Now().UTC()
+	if account.TokenExpiresAt.Before(now.Add(refreshLeadTime)) {
+		provider, err := tm.providerForAccount(account)
+		if err != nil {
+			return "", err
+		}
+
+		capability := provider.RefreshCapability()
+		if !capability.Supported {
+			if account.TokenExpiresAt.After(now) {
+				return tm.crypto.Decrypt(account.AccessTokenEnc)
+			}
+			return "", fmt.Errorf("token expired for account %s and provider does not support refresh", account.ID)
+		}
+
+		return tm.refreshToken(ctx, account, provider, capability)
 	}
 
 	return tm.crypto.Decrypt(account.AccessTokenEnc)
 }
 
 func (tm *TokenManager) ForceRefreshAccessToken(ctx context.Context, accountID string) (string, error) {
-	account := new(models.SocialAccount)
-	err := tm.db.NewSelect().
-		Model(account).
-		Where("id = ?", accountID).
-		Scan(ctx)
+	account, err := tm.loadAccount(ctx, accountID)
 	if err != nil {
 		return "", err
 	}
@@ -71,14 +76,32 @@ func (tm *TokenManager) ForceRefreshAccessToken(ctx context.Context, accountID s
 		return "", fmt.Errorf("account is disconnected: %s", account.ErrorMessage)
 	}
 
-	if len(account.RefreshTokenEnc) == 0 {
-		return "", fmt.Errorf("no refresh token available for account %s", account.ID)
+	provider, err := tm.providerForAccount(account)
+	if err != nil {
+		return "", err
 	}
 
-	return tm.refreshToken(ctx, account)
+	capability := provider.RefreshCapability()
+	if !capability.Supported {
+		return "", fmt.Errorf("token refresh is not supported for platform %s", account.Platform)
+	}
+
+	return tm.refreshToken(ctx, account, provider, capability)
 }
 
-func (tm *TokenManager) refreshToken(ctx context.Context, account *models.SocialAccount) (string, error) {
+func (tm *TokenManager) loadAccount(ctx context.Context, accountID string) (*models.SocialAccount, error) {
+	account := new(models.SocialAccount)
+	err := tm.db.NewSelect().
+		Model(account).
+		Where("id = ?", accountID).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return account, nil
+}
+
+func (tm *TokenManager) providerForAccount(account *models.SocialAccount) (platform.Adapter, error) {
 	providerKey := account.Platform
 	if account.Platform == "mastodon" {
 		providerKey = "mastodon:" + account.InstanceURL
@@ -86,19 +109,19 @@ func (tm *TokenManager) refreshToken(ctx context.Context, account *models.Social
 
 	provider, ok := tm.providers[providerKey]
 	if !ok {
-		return "", fmt.Errorf("unsupported platform for token refresh: %s (instance: %s)", account.Platform, account.InstanceURL)
+		return nil, fmt.Errorf("unsupported platform for token refresh: %s (instance: %s)", account.Platform, account.InstanceURL)
 	}
 
-	if len(account.RefreshTokenEnc) == 0 {
-		return "", fmt.Errorf("no refresh token available for account %s", account.ID)
-	}
+	return provider, nil
+}
 
-	refreshToken, err := tm.crypto.Decrypt(account.RefreshTokenEnc)
+func (tm *TokenManager) refreshToken(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, capability platform.RefreshCapability) (string, error) {
+	input, err := tm.refreshInputForAccount(account, capability.CredentialSource)
 	if err != nil {
-		return "", fmt.Errorf("failed to decrypt refresh token: %w", err)
+		return "", err
 	}
 
-	tokenResp, err := provider.RefreshToken(ctx, refreshToken)
+	tokenResp, err := provider.RefreshToken(ctx, input)
 	if err != nil {
 		log.Printf("[TokenManager] Failed to refresh token for %s account %s: %v", account.Platform, account.ID, err)
 		_, _ = tm.db.NewUpdate().Model(account).
@@ -108,12 +131,42 @@ func (tm *TokenManager) refreshToken(ctx context.Context, account *models.Social
 		return "", fmt.Errorf("failed to refresh token: %w", err)
 	}
 
+	return tm.persistRefreshedTokens(ctx, account, tokenResp)
+}
+
+func (tm *TokenManager) refreshInputForAccount(account *models.SocialAccount, source platform.RefreshCredentialSource) (platform.RefreshTokenInput, error) {
+	input := platform.RefreshTokenInput{}
+
+	if source == platform.RefreshCredentialAccessToken {
+		accessToken, err := tm.crypto.Decrypt(account.AccessTokenEnc)
+		if err != nil {
+			return input, fmt.Errorf("failed to decrypt access token: %w", err)
+		}
+		input.AccessToken = accessToken
+	}
+
+	if source == platform.RefreshCredentialRefreshToken {
+		if len(account.RefreshTokenEnc) == 0 {
+			return input, fmt.Errorf("no refresh token available for account %s", account.ID)
+		}
+
+		refreshToken, err := tm.crypto.Decrypt(account.RefreshTokenEnc)
+		if err != nil {
+			return input, fmt.Errorf("failed to decrypt refresh token: %w", err)
+		}
+		input.RefreshToken = refreshToken
+	}
+
+	return input, nil
+}
+
+func (tm *TokenManager) persistRefreshedTokens(ctx context.Context, account *models.SocialAccount, tokenResp *platform.TokenResult) (string, error) {
 	encAccess, err := tm.crypto.Encrypt(tokenResp.AccessToken)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt access token: %w", err)
 	}
 
-	var encRefresh []byte
+	encRefresh := account.RefreshTokenEnc
 	if tokenResp.RefreshToken != "" {
 		encRefresh, err = tm.crypto.Encrypt(tokenResp.RefreshToken)
 		if err != nil {
@@ -121,7 +174,7 @@ func (tm *TokenManager) refreshToken(ctx context.Context, account *models.Social
 		}
 	}
 
-	var expiresAt time.Time
+	expiresAt := account.TokenExpiresAt
 	if tokenResp.ExpiresIn > 0 {
 		expiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 	}
@@ -136,6 +189,10 @@ func (tm *TokenManager) refreshToken(ctx context.Context, account *models.Social
 
 	if err != nil {
 		return "", fmt.Errorf("failed to update account tokens: %w", err)
+	}
+
+	if err := ScheduleRefreshJob(ctx, tm.db, account.ID, expiresAt); err != nil {
+		log.Printf("[TokenManager] Failed to schedule refresh job for %s account %s: %v", account.Platform, account.ID, err)
 	}
 
 	log.Printf("[TokenManager] Successfully refreshed token for %s account %s", account.Platform, account.ID)

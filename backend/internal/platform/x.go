@@ -208,7 +208,14 @@ func (x *XAdapter) ExchangeCode(_ context.Context, _ string, extra map[string]st
 	}, nil
 }
 
-func (x *XAdapter) RefreshToken(_ context.Context, _ string) (*TokenResult, error) {
+func (x *XAdapter) RefreshCapability() RefreshCapability {
+	return RefreshCapability{
+		Supported:        false,
+		CredentialSource: RefreshCredentialNone,
+	}
+}
+
+func (x *XAdapter) RefreshToken(_ context.Context, _ RefreshTokenInput) (*TokenResult, error) {
 	return nil, fmt.Errorf("x oauth1 tokens do not support refresh")
 }
 

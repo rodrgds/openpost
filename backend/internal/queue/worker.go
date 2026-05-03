@@ -11,6 +11,7 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/publisher"
+	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
 
@@ -20,16 +21,18 @@ type BackgroundWorker struct {
 	workerID  string
 	interval  time.Duration
 	publisher *publisher.Service
+	tokens    *tokenmanager.TokenManager
 	storage   mediastore.BlobStorage
 	done      chan struct{}
 }
 
-func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Service, storage mediastore.BlobStorage) *BackgroundWorker {
+func NewWorker(db *bun.DB, id string, interval time.Duration, pub *publisher.Service, tokens *tokenmanager.TokenManager, storage mediastore.BlobStorage) *BackgroundWorker {
 	return &BackgroundWorker{
 		db:        db,
 		workerID:  id,
 		interval:  interval,
 		publisher: pub,
+		tokens:    tokens,
 		storage:   storage,
 		done:      make(chan struct{}),
 	}
@@ -135,13 +138,26 @@ func (w *BackgroundWorker) executeJob(ctx context.Context, job *models.Job) erro
 	case "publish_post":
 		return w.publisher.HandlePublishJob(ctx, job.Payload)
 	case "refresh_token":
-		// TODO: Call token manager
-		return nil
+		return w.handleRefreshTokenJob(ctx, job.Payload)
 	case "media_cleanup":
 		return w.handleMediaCleanup(ctx, job.Payload)
 	default:
 		return nil
 	}
+}
+
+func (w *BackgroundWorker) handleRefreshTokenJob(ctx context.Context, payload string) error {
+	if w.tokens == nil {
+		return nil
+	}
+
+	accountID, err := tokenmanager.ParseRefreshJobPayload(payload)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.tokens.ForceRefreshAccessToken(ctx, accountID)
+	return err
 }
 
 func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload string) error {

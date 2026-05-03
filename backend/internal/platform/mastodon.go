@@ -63,7 +63,14 @@ func (m *MastodonAdapter) ExchangeCode(ctx context.Context, code string, _ map[s
 	return &tokenResp, nil
 }
 
-func (m *MastodonAdapter) RefreshToken(_ context.Context, _ string) (*TokenResult, error) {
+func (m *MastodonAdapter) RefreshCapability() RefreshCapability {
+	return RefreshCapability{
+		Supported:        false,
+		CredentialSource: RefreshCredentialNone,
+	}
+}
+
+func (m *MastodonAdapter) RefreshToken(_ context.Context, _ RefreshTokenInput) (*TokenResult, error) {
 	return nil, fmt.Errorf("mastodon tokens do not expire")
 }
 

@@ -59,9 +59,20 @@ func (b *BlueskyAdapter) ExchangeCode(_ context.Context, _ string, _ map[string]
 	return nil, fmt.Errorf("bluesky uses app passwords, not OAuth")
 }
 
-func (b *BlueskyAdapter) RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error) {
+func (b *BlueskyAdapter) RefreshCapability() RefreshCapability {
+	return RefreshCapability{
+		Supported:        true,
+		CredentialSource: RefreshCredentialRefreshToken,
+	}
+}
+
+func (b *BlueskyAdapter) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResult, error) {
+	if input.RefreshToken == "" {
+		return nil, fmt.Errorf("bluesky refresh requires a refresh token")
+	}
+
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.refreshSession", nil, map[string]string{
-		"Authorization": "Bearer " + refreshToken,
+		"Authorization": "Bearer " + input.RefreshToken,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bluesky refresh: %w", err)

@@ -29,6 +29,24 @@ type TokenResult struct {
 	Extra        map[string]string `json:"extra"` // Platform-specific data (e.g., user ID for Threads)
 }
 
+type RefreshCredentialSource string
+
+const (
+	RefreshCredentialNone         RefreshCredentialSource = "none"
+	RefreshCredentialAccessToken  RefreshCredentialSource = "access_token"
+	RefreshCredentialRefreshToken RefreshCredentialSource = "refresh_token"
+)
+
+type RefreshCapability struct {
+	Supported        bool
+	CredentialSource RefreshCredentialSource
+}
+
+type RefreshTokenInput struct {
+	AccessToken  string
+	RefreshToken string
+}
+
 // Adapter is the single interface every social platform must implement.
 // This eliminates switch statements across publisher, token manager, and OAuth handlers.
 //
@@ -44,8 +62,13 @@ type Adapter interface {
 	// extra contains platform-specific params (e.g. PKCE verifier for X, server_name for Mastodon).
 	ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error)
 
-	// RefreshToken refreshes an access token using the stored refresh token.
-	RefreshToken(ctx context.Context, refreshToken string) (*TokenResult, error)
+	// RefreshCapability declares whether a platform supports token refresh and
+	// which stored credential it needs for the refresh request.
+	RefreshCapability() RefreshCapability
+
+	// RefreshToken refreshes an access token using the credential(s) declared by
+	// RefreshCapability.
+	RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResult, error)
 
 	// GetProfile fetches the authenticated user's profile.
 	GetProfile(ctx context.Context, accessToken string) (*UserProfile, error)
