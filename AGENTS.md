@@ -96,9 +96,9 @@ Provider keys in the `providers` map follow specific formats:
 | Platform | Provider Key Format | Example |
 |----------|---------------------|---------|
 | X/Twitter | `"x"` | `"x"` |
-| Mastodon | `"mastodon:" + server.Name` | `"mastodon:Personal"` |
+| Mastodon | `"mastodon:" + server.InstanceURL` | `"mastodon:https://masto.pt"` |
 | Bluesky | `"bluesky"` | `"bluesky"` |
 | LinkedIn | `"linkedin"` | `"linkedin"` |
 | Threads | `"threads"` | `"threads"` |
 
-**Important:** For Mastodon, the `instanceURL` stored in `SocialAccount.InstanceURL` must match exactly with the key used to register the adapter. The adapter is registered with `"mastodon:" + server.InstanceURL` (the full URL from config, e.g., `https://masto.pt`). When looking up the provider, use `"mastodon:" + account.InstanceURL` without modification.
+**Important:** For Mastodon, the `instanceURL` stored in `SocialAccount.InstanceURL` must match exactly with the key used to register the adapter. The canonical adapter key is `"mastodon:" + server.InstanceURL` (the full URL from config, e.g., `https://masto.pt`). When looking up the provider, use `"mastodon:" + account.InstanceURL` without modification. Human-friendly server names may still be used as OAuth selection labels, but not as the persisted provider key.

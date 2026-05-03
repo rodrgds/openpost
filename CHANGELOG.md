@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-03
+
 ### Added
 - Account-level MFA with QR-based TOTP enrollment, passkey registration, and step-up login verification, plus settings UI for managing both methods.
 - VitePress documentation site scaffold under `docs-site/`, including landing page, sidebar/navigation config, OpenPost-themed styling, and first-pass operator/contributor docs.
@@ -26,6 +28,11 @@ All notable changes to this project are documented in this file.
 - Posting schedule settings now use a local-time weekly grid with per-day toggles and row-based time management instead of a flat UTC slot list.
 - Suggested posting times now consider already scheduled posts and fall back to the configured minimum draft gap when a day has no unused schedule slots left.
 - Weekly posting schedules now preserve the configured workspace-local time across DST changes instead of drifting by the current UTC offset.
+
+### Fixed
+- Mastodon accounts now persist their configured `instance_url` as the canonical provider key, avoiding publish/token-refresh mismatches after OAuth connection.
+- The default Mastodon callback URI now matches the documented backend callback endpoint on `localhost:8080`.
+- Mastodon server listings now avoid duplicate entries when adapters are registered with both UI labels and canonical instance-url keys.
 
 ## [0.4.4] - 2026-04-19
 

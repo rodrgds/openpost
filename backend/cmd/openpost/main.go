@@ -95,7 +95,10 @@ func main() {
 			cfg.MastodonRedirectURI,
 			server.InstanceURL,
 		)
-		providers["mastodon:"+server.Name] = mastodonAdapter
+		providers["mastodon:"+server.InstanceURL] = mastodonAdapter
+		if server.Name != "" {
+			providers["mastodon:"+server.Name] = mastodonAdapter
+		}
 		log.Printf("Registered Mastodon adapter: %s (%s)", server.Name, server.InstanceURL)
 	}
 

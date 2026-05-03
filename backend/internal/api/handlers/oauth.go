@@ -33,6 +33,14 @@ type OAuthHandler struct {
 	accountSaver                 *account_saver.AccountSaver
 }
 
+func mastodonInstanceURL(adapter platform.Adapter) string {
+	provider, ok := adapter.(interface{ InstanceURL() string })
+	if !ok {
+		return ""
+	}
+	return provider.InstanceURL()
+}
+
 func NewOAuthHandler(
 	db *bun.DB,
 	encryptor *crypto.TokenEncryptor,
@@ -114,24 +122,24 @@ type ListAccountsOutput struct {
 	Body []AccountResponse
 }
 
-func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, string, error) {
+func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, error) {
 	if platform == mastodonProvider {
 		if serverName == "" {
-			return nil, "", fmt.Errorf("server_name required for mastodon")
+			return nil, fmt.Errorf("server_name required for mastodon")
 		}
 		key := "mastodon:" + serverName
 		adapter, ok := h.providers[key]
 		if !ok {
-			return nil, "", fmt.Errorf("unknown mastodon server: %s", serverName)
+			return nil, fmt.Errorf("unknown mastodon server: %s", serverName)
 		}
-		return adapter, serverName, nil
+		return adapter, nil
 	}
 
 	adapter, ok := h.providers[platform]
 	if !ok {
-		return nil, "", fmt.Errorf("unsupported platform: %s", platform)
+		return nil, fmt.Errorf("unsupported platform: %s", platform)
 	}
-	return adapter, "", nil
+	return adapter, nil
 }
 
 func (h *OAuthHandler) ListMastodonServers(api huma.API) {
@@ -144,17 +152,27 @@ func (h *OAuthHandler) ListMastodonServers(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(_ context.Context, _ *struct{}) (*ListMastodonServersOutput, error) {
 		var servers []MastodonServerInfo
+		seen := make(map[string]struct{})
 		for key, adapter := range h.providers {
 			if !strings.HasPrefix(key, "mastodon:") {
 				continue
 			}
-			if m, ok := adapter.(interface{ InstanceURL() string }); ok {
-				name := strings.TrimPrefix(key, "mastodon:")
-				servers = append(servers, MastodonServerInfo{
-					Name:        name,
-					InstanceURL: m.InstanceURL(),
-				})
+			instanceURL := mastodonInstanceURL(adapter)
+			if instanceURL == "" {
+				continue
 			}
+			name := strings.TrimPrefix(key, "mastodon:")
+			if name == instanceURL {
+				continue
+			}
+			if _, ok := seen[instanceURL]; ok {
+				continue
+			}
+			seen[instanceURL] = struct{}{}
+			servers = append(servers, MastodonServerInfo{
+				Name:        name,
+				InstanceURL: instanceURL,
+			})
 		}
 		return &ListMastodonServersOutput{Body: servers}, nil
 	})
@@ -174,7 +192,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
 		}
 
-		adapter, _, err := h.getProvider(input.Platform, input.ServerName)
+		adapter, err := h.getProvider(input.Platform, input.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -241,7 +259,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			}
 		}
 
-		adapter, serverName, err := h.getProvider(input.Platform, input.ServerName)
+		adapter, err := h.getProvider(input.Platform, input.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -287,8 +305,8 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		}
 
 		instanceRef := ""
-		if serverName != "" {
-			instanceRef = serverName
+		if input.Platform == mastodonProvider {
+			instanceRef = mastodonInstanceURL(adapter)
 		}
 
 		return h.saveAccountAndRedirect(ctx, input.Platform, workspaceID, profile.ID, profile.Username, instanceRef, tokenResp)
@@ -338,7 +356,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
-		adapter, _, err := h.getProvider(mastodonProvider, input.Body.ServerName)
+		adapter, err := h.getProvider(mastodonProvider, input.Body.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -353,8 +371,10 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
 		}
 
+		instanceURL := mastodonInstanceURL(adapter)
+
 		// Delegate saving the account (encrypting tokens and inserting) to AccountSaver
-		if _, err := h.accountSaver.SaveAccount(ctx, mastodonProvider, input.Body.WorkspaceID, profile.ID, profile.Username, input.Body.ServerName, tokenResp); err != nil {
+		if _, err := h.accountSaver.SaveAccount(ctx, mastodonProvider, input.Body.WorkspaceID, profile.ID, profile.Username, instanceURL, tokenResp); err != nil {
 			log.Printf("[ExchangeCode] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to save account: %s", err.Error()))
 		}

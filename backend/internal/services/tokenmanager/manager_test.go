@@ -166,3 +166,39 @@ func TestForceRefreshAccessTokenPreservesStoredRefreshToken(t *testing.T) {
 	require.Equal(t, "old-refresh-token", decryptToken(t, encryptor, stored.RefreshTokenEnc))
 	require.Equal(t, "new-linkedin-access-token", decryptToken(t, encryptor, stored.AccessTokenEnc))
 }
+
+func TestForceRefreshAccessTokenUsesMastodonInstanceURLProviderKey(t *testing.T) {
+	t.Parallel()
+
+	db := createTestDB(t)
+	encryptor := crypto.NewTokenEncryptor("test-secret-key")
+	manager := NewTokenManager(db, encryptor)
+	adapter := &stubAdapter{
+		capability: platform.RefreshCapability{
+			Supported:        true,
+			CredentialSource: platform.RefreshCredentialRefreshToken,
+		},
+		tokenResp: &platform.TokenResult{
+			AccessToken:  "new-mastodon-access-token",
+			RefreshToken: "new-mastodon-refresh-token",
+			ExpiresIn:    3600,
+		},
+	}
+	manager.SetProvider("mastodon:https://mastodon.social", adapter)
+
+	account := &models.SocialAccount{
+		ID:             "acc-mastodon",
+		Platform:       "mastodon",
+		InstanceURL:    "https://mastodon.social",
+		AccountID:      "mastodon-user",
+		WorkspaceID:    "ws-1",
+		IsActive:       true,
+		TokenExpiresAt: time.Now().UTC().Add(2 * time.Minute),
+	}
+	insertAccount(t, db, encryptor, account, "old-mastodon-access-token", "old-mastodon-refresh-token")
+
+	token, err := manager.ForceRefreshAccessToken(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Equal(t, "new-mastodon-access-token", token)
+	require.Equal(t, "old-mastodon-refresh-token", adapter.gotInput.RefreshToken)
+}

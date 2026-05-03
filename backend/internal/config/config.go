@@ -61,7 +61,7 @@ func Load() *Config {
 		TwitterClientSecret: os.Getenv("X_CLIENT_SECRET"),
 		TwitterRedirectURI:  os.Getenv("X_REDIRECT_URI"),
 
-		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "http://localhost:5173/api/v1/accounts/mastodon/callback"),
+		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
 
 		LinkedInClientID:             os.Getenv("LINKEDIN_CLIENT_ID"),
 		LinkedInClientSecret:         os.Getenv("LINKEDIN_CLIENT_SECRET"),

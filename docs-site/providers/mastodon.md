@@ -42,5 +42,6 @@ MASTODON_SERVERS='[
 
 ## Notes
 
-- The current backend config default for `MASTODON_REDIRECT_URI` is the callback endpoint, not an out-of-band URI.
+- The current backend config default for `MASTODON_REDIRECT_URI` is `http://localhost:8080/api/v1/accounts/mastodon/callback`.
+- OpenPost may show the config `name` in the UI, but the persisted provider identity is the full `instance_url`.
 - The stored `instance_url` needs to stay consistent with the configured provider entry.
