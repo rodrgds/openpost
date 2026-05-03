@@ -63,7 +63,7 @@
 			localStorage.removeItem('oauth_workspace_id');
 			localStorage.removeItem('oauth_mastodon_server');
 			success = true;
-			setTimeout(() => goto('/accounts'), 2000);
+			setTimeout(() => goto('/accounts/callback?status=success&platform=mastodon'), 500);
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -88,7 +88,7 @@
 			<CardContent class="pt-6 text-center">
 				<div class="mb-4 text-5xl text-green-600">✓</div>
 				<CardTitle class="mb-2">Success</CardTitle>
-				<CardDescription>Redirecting to accounts...</CardDescription>
+				<CardDescription>Preparing your connected account...</CardDescription>
 			</CardContent>
 		</Card>
 	</PageContainer>

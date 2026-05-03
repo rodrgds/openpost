@@ -735,6 +735,21 @@ export interface components {
             day_of_week: number;
             /** @description Display label */
             label?: string;
+            /**
+             * Format: int64
+             * @description Day of week in workspace local time (0=Sunday, 6=Saturday)
+             */
+            local_day_of_week?: number;
+            /**
+             * Format: int64
+             * @description Hour in workspace local time (0-23)
+             */
+            local_hour?: number;
+            /**
+             * Format: int64
+             * @description Minute in workspace local time (0-59)
+             */
+            local_minute?: number;
             /** @description Optional set ID */
             set_id?: string;
             /**
@@ -1009,6 +1024,8 @@ export interface components {
              */
             readonly $schema?: string;
             /** Format: int64 */
+            draft_gap_minutes: number;
+            /** Format: int64 */
             media_cleanup_days: number;
             /** Format: int64 */
             random_delay_minutes: number;
@@ -1278,6 +1295,21 @@ export interface components {
             is_active: boolean;
             /** @description Display label (e.g., Morning, Lunch) */
             label?: string;
+            /**
+             * Format: int64
+             * @description Day of week in workspace local time (0=Sunday, 6=Saturday)
+             */
+            local_day_of_week: number;
+            /**
+             * Format: int64
+             * @description Hour in workspace local time (0-23)
+             */
+            local_hour: number;
+            /**
+             * Format: int64
+             * @description Minute in workspace local time (0-59)
+             */
+            local_minute: number;
             /** @description Optional set ID */
             set_id?: string;
             /**
@@ -1550,6 +1582,8 @@ export interface components {
              */
             readonly $schema?: string;
             /** Format: int64 */
+            draft_gap_minutes?: number;
+            /** Format: int64 */
             media_cleanup_days?: number;
             /** Format: int64 */
             random_delay_minutes?: number;
@@ -1570,6 +1604,8 @@ export interface components {
              * @example https://example.com/schemas/UpdateWorkspaceSettingsOutputBody.json
              */
             readonly $schema?: string;
+            /** Format: int64 */
+            draft_gap_minutes: number;
             /** Format: int64 */
             media_cleanup_days: number;
             /** Format: int64 */

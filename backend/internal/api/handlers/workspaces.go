@@ -143,6 +143,7 @@ type GetWorkspaceSettingsOutput struct {
 		WeekStart           int    `json:"week_start"`
 		MediaCleanupDays    int    `json:"media_cleanup_days"`
 		RandomDelayMinutes  int    `json:"random_delay_minutes"`
+		DraftGapMinutes     int    `json:"draft_gap_minutes"`
 		SlotStartHour       int    `json:"slot_start_hour"`
 		SlotEndHour         int    `json:"slot_end_hour"`
 		SlotIntervalMinutes int    `json:"slot_interval_minutes"`
@@ -156,6 +157,7 @@ type UpdateWorkspaceSettingsInput struct {
 		WeekStart           *int    `json:"week_start,omitempty"`
 		MediaCleanupDays    *int    `json:"media_cleanup_days,omitempty"`
 		RandomDelayMinutes  *int    `json:"random_delay_minutes,omitempty"`
+		DraftGapMinutes     *int    `json:"draft_gap_minutes,omitempty"`
 		SlotStartHour       *int    `json:"slot_start_hour,omitempty"`
 		SlotEndHour         *int    `json:"slot_end_hour,omitempty"`
 		SlotIntervalMinutes *int    `json:"slot_interval_minutes,omitempty"`
@@ -168,6 +170,7 @@ type UpdateWorkspaceSettingsOutput struct {
 		WeekStart           int    `json:"week_start"`
 		MediaCleanupDays    int    `json:"media_cleanup_days"`
 		RandomDelayMinutes  int    `json:"random_delay_minutes"`
+		DraftGapMinutes     int    `json:"draft_gap_minutes"`
 		SlotStartHour       int    `json:"slot_start_hour"`
 		SlotEndHour         int    `json:"slot_end_hour"`
 		SlotIntervalMinutes int    `json:"slot_interval_minutes"`
@@ -211,6 +214,7 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 			WeekStart           int    `json:"week_start"`
 			MediaCleanupDays    int    `json:"media_cleanup_days"`
 			RandomDelayMinutes  int    `json:"random_delay_minutes"`
+			DraftGapMinutes     int    `json:"draft_gap_minutes"`
 			SlotStartHour       int    `json:"slot_start_hour"`
 			SlotEndHour         int    `json:"slot_end_hour"`
 			SlotIntervalMinutes int    `json:"slot_interval_minutes"`
@@ -219,6 +223,7 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 			WeekStart:           workspace.WeekStart,
 			MediaCleanupDays:    workspace.MediaCleanupDays,
 			RandomDelayMinutes:  workspace.RandomDelayMinutes,
+			DraftGapMinutes:     workspace.DraftGapMinutes,
 			SlotStartHour:       workspace.SlotStartHour,
 			SlotEndHour:         workspace.SlotEndHour,
 			SlotIntervalMinutes: workspace.SlotIntervalMinutes,
@@ -280,6 +285,12 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 			}
 			workspace.RandomDelayMinutes = *input.Body.RandomDelayMinutes
 		}
+		if input.Body.DraftGapMinutes != nil {
+			if *input.Body.DraftGapMinutes < 0 || *input.Body.DraftGapMinutes > 24*60 {
+				return nil, huma.Error400BadRequest("draft_gap_minutes must be between 0 and 1440")
+			}
+			workspace.DraftGapMinutes = *input.Body.DraftGapMinutes
+		}
 		if input.Body.SlotStartHour != nil {
 			if *input.Body.SlotStartHour < 0 || *input.Body.SlotStartHour > 23 {
 				return nil, huma.Error400BadRequest("slot_start_hour must be between 0 and 23")
@@ -300,7 +311,7 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 		}
 
 		_, err = h.db.NewUpdate().Model(&workspace).
-			Column("timezone", "week_start", "media_cleanup_days", "random_delay_minutes", "slot_start_hour", "slot_end_hour", "slot_interval_minutes").
+			Column("timezone", "week_start", "media_cleanup_days", "random_delay_minutes", "draft_gap_minutes", "slot_start_hour", "slot_end_hour", "slot_interval_minutes").
 			Where("id = ?", input.PathID).
 			Exec(ctx)
 		if err != nil {
@@ -316,6 +327,7 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 			WeekStart           int    `json:"week_start"`
 			MediaCleanupDays    int    `json:"media_cleanup_days"`
 			RandomDelayMinutes  int    `json:"random_delay_minutes"`
+			DraftGapMinutes     int    `json:"draft_gap_minutes"`
 			SlotStartHour       int    `json:"slot_start_hour"`
 			SlotEndHour         int    `json:"slot_end_hour"`
 			SlotIntervalMinutes int    `json:"slot_interval_minutes"`
@@ -324,6 +336,7 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 			WeekStart:           workspace.WeekStart,
 			MediaCleanupDays:    workspace.MediaCleanupDays,
 			RandomDelayMinutes:  workspace.RandomDelayMinutes,
+			DraftGapMinutes:     workspace.DraftGapMinutes,
 			SlotStartHour:       workspace.SlotStartHour,
 			SlotEndHour:         workspace.SlotEndHour,
 			SlotIntervalMinutes: workspace.SlotIntervalMinutes,

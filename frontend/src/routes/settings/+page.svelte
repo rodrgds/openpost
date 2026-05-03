@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Input } from '$lib/components/ui/input';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
@@ -13,8 +14,10 @@
 	import CalendarIcon from 'lucide-svelte/icons/calendar';
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import TrashIcon from 'lucide-svelte/icons/trash';
+	import SparklesIcon from 'lucide-svelte/icons/sparkles';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
+	import { getLocaleTag } from '$lib/i18n';
 
 	const timezones = [
 		{ group: 'Americas', value: 'America/New_York', label: 'New York (ET)' },
@@ -96,15 +99,6 @@
 		return tz?.label ?? value;
 	}
 
-	let detectedTimezone = $state('');
-
-	onMount(() => {
-		detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		if (!workspaceCtx.settings.timezone && detectedTimezone) {
-			workspaceCtx.settings.timezone = detectedTimezone;
-		}
-	});
-
 	const cleanupDaysOptions = [
 		{ value: 0, label: 'Disabled' },
 		{ value: 7, label: '7 days' },
@@ -127,6 +121,7 @@
 				week_start: workspaceCtx.settings.week_start,
 				media_cleanup_days: workspaceCtx.settings.media_cleanup_days,
 				random_delay_minutes: workspaceCtx.settings.random_delay_minutes,
+				draft_gap_minutes: workspaceCtx.settings.draft_gap_minutes,
 				slot_start_hour: workspaceCtx.settings.slot_start_hour,
 				slot_end_hour: workspaceCtx.settings.slot_end_hour,
 				slot_interval_minutes: workspaceCtx.settings.slot_interval_minutes
@@ -139,14 +134,12 @@
 		}
 	}
 
-	function parseDurationInput(input: string): number | null {
+	function parseDurationInput(input: string, allowZero: boolean = false): number | null {
 		input = input.trim().toLowerCase();
-		// Try direct number first (assume minutes)
 		const direct = parseInt(input, 10);
-		if (!isNaN(direct) && direct > 0 && String(direct) === input) {
+		if (!isNaN(direct) && String(direct) === input && (direct > 0 || (allowZero && direct === 0))) {
 			return direct;
 		}
-		// Parse patterns like "15m", "30 min", "1h", "1h30m", "90 minutes", "2 hours"
 		const hourMatch = input.match(/(\d+)\s*h/);
 		const minMatch = input.match(/(\d+)\s*m/);
 		let total = 0;
@@ -158,6 +151,8 @@
 
 	let intervalInput = $state(String(workspaceCtx.settings.slot_interval_minutes));
 	let intervalError = $state('');
+	let draftGapInput = $state(String(workspaceCtx.settings.draft_gap_minutes));
+	let draftGapError = $state('');
 
 	function handleIntervalChange(value: string) {
 		intervalInput = value;
@@ -170,7 +165,17 @@
 		}
 	}
 
-	// Posting schedules
+	function handleDraftGapChange(value: string) {
+		draftGapInput = value;
+		const parsed = parseDurationInput(value, true);
+		if (parsed !== null && parsed >= 0 && parsed <= 24 * 60) {
+			draftGapError = '';
+			workspaceCtx.settings.draft_gap_minutes = parsed;
+		} else if (value.trim() !== '') {
+			draftGapError = 'Enter a duration between 0 minutes and 24 hours (e.g. 45m, 2h, 0)';
+		}
+	}
+
 	interface PostingSchedule {
 		id: string;
 		workspace_id: string;
@@ -178,25 +183,62 @@
 		utc_hour: number;
 		utc_minute: number;
 		day_of_week: number;
+		local_hour: number;
+		local_minute: number;
+		local_day_of_week: number;
 		label: string;
 		is_active: boolean;
 		created_at: string;
 	}
 
+	interface ScheduleRow {
+		key: string;
+		local_hour: number;
+		local_minute: number;
+		label: string;
+		days: Record<number, PostingSchedule | undefined>;
+	}
+
 	let schedules = $state<PostingSchedule[]>([]);
 	let loadingSchedules = $state(false);
-	let showAddSchedule = $state(false);
 	let showSuggestSchedule = $state(false);
 	let suggestedPostsPerDay = $state(3);
 	let generatingSchedule = $state(false);
-	let newSchedule = $state({
-		day_of_week: 1,
-		utc_hour: 9,
-		utc_minute: 0,
-		label: ''
-	});
+	let newTimeInput = $state('09:00');
+	let newTimeError = $state('');
+	let newTimeDays = $state<number[]>([1, 2, 3, 4, 5]);
 
 	const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+	const dayShortNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+	const dayOrder = $derived.by(() => {
+		const start = workspaceCtx.settings.week_start === 0 ? 0 : 1;
+		return Array.from({ length: 7 }, (_, index) => (start + index) % 7);
+	});
+
+	const scheduleRows = $derived.by(() => {
+		const rows = new Map<string, ScheduleRow>();
+		for (const schedule of schedules) {
+			const key = `${schedule.local_hour}:${schedule.local_minute}`;
+			if (!rows.has(key)) {
+				rows.set(key, {
+					key,
+					local_hour: schedule.local_hour,
+					local_minute: schedule.local_minute,
+					label: schedule.label,
+					days: {}
+				});
+			}
+			const row = rows.get(key)!;
+			row.days[schedule.local_day_of_week] = schedule;
+			if (!row.label && schedule.label) {
+				row.label = schedule.label;
+			}
+		}
+		return Array.from(rows.values()).sort(
+			(a, b) => a.local_hour * 60 + a.local_minute - (b.local_hour * 60 + b.local_minute)
+		);
+	});
 
 	async function loadSchedules() {
 		if (!workspaceCtx.currentWorkspace) return;
@@ -215,25 +257,59 @@
 		}
 	}
 
-	async function addSchedule() {
+	function parseClockInput(value: string): { hour: number; minute: number } | null {
+		const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+		if (!match) return null;
+		const hour = Number(match[1]);
+		const minute = Number(match[2]);
+		if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+		return { hour, minute };
+	}
+
+	async function createSchedule(dayOfWeek: number, localHour: number, localMinute: number) {
 		if (!workspaceCtx.currentWorkspace) return;
+		const { error: err } = await (client as any).POST('/posting-schedules', {
+			body: {
+				workspace_id: workspaceCtx.currentWorkspace.id,
+				local_day_of_week: dayOfWeek,
+				local_hour: localHour,
+				local_minute: localMinute,
+				day_of_week: 0,
+				utc_hour: 0,
+				utc_minute: 0,
+				label: ''
+			}
+		});
+		if (err) throw err;
+	}
+
+	async function addTimeRow() {
+		const parsed = parseClockInput(newTimeInput);
+		if (!parsed) {
+			newTimeError = 'Use HH:MM in 24-hour format.';
+			return;
+		}
+		if (newTimeDays.length === 0) {
+			newTimeError = 'Select at least one day.';
+			return;
+		}
+		newTimeError = '';
 		try {
-			const { error: err } = await (client as any).POST('/posting-schedules', {
-				body: {
-					workspace_id: workspaceCtx.currentWorkspace.id,
-					day_of_week: newSchedule.day_of_week,
-					utc_hour: newSchedule.utc_hour,
-					utc_minute: newSchedule.utc_minute,
-					label: newSchedule.label
+			for (const day of newTimeDays) {
+				const exists = schedules.some(
+					(schedule) =>
+						schedule.local_day_of_week === day &&
+						schedule.local_hour === parsed.hour &&
+						schedule.local_minute === parsed.minute
+				);
+				if (!exists) {
+					await createSchedule(day, parsed.hour, parsed.minute);
 				}
-			});
-			if (err) throw err;
-			showAddSchedule = false;
-			newSchedule = { day_of_week: 1, utc_hour: 9, utc_minute: 0, label: '' };
+			}
 			await loadSchedules();
-			toastMessage = 'Schedule added successfully';
+			toastMessage = 'Time row added successfully';
 		} catch (e) {
-			toastMessage = (e as Error).message || 'Failed to add schedule';
+			toastMessage = (e as Error).message || 'Failed to add schedule row';
 		}
 	}
 
@@ -248,6 +324,46 @@
 		} catch (e) {
 			toastMessage = (e as Error).message || 'Failed to delete schedule';
 		}
+	}
+
+	async function toggleScheduleCell(row: ScheduleRow, dayOfWeek: number) {
+		try {
+			const existing = row.days[dayOfWeek];
+			if (existing) {
+				await deleteSchedule(existing.id);
+				return;
+			}
+			await createSchedule(dayOfWeek, row.local_hour, row.local_minute);
+			await loadSchedules();
+			toastMessage = 'Schedule updated successfully';
+		} catch (e) {
+			toastMessage = (e as Error).message || 'Failed to update schedule';
+		}
+	}
+
+	async function removeTimeRow(row: ScheduleRow) {
+		try {
+			for (const schedule of Object.values(row.days)) {
+				if (schedule) {
+					const { error: err } = await (client as any).DELETE('/posting-schedules/{id}', {
+						params: { path: { id: schedule.id } }
+					});
+					if (err) throw err;
+				}
+			}
+			await loadSchedules();
+			toastMessage = 'Time row removed successfully';
+		} catch (e) {
+			toastMessage = (e as Error).message || 'Failed to remove schedule row';
+		}
+	}
+
+	function toggleNewDay(dayOfWeek: number) {
+		if (newTimeDays.includes(dayOfWeek)) {
+			newTimeDays = newTimeDays.filter((value) => value !== dayOfWeek);
+			return;
+		}
+		newTimeDays = [...newTimeDays, dayOfWeek].sort((a, b) => a - b);
 	}
 
 	async function generateSuggestedSchedule() {
@@ -272,20 +388,10 @@
 	}
 
 	function formatTime(hour: number, minute: number): string {
-		const h = hour.toString().padStart(2, '0');
-		const m = minute.toString().padStart(2, '0');
-		return `${h}:${m}`;
-	}
-
-	function formatLocalTime(hour: number, minute: number): string {
-		// Create a date in UTC with the given time
-		const utcDate = new Date();
-		utcDate.setUTCHours(hour, minute, 0, 0);
-		// Format in local timezone
-		return utcDate.toLocaleTimeString('en-US', {
-			hour: '2-digit',
+		return new Date(Date.UTC(2024, 0, 1, hour, minute)).toLocaleTimeString(getLocaleTag(), {
+			hour: 'numeric',
 			minute: '2-digit',
-			hour12: false
+			timeZone: 'UTC'
 		});
 	}
 
@@ -293,6 +399,11 @@
 		if (workspaceCtx.currentWorkspace) {
 			loadSchedules();
 		}
+	});
+
+	$effect(() => {
+		intervalInput = String(workspaceCtx.settings.slot_interval_minutes);
+		draftGapInput = String(workspaceCtx.settings.draft_gap_minutes);
 	});
 
 	function handleTimezoneChange(value: string) {
@@ -331,118 +442,189 @@
 	loadingMessage="Loading workspace..."
 >
 	<div class="space-y-8">
-		<!-- Workspace Info -->
 		<section class="space-y-4">
 			<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
-			<div class="space-y-4">
-				<div class="flex items-center gap-4">
-					<span class="text-sm font-medium">Current Workspace</span>
-					<span class="text-sm text-muted-foreground">{workspaceCtx.currentWorkspace?.name}</span>
-				</div>
+			<div class="flex items-center gap-4">
+				<span class="text-sm font-medium">Current Workspace</span>
+				<span class="text-sm text-muted-foreground">{workspaceCtx.currentWorkspace?.name}</span>
 			</div>
 		</section>
 
-		<!-- Date & Time Settings -->
 		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Date & Time
 			</h2>
-			<div class="space-y-4">
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div class="space-y-2">
-						<label class="text-sm font-medium" for="timezone-select">Timezone</label>
-						<Select.Root
-							type="single"
-							value={workspaceCtx.settings.timezone}
-							onValueChange={handleTimezoneChange}
-						>
-							<Select.Trigger id="timezone-select" class="w-full">
-								{getTimezoneLabel(workspaceCtx.settings.timezone)}
-							</Select.Trigger>
-							<Select.Content class="max-h-80 overflow-y-auto">
-								{#each Object.entries(groupedTimezones()) as [group, tzs]}
-									<Select.Group>
-										<Select.GroupHeading class="text-xs">{group}</Select.GroupHeading>
-										{#each tzs as tz}
-											<Select.Item value={tz.value}>{tz.label}</Select.Item>
-										{/each}
-									</Select.Group>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-						<p class="text-sm text-muted-foreground">Used for displaying scheduled post times</p>
-					</div>
-
-					<div class="space-y-2">
-						<label class="text-sm font-medium" for="week-start-select">Week Starts On</label>
-						<Select.Root
-							type="single"
-							value={String(workspaceCtx.settings.week_start)}
-							onValueChange={(v) => handleWeekStartChange(Number(v))}
-						>
-							<Select.Trigger id="week-start-select" class="w-full">
-								{workspaceCtx.settings.week_start === 0 ? 'Sunday' : 'Monday'}
-							</Select.Trigger>
-							<Select.Content>
-								<Select.Item value="0">Sunday</Select.Item>
-								<Select.Item value="1">Monday</Select.Item>
-							</Select.Content>
-						</Select.Root>
-						<p class="text-sm text-muted-foreground">Affects the calendar display in the sidebar</p>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<!-- Media Cleanup Settings -->
-		<section class="space-y-4">
-			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
-				<ImageIcon class="h-5 w-5 text-muted-foreground" />
-				Media Cleanup
-			</h2>
-			<div class="space-y-4">
+			<div class="grid gap-4 sm:grid-cols-2">
 				<div class="space-y-2">
-					<label class="text-sm font-medium" for="cleanup-select">Auto-delete unused media</label>
+					<label class="text-sm font-medium" for="timezone-select">Timezone</label>
 					<Select.Root
 						type="single"
-						value={String(workspaceCtx.settings.media_cleanup_days)}
-						onValueChange={(v) => handleCleanupDaysChange(Number(v))}
+						value={workspaceCtx.settings.timezone}
+						onValueChange={handleTimezoneChange}
 					>
-						<Select.Trigger id="cleanup-select" class="w-full">
-							{cleanupDaysOptions.find((o) => o.value === workspaceCtx.settings.media_cleanup_days)
-								?.label || 'Disabled'}
+						<Select.Trigger id="timezone-select" class="w-full">
+							{getTimezoneLabel(workspaceCtx.settings.timezone)}
 						</Select.Trigger>
-						<Select.Content>
-							{#each cleanupDaysOptions as option}
-								<Select.Item value={String(option.value)}>{option.label}</Select.Item>
+						<Select.Content class="max-h-80 overflow-y-auto">
+							{#each Object.entries(groupedTimezones()) as [group, tzs]}
+								<Select.Group>
+									<Select.GroupHeading class="text-xs">{group}</Select.GroupHeading>
+									{#each tzs as tz}
+										<Select.Item value={tz.value}>{tz.label}</Select.Item>
+									{/each}
+								</Select.Group>
 							{/each}
 						</Select.Content>
 					</Select.Root>
 					<p class="text-sm text-muted-foreground">
-						Automatically delete unused, non-favorited media after this period. Favorited media is
-						always kept.
+						Detected from your browser the first time a workspace loads, then saved here.
+					</p>
+				</div>
+
+				<div class="space-y-2">
+					<label class="text-sm font-medium" for="week-start-select">Week Starts On</label>
+					<Select.Root
+						type="single"
+						value={String(workspaceCtx.settings.week_start)}
+						onValueChange={(v) => handleWeekStartChange(Number(v))}
+					>
+						<Select.Trigger id="week-start-select" class="w-full">
+							{workspaceCtx.settings.week_start === 0 ? 'Sunday' : 'Monday'}
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Item value="0">Sunday</Select.Item>
+							<Select.Item value="1">Monday</Select.Item>
+						</Select.Content>
+					</Select.Root>
+					<p class="text-sm text-muted-foreground">
+						Defaulted from your locale on first load and used for calendar layout.
 					</p>
 				</div>
 			</div>
 		</section>
 
-		<!-- Posting Schedule Settings -->
+		<section class="space-y-4">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ImageIcon class="h-5 w-5 text-muted-foreground" />
+				Media Cleanup
+			</h2>
+			<div class="space-y-2">
+				<label class="text-sm font-medium" for="cleanup-select">Auto-delete unused media</label>
+				<Select.Root
+					type="single"
+					value={String(workspaceCtx.settings.media_cleanup_days)}
+					onValueChange={(v) => handleCleanupDaysChange(Number(v))}
+				>
+					<Select.Trigger id="cleanup-select" class="w-full">
+						{cleanupDaysOptions.find((o) => o.value === workspaceCtx.settings.media_cleanup_days)
+							?.label || 'Disabled'}
+					</Select.Trigger>
+					<Select.Content>
+						{#each cleanupDaysOptions as option}
+							<Select.Item value={String(option.value)}>{option.label}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+				<p class="text-sm text-muted-foreground">
+					Automatically delete unused, non-favorited media after this period. Favorited media is
+					always kept.
+				</p>
+			</div>
+		</section>
+
 		<section class="rounded-lg border p-6">
 			<div class="mb-4 flex items-center justify-between">
 				<h2 class="flex items-center gap-2 text-lg font-semibold">
 					<CalendarIcon class="h-5 w-5 text-muted-foreground" />
 					Posting Schedule
 				</h2>
-				<Button onclick={() => (showAddSchedule = true)} variant="outline" size="sm">
-					<PlusIcon class="mr-2 h-4 w-4" />
-					Add Time Slot
+				<Button
+					onclick={() => (showSuggestSchedule = !showSuggestSchedule)}
+					variant="outline"
+					size="sm"
+				>
+					<SparklesIcon class="mr-2 h-4 w-4" />
+					Suggest Weekly Pattern
 				</Button>
 			</div>
 			<p class="mb-4 text-sm text-muted-foreground">
-				Define your preferred posting times. The "Suggest Time" button in the compose page will use
-				these slots.
+				Define reusable posting times in your workspace timezone. Toggle each weekday checkbox to
+				decide when that time is active. The "Suggest Time" action will use these slots first.
 			</p>
+
+			<div class="mb-4 rounded-xl border bg-muted/20 p-4">
+				<div class="grid gap-4 lg:grid-cols-[180px_1fr_auto]">
+					<div class="space-y-2">
+						<label class="text-sm font-medium" for="new-time">Add time row</label>
+						<Input id="new-time" bind:value={newTimeInput} type="time" step="900" />
+					</div>
+					<div class="space-y-2">
+						<span class="text-sm font-medium">Active days</span>
+						<div class="flex flex-wrap gap-3">
+							{#each dayOrder as dayIndex}
+								<label
+									class="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+								>
+									<Checkbox
+										checked={newTimeDays.includes(dayIndex)}
+										onCheckedChange={() => toggleNewDay(dayIndex)}
+									/>
+									<span>{dayShortNames[dayIndex]}</span>
+								</label>
+							{/each}
+						</div>
+					</div>
+					<div class="flex items-end">
+						<Button onclick={addTimeRow} class="w-full lg:w-auto">
+							<PlusIcon class="mr-2 h-4 w-4" />
+							Add Time
+						</Button>
+					</div>
+				</div>
+				{#if newTimeError}
+					<p class="mt-3 text-xs text-destructive">{newTimeError}</p>
+				{:else}
+					<p class="mt-3 text-xs text-muted-foreground">
+						New rows are created in {getTimezoneLabel(workspaceCtx.settings.timezone)}.
+					</p>
+				{/if}
+			</div>
+
+			{#if showSuggestSchedule}
+				<div class="mb-4 rounded-xl border bg-background p-4">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+						<div class="space-y-2">
+							<label class="text-sm font-medium" for="posts-per-day">Suggested posts per day</label>
+							<Select.Root
+								type="single"
+								value={String(suggestedPostsPerDay)}
+								onValueChange={(v) => (suggestedPostsPerDay = Number(v))}
+							>
+								<Select.Trigger id="posts-per-day" class="w-28">
+									{suggestedPostsPerDay}
+								</Select.Trigger>
+								<Select.Content class="max-h-60 overflow-y-auto">
+									{#each Array.from({ length: 10 }, (_, i) => i + 1) as n}
+										<Select.Item value={String(n)}>{n}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						</div>
+						<div class="flex gap-2">
+							<Button onclick={() => (showSuggestSchedule = false)} variant="outline" size="sm"
+								>Cancel</Button
+							>
+							<Button onclick={generateSuggestedSchedule} size="sm" disabled={generatingSchedule}>
+								{#if generatingSchedule}
+									<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+								{/if}
+								Generate
+							</Button>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			{#if loadingSchedules}
 				<div class="space-y-2">
@@ -450,164 +632,66 @@
 					<Skeleton class="h-14 rounded-md" />
 					<Skeleton class="h-14 rounded-md" />
 				</div>
-			{:else if schedules.length === 0}
-				<div class="rounded-md border border-dashed p-8 text-center text-muted-foreground">
-					<p class="text-sm">No posting schedules configured.</p>
-					<p class="mt-1 text-xs">Add time slots to enable the "Suggest Time" feature.</p>
-					{#if !showSuggestSchedule}
-						<Button
-							onclick={() => (showSuggestSchedule = true)}
-							variant="outline"
-							size="sm"
-							class="mt-4"
-						>
-							Use suggested schedule
-						</Button>
-					{:else}
-						<div class="mt-4 flex flex-col items-center gap-3">
-							<div class="flex items-center gap-2">
-								<label class="text-sm" for="posts-per-day">Posts per day</label>
-								<Select.Root
-									type="single"
-									value={String(suggestedPostsPerDay)}
-									onValueChange={(v) => (suggestedPostsPerDay = Number(v))}
-								>
-									<Select.Trigger id="posts-per-day" class="w-24">
-										{suggestedPostsPerDay}
-									</Select.Trigger>
-									<Select.Content class="max-h-60 overflow-y-auto">
-										{#each Array.from({ length: 10 }, (_, i) => i + 1) as n}
-											<Select.Item value={String(n)}>{n}</Select.Item>
-										{/each}
-									</Select.Content>
-								</Select.Root>
-							</div>
-							<div class="flex gap-2">
-								<Button onclick={() => (showSuggestSchedule = false)} variant="outline" size="sm">
-									Cancel
-								</Button>
-								<Button onclick={generateSuggestedSchedule} size="sm" disabled={generatingSchedule}>
-									{#if generatingSchedule}
-										<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
-									{/if}
-									Generate Schedule
-								</Button>
-							</div>
-						</div>
-					{/if}
-				</div>
 			{:else}
-				<div class="space-y-2">
-					{#each dayNames as dayName, dayIndex}
-						{@const daySchedules = schedules.filter((s) => s.day_of_week === dayIndex)}
-						{#if daySchedules.length > 0}
-							<div class="rounded-md border p-3">
-								<div class="mb-2 text-sm font-medium">{dayName}</div>
-								<div class="flex flex-wrap gap-2">
-									{#each daySchedules as schedule}
-										<div class="flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 text-sm">
-											<span class="font-medium">
-												{formatLocalTime(schedule.utc_hour, schedule.utc_minute)}
-											</span>
-											{#if schedule.label}
-												<span class="text-xs text-muted-foreground">({schedule.label})</span>
-											{/if}
-											<button
-												onclick={() => deleteSchedule(schedule.id)}
-												class="ml-1 text-muted-foreground hover:text-destructive"
-											>
-												<TrashIcon class="h-3.5 w-3.5" />
-											</button>
-										</div>
-									{/each}
+				<div class="overflow-hidden rounded-xl border">
+					<div class="grid grid-cols-[120px_repeat(7,minmax(56px,1fr))_52px] border-b bg-muted/30">
+						<div
+							class="px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+						>
+							Time
+						</div>
+						{#each dayOrder as dayIndex}
+							<div
+								class="px-2 py-3 text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+							>
+								{dayShortNames[dayIndex]}
+							</div>
+						{/each}
+						<div class="px-2 py-3"></div>
+					</div>
+
+					{#if scheduleRows.length === 0}
+						<div class="px-4 py-10 text-center text-sm text-muted-foreground">
+							No posting times yet. Add a row above or generate a suggested weekly pattern.
+						</div>
+					{:else}
+						{#each scheduleRows as row (row.key)}
+							<div
+								class="grid grid-cols-[120px_repeat(7,minmax(56px,1fr))_52px] border-b last:border-b-0"
+							>
+								<div class="px-4 py-3">
+									<div class="font-medium">{formatTime(row.local_hour, row.local_minute)}</div>
+									{#if row.label}
+										<div class="text-xs text-muted-foreground">{row.label}</div>
+									{/if}
+								</div>
+								{#each dayOrder as dayIndex}
+									<div class="flex items-center justify-center px-2 py-3">
+										<Checkbox
+											checked={Boolean(row.days[dayIndex])}
+											onCheckedChange={() => toggleScheduleCell(row, dayIndex)}
+											aria-label={`Toggle ${dayNames[dayIndex]} ${formatTime(row.local_hour, row.local_minute)}`}
+										/>
+									</div>
+								{/each}
+								<div class="flex items-center justify-center px-2 py-3">
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-8 w-8"
+										onclick={() => removeTimeRow(row)}
+										aria-label={`Remove ${formatTime(row.local_hour, row.local_minute)} row`}
+									>
+										<TrashIcon class="h-4 w-4" />
+									</Button>
 								</div>
 							</div>
-						{/if}
-					{/each}
-				</div>
-			{/if}
-
-			{#if showAddSchedule}
-				<div class="mt-4 rounded-md border bg-muted/30 p-4">
-					<h3 class="mb-3 text-sm font-medium">Add New Time Slot</h3>
-					<div class="grid gap-4 sm:grid-cols-4">
-						<div class="space-y-2">
-							<label class="text-xs" for="schedule-day">Day</label>
-							<Select.Root
-								type="single"
-								value={String(newSchedule.day_of_week)}
-								onValueChange={(v) => (newSchedule.day_of_week = Number(v))}
-							>
-								<Select.Trigger id="schedule-day" class="w-full">
-									{dayNames[newSchedule.day_of_week]}
-								</Select.Trigger>
-								<Select.Content>
-									{#each dayNames as name, idx}
-										<Select.Item value={String(idx)}>{name}</Select.Item>
-									{/each}
-								</Select.Content>
-							</Select.Root>
-						</div>
-						<div class="space-y-2">
-							<label class="text-xs" for="schedule-hour">Hour (UTC)</label>
-							<Select.Root
-								type="single"
-								value={String(newSchedule.utc_hour)}
-								onValueChange={(v) => (newSchedule.utc_hour = Number(v))}
-							>
-								<Select.Trigger id="schedule-hour" class="w-full">
-									{newSchedule.utc_hour.toString().padStart(2, '0')}:00
-								</Select.Trigger>
-								<Select.Content class="max-h-60 overflow-y-auto">
-									{#each Array.from({ length: 24 }, (_, i) => i) as hour}
-										<Select.Item value={String(hour)}>
-											{hour.toString().padStart(2, '0')}:00
-										</Select.Item>
-									{/each}
-								</Select.Content>
-							</Select.Root>
-						</div>
-						<div class="space-y-2">
-							<label class="text-xs" for="schedule-minute">Minute</label>
-							<Select.Root
-								type="single"
-								value={String(newSchedule.utc_minute)}
-								onValueChange={(v) => (newSchedule.utc_minute = Number(v))}
-							>
-								<Select.Trigger id="schedule-minute" class="w-full">
-									{newSchedule.utc_minute.toString().padStart(2, '0')}
-								</Select.Trigger>
-								<Select.Content>
-									{#each [0, 15, 30, 45] as minute}
-										<Select.Item value={String(minute)}>
-											{minute.toString().padStart(2, '0')}
-										</Select.Item>
-									{/each}
-								</Select.Content>
-							</Select.Root>
-						</div>
-						<div class="space-y-2">
-							<label class="text-xs" for="schedule-label">Label (optional)</label>
-							<input
-								id="schedule-label"
-								type="text"
-								bind:value={newSchedule.label}
-								placeholder="e.g., Morning"
-								class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-							/>
-						</div>
-					</div>
-					<div class="mt-4 flex justify-end gap-2">
-						<Button onclick={() => (showAddSchedule = false)} variant="outline" size="sm">
-							Cancel
-						</Button>
-						<Button onclick={addSchedule} size="sm">Add Slot</Button>
-					</div>
+						{/each}
+					{/if}
 				</div>
 			{/if}
 		</section>
 
-		<!-- Natural Posting Settings -->
 		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
@@ -643,10 +727,29 @@
 						</Select.Content>
 					</Select.Root>
 				</div>
+				<div class="space-y-2">
+					<label class="text-sm font-medium" for="draft-gap">Draft spillover gap</label>
+					<Input
+						id="draft-gap"
+						type="text"
+						value={draftGapInput}
+						oninput={(e) => handleDraftGapChange((e.target as HTMLInputElement).value)}
+						placeholder="e.g. 45m, 2h, 0"
+						class={draftGapError ? 'border-destructive' : ''}
+					/>
+					{#if draftGapError}
+						<p class="text-xs text-destructive">{draftGapError}</p>
+					{:else}
+						<p class="text-xs text-muted-foreground">
+							When a day has no unused schedule slots left, "Suggest Time" will place the next post
+							at least {workspaceCtx.settings.draft_gap_minutes} minutes after the latest scheduled post
+							that day. Use `0` to disable the spillover rule.
+						</p>
+					{/if}
+				</div>
 			</div>
 		</section>
 
-		<!-- Time Slot Configuration -->
 		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
@@ -669,9 +772,9 @@
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
 								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
-									<Select.Item value={String(hour)}>
-										{hour.toString().padStart(2, '0')}:00
-									</Select.Item>
+									<Select.Item value={String(hour)}
+										>{hour.toString().padStart(2, '0')}:00</Select.Item
+									>
 								{/each}
 							</Select.Content>
 						</Select.Root>
@@ -688,9 +791,9 @@
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
 								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
-									<Select.Item value={String(hour)}>
-										{hour.toString().padStart(2, '0')}:00
-									</Select.Item>
+									<Select.Item value={String(hour)}
+										>{hour.toString().padStart(2, '0')}:00</Select.Item
+									>
 								{/each}
 							</Select.Content>
 						</Select.Root>
@@ -719,7 +822,6 @@
 			</div>
 		</section>
 
-		<!-- Save Button -->
 		<div class="flex justify-end">
 			<Button onclick={saveSettings} disabled={saving}>
 				{#if saving}

@@ -318,12 +318,13 @@ func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName,
 		return nil, huma.Error500InternalServerError("failed to save account")
 	}
 
-	log.Printf("[Callback] Account saved successfully: ID=%s, redirecting to /", account.ID)
+	successPath := "/accounts/callback?status=success&platform=" + url.QueryEscape(platformName)
+	log.Printf("[Callback] Account saved successfully: ID=%s, redirecting to %s", account.ID, successPath)
 
 	return &huma.StreamResponse{
 		Body: func(ctx huma.Context) {
 			ctx.SetStatus(http.StatusTemporaryRedirect)
-			ctx.SetHeader("Location", "/")
+			ctx.SetHeader("Location", successPath)
 		},
 	}, nil
 }

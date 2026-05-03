@@ -29,7 +29,15 @@
 		'/connect',
 		'/demo',
 		'/demo/paraglide',
-		'/accounts/mastodon/callback'
+		'/accounts/mastodon/callback',
+		'/accounts/callback'
+	];
+
+	const standaloneRoutes = [
+		'/onboarding',
+		'/connect',
+		'/accounts/mastodon/callback',
+		'/accounts/callback'
 	];
 
 	let needsOnboarding = $state(false);
@@ -144,7 +152,7 @@
 	{:else}
 		{@render children()}
 	{/if}
-{:else if currentPath === '/onboarding' || currentPath === '/connect'}
+{:else if standaloneRoutes.includes(currentPath)}
 	<div class="fixed top-4 right-4 z-20">
 		<LanguageSwitcher compact />
 	</div>

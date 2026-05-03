@@ -463,10 +463,7 @@
 						<DropdownMenu.Separator />
 
 						<DropdownMenu.Group>
-							<div class="px-2 py-1.5">
-								<LanguageSwitcher compact />
-							</div>
-							<DropdownMenu.Separator />
+							<LanguageSwitcher variant="menu" />
 							<DropdownMenu.Item onclick={toggleMode}>
 								<SunIcon
 									class="mr-2 size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"

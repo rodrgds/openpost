@@ -177,6 +177,21 @@
 						"type": "integer"
 					},
 					"label": { "description": "Display label", "type": "string" },
+					"local_day_of_week": {
+						"description": "Day of week in workspace local time (0=Sunday, 6=Saturday)",
+						"format": "int64",
+						"type": "integer"
+					},
+					"local_hour": {
+						"description": "Hour in workspace local time (0-23)",
+						"format": "int64",
+						"type": "integer"
+					},
+					"local_minute": {
+						"description": "Minute in workspace local time (0-59)",
+						"format": "int64",
+						"type": "integer"
+					},
 					"set_id": { "description": "Optional set ID", "type": "string" },
 					"utc_hour": { "description": "Hour in UTC (0-23)", "format": "int64", "type": "integer" },
 					"utc_minute": {
@@ -586,6 +601,7 @@
 						"readOnly": true,
 						"type": "string"
 					},
+					"draft_gap_minutes": { "format": "int64", "type": "integer" },
 					"media_cleanup_days": { "format": "int64", "type": "integer" },
 					"random_delay_minutes": { "format": "int64", "type": "integer" },
 					"slot_end_hour": { "format": "int64", "type": "integer" },
@@ -597,6 +613,7 @@
 				"required": [
 					"timezone",
 					"week_start",
+					"draft_gap_minutes",
 					"media_cleanup_days",
 					"random_delay_minutes",
 					"slot_start_hour",
@@ -917,6 +934,21 @@
 					"id": { "description": "Schedule ID", "type": "string" },
 					"is_active": { "description": "Whether this slot is active", "type": "boolean" },
 					"label": { "description": "Display label (e.g., Morning, Lunch)", "type": "string" },
+					"local_day_of_week": {
+						"description": "Day of week in workspace local time (0=Sunday, 6=Saturday)",
+						"format": "int64",
+						"type": "integer"
+					},
+					"local_hour": {
+						"description": "Hour in workspace local time (0-23)",
+						"format": "int64",
+						"type": "integer"
+					},
+					"local_minute": {
+						"description": "Minute in workspace local time (0-59)",
+						"format": "int64",
+						"type": "integer"
+					},
 					"set_id": { "description": "Optional set ID", "type": "string" },
 					"utc_hour": { "description": "Hour in UTC (0-23)", "format": "int64", "type": "integer" },
 					"utc_minute": {
@@ -932,6 +964,9 @@
 					"utc_hour",
 					"utc_minute",
 					"day_of_week",
+					"local_hour",
+					"local_minute",
+					"local_day_of_week",
 					"is_active",
 					"created_at"
 				],
@@ -1298,6 +1333,7 @@
 						"readOnly": true,
 						"type": "string"
 					},
+					"draft_gap_minutes": { "format": "int64", "type": "integer" },
 					"media_cleanup_days": { "format": "int64", "type": "integer" },
 					"random_delay_minutes": { "format": "int64", "type": "integer" },
 					"slot_end_hour": { "format": "int64", "type": "integer" },
@@ -1318,6 +1354,7 @@
 						"readOnly": true,
 						"type": "string"
 					},
+					"draft_gap_minutes": { "format": "int64", "type": "integer" },
 					"media_cleanup_days": { "format": "int64", "type": "integer" },
 					"random_delay_minutes": { "format": "int64", "type": "integer" },
 					"slot_end_hour": { "format": "int64", "type": "integer" },
@@ -1329,6 +1366,7 @@
 				"required": [
 					"timezone",
 					"week_start",
+					"draft_gap_minutes",
 					"media_cleanup_days",
 					"random_delay_minutes",
 					"slot_start_hour",

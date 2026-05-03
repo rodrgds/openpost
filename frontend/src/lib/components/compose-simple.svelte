@@ -186,8 +186,7 @@
 
 	const selectedPlatformLimits = $derived.by(() => {
 		const seen = new Set<string>();
-		return accounts
-			.filter((a) => selectedAccountIds.includes(a.id))
+		return selectedAccounts
 			.map((a) => {
 				const key = getPlatformKey(a.platform);
 				return {
@@ -203,10 +202,38 @@
 			});
 	});
 
-	const maxChars = $derived.by(() => {
-		const selected = accounts.filter((a) => selectedAccountIds.includes(a.id));
-		if (selected.length === 0) return 280;
-		const limits = selected.map((a) => PLATFORM_CHAR_LIMITS[getPlatformKey(a.platform)] ?? 280);
+	const editorTargetAccounts = $derived.by(() => {
+		if (activeVariantAccountId) {
+			const activeAccount = accounts.find((a) => a.id === activeVariantAccountId);
+			return activeAccount ? [activeAccount] : [];
+		}
+
+		return selectedAccounts.filter((account) => !variants.has(account.id));
+	});
+
+	const editorPlatformLimits = $derived.by(() => {
+		const seen = new Set<string>();
+		return editorTargetAccounts
+			.map((a) => {
+				const key = getPlatformKey(a.platform);
+				return {
+					platform: getPlatformName(a.platform),
+					key,
+					limit: PLATFORM_CHAR_LIMITS[key] ?? 280
+				};
+			})
+			.filter((item) => {
+				if (seen.has(item.key)) return false;
+				seen.add(item.key);
+				return true;
+			});
+	});
+
+	const editorMaxChars = $derived.by(() => {
+		if (editorTargetAccounts.length === 0) return 280;
+		const limits = editorTargetAccounts.map(
+			(a) => PLATFORM_CHAR_LIMITS[getPlatformKey(a.platform)] ?? 280
+		);
 		return Math.min(...limits);
 	});
 
@@ -1802,7 +1829,7 @@
 															<svg
 																class="h-4 w-4 {getCharCounterColor(
 																	getEditorContentForPost(post).length,
-																	maxChars
+																	editorMaxChars
 																)}"
 																viewBox="0 0 20 20"
 															>
@@ -1822,7 +1849,7 @@
 																	fill="none"
 																	stroke={getCharCounterStrokeColor(
 																		getEditorContentForPost(post).length,
-																		maxChars
+																		editorMaxChars
 																	)}
 																	stroke-width="2.5"
 																	stroke-linecap="round"
@@ -1830,13 +1857,13 @@
 																	stroke-dashoffset={50.27 *
 																		Math.max(
 																			0,
-																			1 - getEditorContentForPost(post).length / maxChars
+																			1 - getEditorContentForPost(post).length / editorMaxChars
 																		)}
 																	transform="rotate(-90 10 10)"
 																/>
 															</svg>
 															<span class="text-[10px] text-muted-foreground/60 tabular-nums"
-																>{getEditorContentForPost(post).length}/{maxChars}</span
+																>{getEditorContentForPost(post).length}/{editorMaxChars}</span
 															>
 														</div>
 													{/snippet}
@@ -1846,7 +1873,7 @@
 														<p class="text-xs font-medium text-muted-foreground">
 															Character limits
 														</p>
-														{#each selectedPlatformLimits as pl (pl.key)}
+														{#each editorPlatformLimits as pl (pl.key)}
 															<div class="flex items-center justify-between gap-2 text-xs">
 																<div class="flex items-center gap-1.5">
 																	<PlatformIcon platform={pl.key} class="h-3 w-3" /><span
