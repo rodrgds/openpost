@@ -9,6 +9,7 @@ RUN cd frontend && bun install --frozen-lockfile
 
 COPY frontend/ ./frontend/
 COPY assets/ ./assets/
+COPY scripts/ ./scripts/
 RUN cd frontend && bun run build
 
 # Build stage for backend
