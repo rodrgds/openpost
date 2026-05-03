@@ -49,6 +49,8 @@ func CreateSchema(db *bun.DB) error {
 		(*models.User)(nil),
 		(*models.WorkspaceMember)(nil),
 		(*models.SocialAccount)(nil),
+		(*models.UserPasskey)(nil),
+		(*models.AuthChallenge)(nil),
 		(*models.XOAuthRequestToken)(nil),
 		(*models.Post)(nil),
 		(*models.PostDestination)(nil),

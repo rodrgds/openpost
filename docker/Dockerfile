@@ -42,7 +42,7 @@ RUN mkdir -p /data/media /data/db && chown -R openpost:openpost /data
 
 USER openpost
 
-ENV OPENPOST_DB_PATH=/data/db/openpost.db
+ENV OPENPOST_DATABASE_PATH=/data/db/openpost.db
 ENV OPENPOST_MEDIA_PATH=/data/media
 ENV OPENPOST_PORT=8080
 

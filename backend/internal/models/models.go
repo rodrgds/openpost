@@ -25,10 +25,37 @@ type Workspace struct {
 type User struct {
 	bun.BaseModel `bun:"table:users"`
 
-	ID           string    `bun:",pk" json:"id"`
-	Email        string    `bun:",unique,notnull" json:"email"`
-	PasswordHash string    `bun:",notnull" json:"-"`
-	CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID               string    `bun:",pk" json:"id"`
+	Email            string    `bun:",unique,notnull" json:"email"`
+	PasswordHash     string    `bun:",notnull" json:"-"`
+	IsAdmin          bool      `bun:",notnull,default:false" json:"is_admin"`
+	TOTPSecretEnc    []byte    `bun:"totp_secret_encrypted" json:"-"`
+	TOTPEnabledAt    time.Time `bun:",nullzero" json:"totp_enabled_at"`
+	PasskeyEnabledAt time.Time `bun:",nullzero" json:"passkey_enabled_at"`
+	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type UserPasskey struct {
+	bun.BaseModel `bun:"table:user_passkeys"`
+
+	ID             string    `bun:",pk" json:"id"`
+	UserID         string    `bun:",notnull" json:"user_id"`
+	Name           string    `bun:",notnull" json:"name"`
+	CredentialID   []byte    `bun:",notnull,unique" json:"-"`
+	CredentialJSON string    `bun:"credential_json,notnull" json:"-"`
+	CreatedAt      time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	LastUsedAt     time.Time `bun:",nullzero" json:"last_used_at"`
+}
+
+type AuthChallenge struct {
+	bun.BaseModel `bun:"table:auth_challenges"`
+
+	ID        string    `bun:",pk" json:"id"`
+	UserID    string    `bun:",notnull" json:"user_id"`
+	Type      string    `bun:",notnull" json:"type"`
+	Payload   string    `bun:",notnull" json:"payload"`
+	ExpiresAt time.Time `bun:",notnull" json:"expires_at"`
+	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type WorkspaceMember struct {

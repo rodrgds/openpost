@@ -24,7 +24,7 @@ services:
       - openpost_data:/data
     environment:
       - OPENPOST_PORT=8080
-      - OPENPOST_DB_PATH=/data/db/openpost.db
+      - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
       - OPENPOST_MEDIA_URL=http://localhost:8080/media
     healthcheck:
@@ -46,8 +46,8 @@ cp backend/.env.example .env
 
 Set at least:
 
-- `JWT_SECRET`
-- `ENCRYPTION_KEY`
+- `OPENPOST_JWT_SECRET`
+- `OPENPOST_ENCRYPTION_KEY`
 - Provider credentials for the networks you want to enable
 
 ## Generate secrets
@@ -56,7 +56,11 @@ Set at least:
 openssl rand -base64 32
 ```
 
-Generate one value for `JWT_SECRET` and another for `ENCRYPTION_KEY`.
+Generate one value for `OPENPOST_JWT_SECRET` and another for `OPENPOST_ENCRYPTION_KEY`.
+
+Optional hardening after setup:
+
+- `OPENPOST_DISABLE_REGISTRATIONS=true` to block new self-service signups after the first admin account has been created
 
 ## Start OpenPost
 
@@ -94,7 +98,7 @@ docker compose logs -f openpost
 ## Production warnings
 
 - Put OpenPost behind HTTPS before enabling OAuth in production.
-- Set `OPENPOST_FRONTEND_URL` and `OPENPOST_MEDIA_URL` to public URLs.
+- Set `OPENPOST_APP_URL` and `OPENPOST_MEDIA_URL` to public URLs.
 - Back up both the SQLite database and media directory.
 
 ## Next steps

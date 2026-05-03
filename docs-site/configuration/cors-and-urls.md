@@ -2,11 +2,11 @@
 
 These settings solve many deployment problems when they are set correctly.
 
-## `OPENPOST_FRONTEND_URL`
+## `OPENPOST_APP_URL`
 
 The public URL users visit in the browser. This is also part of the default CORS allowlist.
 
-## `OPENPOST_CORS_EXTRA_ORIGINS`
+## `OPENPOST_EXTRA_CORS_ORIGINS`
 
 Extra origins to allow, as a comma-separated list. Use this if you have alternate domains, admin origins, or a separate dev frontend.
 
@@ -20,7 +20,7 @@ These are configured in the provider developer portals and should point back to 
 
 ## Common mistakes
 
-- `OPENPOST_FRONTEND_URL` still points at localhost in production
+- `OPENPOST_APP_URL` still points at localhost in production
 - `OPENPOST_MEDIA_URL` points at an internal hostname
 - Provider callback URLs still use the local development domain
 - Reverse proxy serves a different hostname than the one configured in OAuth apps

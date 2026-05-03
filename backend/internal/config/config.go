@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -16,12 +17,15 @@ type MastodonServerConfig struct {
 }
 
 type Config struct {
-	Port          string
-	DatabasePath  string
-	JWTSecret     string
-	EncryptionKey string
-	FrontendURL   string
-	CORSOrigins   []string
+	Port                 string
+	DatabasePath         string
+	JWTSecret            string
+	EncryptionKey        string
+	DisableRegistrations bool
+	FrontendURL          string
+	PublicURL            string
+	CORSOrigins          []string
+	WebAuthnRPID         string
 
 	TwitterClientID     string
 	TwitterClientSecret string
@@ -45,32 +49,43 @@ type Config struct {
 
 func Load() *Config {
 	cfg := &Config{
-		Port:          getEnv("OPENPOST_PORT", "8080"),
-		DatabasePath:  getEnv("OPENPOST_DB_PATH", "file:openpost.db?cache=shared&mode=rwc"),
-		JWTSecret:     getEnv("JWT_SECRET", "development-jwt-secret-change-in-production"),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", "super-secret-32-byte-master-key-here"),
-		FrontendURL:   getEnv("OPENPOST_FRONTEND_URL", "http://localhost:5173"),
+		Port:                 os.Getenv("OPENPOST_PORT"),
+		DatabasePath:         os.Getenv("OPENPOST_DATABASE_PATH"),
+		JWTSecret:            os.Getenv("OPENPOST_JWT_SECRET"),
+		EncryptionKey:        os.Getenv("OPENPOST_ENCRYPTION_KEY"),
+		DisableRegistrations: getEnvBool("OPENPOST_DISABLE_REGISTRATIONS", false),
+		FrontendURL:          os.Getenv("OPENPOST_APP_URL"),
+		PublicURL:            os.Getenv("OPENPOST_PUBLIC_URL"),
 
-		TwitterClientID:     getEnv("TWITTER_CLIENT_ID", ""),
-		TwitterClientSecret: getEnv("TWITTER_CLIENT_SECRET", ""),
-		TwitterRedirectURI:  getEnv("TWITTER_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/x/callback"),
+		TwitterClientID:     os.Getenv("X_CLIENT_ID"),
+		TwitterClientSecret: os.Getenv("X_CLIENT_SECRET"),
+		TwitterRedirectURI:  os.Getenv("X_REDIRECT_URI"),
 
-		MastodonRedirectURI: getEnv("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
+		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "http://localhost:5173/api/v1/accounts/mastodon/callback"),
 
-		LinkedInClientID:             getEnv("LINKEDIN_CLIENT_ID", ""),
-		LinkedInClientSecret:         getEnv("LINKEDIN_CLIENT_SECRET", ""),
-		LinkedInRedirectURI:          getEnv("LINKEDIN_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/linkedin/callback"),
-		DisableLinkedInThreadReplies: getEnvBool("OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES", false),
+		LinkedInClientID:             os.Getenv("LINKEDIN_CLIENT_ID"),
+		LinkedInClientSecret:         os.Getenv("LINKEDIN_CLIENT_SECRET"),
+		LinkedInRedirectURI:          os.Getenv("LINKEDIN_REDIRECT_URI"),
+		DisableLinkedInThreadReplies: getEnvBool("LINKEDIN_DISABLE_THREAD_REPLIES", false),
 
-		ThreadsClientID:     getEnv("THREADS_CLIENT_ID", ""),
-		ThreadsClientSecret: getEnv("THREADS_CLIENT_SECRET", ""),
-		ThreadsRedirectURI:  getEnv("THREADS_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/threads/callback"),
+		ThreadsClientID:     os.Getenv("THREADS_CLIENT_ID"),
+		ThreadsClientSecret: os.Getenv("THREADS_CLIENT_SECRET"),
+		ThreadsRedirectURI:  os.Getenv("THREADS_REDIRECT_URI"),
 
-		MediaPath: getEnv("OPENPOST_MEDIA_PATH", "./media"),
-		MediaURL:  getEnv("OPENPOST_MEDIA_URL", "/media"),
+		MediaPath: getEnvDefault("OPENPOST_MEDIA_PATH", "./media"),
+		MediaURL:  getEnvDefault("OPENPOST_MEDIA_URL", "/media"),
 	}
 
-	if raw := getEnv("MASTODON_SERVERS", ""); raw != "" {
+	if cfg.PublicURL == "" {
+		cfg.PublicURL = cfg.FrontendURL
+	}
+	if parsed, err := url.Parse(cfg.PublicURL); err == nil && parsed.Hostname() != "" {
+		cfg.WebAuthnRPID = parsed.Hostname()
+	} else {
+		cfg.WebAuthnRPID = "localhost"
+	}
+
+	if raw := os.Getenv("MASTODON_SERVERS"); raw != "" {
 		var servers []MastodonServerConfig
 		if err := json.Unmarshal([]byte(raw), &servers); err != nil {
 			log.Printf("WARNING: failed to parse MASTODON_SERVERS JSON: %v", err)
@@ -80,8 +95,8 @@ func Load() *Config {
 	}
 
 	// Build CORS origins list
-	corsOrigins := []string{cfg.FrontendURL, "http://localhost:5173", "http://localhost:8080"}
-	if extra := getEnv("OPENPOST_CORS_EXTRA_ORIGINS", ""); extra != "" {
+	corsOrigins := []string{cfg.FrontendURL, "http://localhost:5173"}
+	if extra := os.Getenv("OPENPOST_EXTRA_CORS_ORIGINS"); extra != "" {
 		for _, origin := range strings.Split(extra, ",") {
 			trimmed := strings.TrimSpace(origin)
 			if trimmed != "" {
@@ -96,7 +111,7 @@ func Load() *Config {
 	return cfg
 }
 
-func getEnv(key, fallback string) string {
+func getEnvDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
@@ -120,8 +135,8 @@ func getEnvBool(key string, fallback bool) bool {
 
 func Init() {
 	// Validate critical security config on startup
-	jwtSecret := os.Getenv("JWT_SECRET")
-	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	jwtSecret := os.Getenv("OPENPOST_JWT_SECRET")
+	encryptionKey := os.Getenv("OPENPOST_ENCRYPTION_KEY")
 
 	isProduction := os.Getenv("OPENPOST_ENV") == "production" ||
 		os.Getenv("OPENPOST_ENV") == "prod" ||
@@ -129,24 +144,24 @@ func Init() {
 
 	if isProduction {
 		if jwtSecret == "" {
-			log.Fatal("FATAL: JWT_SECRET is required in production. Set OPENPOST_ENV=production to enable this check.")
+			log.Fatal("FATAL: OPENPOST_JWT_SECRET is required in production. Set OPENPOST_ENV=production to enable this check.")
 		}
 		if len(jwtSecret) < 32 {
-			log.Printf("FATAL: JWT_SECRET must be at least 32 characters in production (got %d)", len(jwtSecret))
+			log.Printf("FATAL: OPENPOST_JWT_SECRET must be at least 32 characters in production (got %d)", len(jwtSecret))
 		}
 		if encryptionKey == "" {
-			log.Fatal("FATAL: ENCRYPTION_KEY is required in production. Set OPENPOST_ENV=production to enable this check.")
+			log.Fatal("FATAL: OPENPOST_ENCRYPTION_KEY is required in production. Set OPENPOST_ENV=production to enable this check.")
 		}
 		if len(encryptionKey) < 32 {
-			log.Fatalf("FATAL: ENCRYPTION_KEY must be at least 32 characters in production (got %d)", len(encryptionKey))
+			log.Fatalf("FATAL: OPENPOST_ENCRYPTION_KEY must be at least 32 characters in production (got %d)", len(encryptionKey))
 		}
 	} else {
 		// Warn in development if using defaults
-		if jwtSecret == "development-jwt-secret-change-in-production" {
-			log.Println("WARNING: Using default JWT_SECRET. Set JWT_SECRET in .env for production.")
+		if jwtSecret == "" {
+			log.Println("WARNING: OPENPOST_JWT_SECRET is not set. Set OPENPOST_JWT_SECRET in .env for production.")
 		}
-		if encryptionKey == "super-secret-32-byte-master-key-here" {
-			log.Println("WARNING: Using default ENCRYPTION_KEY. Set ENCRYPTION_KEY in .env for production.")
+		if encryptionKey == "" {
+			log.Println("WARNING: OPENPOST_ENCRYPTION_KEY is not set. Set OPENPOST_ENCRYPTION_KEY in .env for production.")
 		}
 	}
 }

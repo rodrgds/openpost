@@ -14,7 +14,7 @@ services:
       - openpost_data:/data
     environment:
       - OPENPOST_PORT=8080
-      - OPENPOST_DB_PATH=/data/db/openpost.db
+      - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
       - OPENPOST_MEDIA_URL=https://openpost.example.com/media
     healthcheck:

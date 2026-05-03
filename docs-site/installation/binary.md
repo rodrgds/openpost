@@ -28,5 +28,5 @@ By default, OpenPost listens on `http://localhost:8080`.
 
 ## Notes
 
-- Set `OPENPOST_DB_PATH` and `OPENPOST_MEDIA_PATH` explicitly for production.
+- Set `OPENPOST_DATABASE_PATH` and `OPENPOST_MEDIA_PATH` explicitly for production.
 - Put the service behind HTTPS before enabling production OAuth callbacks.

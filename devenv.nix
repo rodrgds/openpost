@@ -20,8 +20,8 @@
 
   # Environment variables
   env.OPENPOST_PORT = "8080";
-  env.OPENPOST_DB_PATH = "file:openpost.db?cache=shared&mode=rwc";
-  env.OPENPOST_FRONTEND_URL = "http://localhost:8080";
+  env.OPENPOST_DATABASE_PATH = "file:openpost.db?cache=shared&mode=rwc";
+  env.OPENPOST_APP_URL = "http://localhost:8080";
 
   # Scripts available in the shell
   scripts = {

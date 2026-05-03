@@ -1,11 +1,8 @@
 # API Reference
 
-OpenPost generates an OpenAPI specification from the backend.
+The full OpenAPI reference now lives in the developer docs:
 
-On a running instance, the spec is available at:
+- Rendered reference: [/development/api-reference](/development/api-reference)
+- Raw spec on a running instance: [`/openapi.json`](/openapi.json)
 
-```txt
-/openapi.json
-```
-
-Full rendered API reference is coming later. For now, use the generated spec from a live instance.
+The docs build syncs the checked-in backend spec into the docs site so the rendered reference stays in step with the frontend client types.

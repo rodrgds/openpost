@@ -74,6 +74,7 @@ const developmentSidebar = [
 		items: [
 			{ text: 'Setup', link: '/development/setup' },
 			{ text: 'Architecture', link: '/development/architecture' },
+			{ text: 'API Reference', link: '/development/api-reference' },
 			{ text: 'Frontend', link: '/development/frontend' },
 			{ text: 'Backend', link: '/development/backend' },
 			{ text: 'Platform Adapters', link: '/development/platform-adapters' },

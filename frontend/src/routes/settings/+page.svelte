@@ -4,7 +4,11 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import PageContainer from '$lib/components/page-container.svelte';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth';
+	import { createPasskeyCredential } from '$lib/auth/webauthn';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import SaveIcon from 'lucide-svelte/icons/save';
@@ -15,6 +19,9 @@
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import TrashIcon from 'lucide-svelte/icons/trash';
 	import SparklesIcon from 'lucide-svelte/icons/sparkles';
+	import ShieldCheckIcon from 'lucide-svelte/icons/shield-check';
+	import SmartphoneIcon from 'lucide-svelte/icons/smartphone';
+	import KeyRoundIcon from 'lucide-svelte/icons/key-round';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -112,6 +119,174 @@
 
 	let saving = $state(false);
 	let toastMessage = $state('');
+	let loadingSecurity = $state(true);
+	let securityBusy = $state(false);
+	let securityError = $state('');
+	let currentPassword = $state('');
+	let totpSetupChallengeId = $state('');
+	let totpManualEntryKey = $state('');
+	let totpQRCodeDataURL = $state('');
+	let totpCode = $state('');
+	let newPasskeyName = $state('');
+
+	interface PasskeySummary {
+		id: string;
+		name: string;
+		created_at: string;
+		last_used_at: string;
+	}
+
+	interface SecurityStatus {
+		user: {
+			id: string;
+			email: string;
+			created_at: string;
+		};
+		totp_enabled: boolean;
+		passkeys: PasskeySummary[];
+		methods: string[];
+	}
+
+	let securityStatus = $state<SecurityStatus | null>(null);
+
+	const authState = $derived($auth);
+	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
+
+	async function loadSecurityStatus() {
+		loadingSecurity = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).GET('/auth/security');
+			if (err || !data) throw new Error(err?.detail || 'Failed to load account security');
+			securityStatus = data;
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			loadingSecurity = false;
+		}
+	}
+
+	async function startTOTPSetup() {
+		securityBusy = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).POST('/auth/security/totp/setup', {
+				body: { current_password: currentPassword }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to start authenticator setup');
+			totpSetupChallengeId = data.challenge_id;
+			totpManualEntryKey = data.manual_entry_key;
+			totpQRCodeDataURL = data.qr_code_data_url;
+			totpCode = '';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			securityBusy = false;
+		}
+	}
+
+	async function confirmTOTPSetup() {
+		if (!totpSetupChallengeId) return;
+		securityBusy = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).POST('/auth/security/totp/confirm', {
+				body: {
+					challenge_id: totpSetupChallengeId,
+					code: totpCode
+				}
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to confirm authenticator app');
+			securityStatus = data;
+			totpSetupChallengeId = '';
+			totpManualEntryKey = '';
+			totpQRCodeDataURL = '';
+			totpCode = '';
+			currentPassword = '';
+			toastMessage = 'Authenticator app enabled';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			securityBusy = false;
+		}
+	}
+
+	async function disableTOTP() {
+		securityBusy = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).POST('/auth/security/totp/disable', {
+				body: { current_password: currentPassword }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to disable authenticator app');
+			securityStatus = data;
+			currentPassword = '';
+			toastMessage = 'Authenticator app disabled';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			securityBusy = false;
+		}
+	}
+
+	async function addPasskey() {
+		securityBusy = true;
+		securityError = '';
+		try {
+			const { data: beginData, error: beginError } = await (client as any).POST(
+				'/auth/security/passkeys/begin',
+				{
+					body: {
+						current_password: currentPassword,
+						name: newPasskeyName
+					}
+				}
+			);
+			if (beginError || !beginData) {
+				throw new Error(beginError?.detail || 'Failed to start passkey registration');
+			}
+
+			const credential = await createPasskeyCredential(beginData.options);
+			const { data, error: err } = await (client as any).POST('/auth/security/passkeys/finish', {
+				body: {
+					challenge_id: beginData.challenge_id,
+					name: newPasskeyName,
+					credential
+				}
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to save passkey');
+			securityStatus = data;
+			currentPassword = '';
+			newPasskeyName = '';
+			toastMessage = 'Passkey added';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			securityBusy = false;
+		}
+	}
+
+	async function removePasskey(passkeyId: string) {
+		securityBusy = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).POST(
+				'/auth/security/passkeys/{passkey_id}/remove',
+				{
+					params: { path: { passkey_id: passkeyId } },
+					body: { current_password: currentPassword }
+				}
+			);
+			if (err || !data) throw new Error(err?.detail || 'Failed to remove passkey');
+			securityStatus = data;
+			currentPassword = '';
+			toastMessage = 'Passkey removed';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			securityBusy = false;
+		}
+	}
 
 	async function saveSettings() {
 		saving = true;
@@ -402,6 +577,12 @@
 	});
 
 	$effect(() => {
+		if (authState.isAuthenticated) {
+			loadSecurityStatus();
+		}
+	});
+
+	$effect(() => {
 		intervalInput = String(workspaceCtx.settings.slot_interval_minutes);
 		draftGapInput = String(workspaceCtx.settings.draft_gap_minutes);
 	});
@@ -448,6 +629,213 @@
 				<span class="text-sm font-medium">Current Workspace</span>
 				<span class="text-sm text-muted-foreground">{workspaceCtx.currentWorkspace?.name}</span>
 			</div>
+			<div class="rounded-lg border bg-muted/20 p-4">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p class="text-sm font-medium">Connected social accounts live separately</p>
+						<p class="text-sm text-muted-foreground">
+							Account security is personal. Social connections and sets are still managed per
+							workspace on the accounts page.
+						</p>
+					</div>
+					<Button variant="outline" onclick={() => goto('/accounts')}>Open Accounts</Button>
+				</div>
+			</div>
+		</section>
+
+		<section class="rounded-lg border p-6">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<ShieldCheckIcon class="h-5 w-5 text-muted-foreground" />
+				Account Security
+			</h2>
+			<p class="mb-4 text-sm text-muted-foreground">
+				Turn on two-factor authentication for your user account with an authenticator app and
+				optional passkeys. These protections follow your login, not your workspace.
+			</p>
+
+			{#if loadingSecurity}
+				<div class="space-y-3">
+					<Skeleton class="h-24 rounded-lg" />
+					<Skeleton class="h-40 rounded-lg" />
+				</div>
+			{:else}
+				<div class="space-y-4">
+					<div class="rounded-lg border bg-muted/20 p-4">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+							<div>
+								<p class="text-sm font-medium">{securityStatus?.user.email}</p>
+								<p class="text-sm text-muted-foreground">
+									Active methods:
+									{securityStatus?.methods.length
+										? securityStatus.methods.join(', ')
+										: 'none configured'}
+								</p>
+							</div>
+							<p class="text-sm text-muted-foreground">
+								Passkeys: {passkeyCount}
+							</p>
+						</div>
+					</div>
+
+					<div class="grid gap-4 lg:grid-cols-2">
+						<div class="rounded-lg border p-4">
+							<div class="mb-3 flex items-center gap-2">
+								<SmartphoneIcon class="h-4 w-4 text-muted-foreground" />
+								<h3 class="font-medium">Authenticator App</h3>
+							</div>
+							<p class="mb-4 text-sm text-muted-foreground">
+								Scan a QR code in Authy, 1Password, Google Authenticator, or any standard TOTP app.
+							</p>
+
+							{#if securityStatus?.totp_enabled}
+								<div class="space-y-3">
+									<div class="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
+										Authenticator app is enabled.
+									</div>
+									<div class="space-y-2">
+										<Label for="disable-password">Current password</Label>
+										<Input
+											id="disable-password"
+											type="password"
+											bind:value={currentPassword}
+											placeholder="Required to disable"
+										/>
+									</div>
+									<Button
+										variant="outline"
+										onclick={disableTOTP}
+										disabled={securityBusy || !currentPassword.trim()}
+									>
+										Disable Authenticator App
+									</Button>
+								</div>
+							{:else}
+								<div class="space-y-3">
+									<div class="space-y-2">
+										<Label for="totp-password">Current password</Label>
+										<Input
+											id="totp-password"
+											type="password"
+											bind:value={currentPassword}
+											placeholder="Required to start setup"
+										/>
+									</div>
+									<Button
+										onclick={startTOTPSetup}
+										disabled={securityBusy || !currentPassword.trim()}
+									>
+										Start Authenticator Setup
+									</Button>
+
+									{#if totpSetupChallengeId}
+										<div class="space-y-3 rounded-lg border bg-muted/20 p-4">
+											<img
+												src={totpQRCodeDataURL}
+												alt="TOTP QR code"
+												class="mx-auto h-48 w-48 rounded-lg border bg-white p-2"
+											/>
+											<div class="space-y-1">
+												<p class="text-sm font-medium">Manual entry key</p>
+												<p class="font-mono text-xs break-all text-muted-foreground">
+													{totpManualEntryKey}
+												</p>
+											</div>
+											<div class="space-y-2">
+												<Label for="totp-code">Enter the 6-digit code from your app</Label>
+												<Input
+													id="totp-code"
+													bind:value={totpCode}
+													inputmode="numeric"
+													autocomplete="one-time-code"
+													maxlength={6}
+													placeholder="123456"
+												/>
+											</div>
+											<Button
+												onclick={confirmTOTPSetup}
+												disabled={securityBusy || totpCode.trim().length !== 6}
+											>
+												Confirm Authenticator App
+											</Button>
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+
+						<div class="rounded-lg border p-4">
+							<div class="mb-3 flex items-center gap-2">
+								<KeyRoundIcon class="h-4 w-4 text-muted-foreground" />
+								<h3 class="font-medium">Passkeys</h3>
+							</div>
+							<p class="mb-4 text-sm text-muted-foreground">
+								Add device-backed passkeys as a second factor for faster sign-ins.
+							</p>
+
+							<div class="space-y-3">
+								<div class="space-y-2">
+									<Label for="passkey-password">Current password</Label>
+									<Input
+										id="passkey-password"
+										type="password"
+										bind:value={currentPassword}
+										placeholder="Required to add or remove passkeys"
+									/>
+								</div>
+								<div class="space-y-2">
+									<Label for="passkey-name">Passkey name</Label>
+									<Input
+										id="passkey-name"
+										bind:value={newPasskeyName}
+										placeholder="MacBook, iPhone, YubiKey"
+									/>
+								</div>
+								<Button onclick={addPasskey} disabled={securityBusy || !currentPassword.trim()}>
+									Add Passkey
+								</Button>
+							</div>
+
+							<div class="mt-4 space-y-2">
+								{#if securityStatus?.passkeys.length}
+									{#each securityStatus.passkeys as passkey (passkey.id)}
+										<div class="flex items-center justify-between rounded-md border px-3 py-2">
+											<div>
+												<p class="text-sm font-medium">{passkey.name}</p>
+												<p class="text-xs text-muted-foreground">
+													{#if passkey.last_used_at && passkey.last_used_at !== '0001-01-01T00:00:00Z'}
+														Last used {new Date(passkey.last_used_at).toLocaleString()}
+													{:else}
+														Added {new Date(passkey.created_at).toLocaleString()}
+													{/if}
+												</p>
+											</div>
+											<Button
+												variant="ghost"
+												size="sm"
+												class="text-destructive hover:text-destructive"
+												onclick={() => removePasskey(passkey.id)}
+												disabled={securityBusy || !currentPassword.trim()}
+											>
+												Remove
+											</Button>
+										</div>
+									{/each}
+								{:else}
+									<p class="text-sm text-muted-foreground">No passkeys added yet.</p>
+								{/if}
+							</div>
+						</div>
+					</div>
+
+					{#if securityError}
+						<div
+							class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+						>
+							{securityError}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</section>
 
 		<section class="space-y-4">

@@ -47,6 +47,8 @@ frontend/yarn.lock
 frontend/pnpm-lock.yaml
 frontend/bun.lock
 docs-site/public/assets/
+docs-site/public/openapi.json
+docs-site/.generated/openapi.json
 docs-site/.vitepress/dist/
 docs-site/.vitepress/cache/
 

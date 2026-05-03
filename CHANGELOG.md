@@ -5,6 +5,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Account-level MFA with QR-based TOTP enrollment, passkey registration, and step-up login verification, plus settings UI for managing both methods.
 - VitePress documentation site scaffold under `docs-site/`, including landing page, sidebar/navigation config, OpenPost-themed styling, and first-pass operator/contributor docs.
 - Shared asset sync pipeline that copies canonical repo assets into frontend and docs public directories.
 - GitHub Pages workflow for building and deploying the docs site.
@@ -14,6 +15,7 @@ All notable changes to this project are documented in this file.
 - Workspace setting for `draft_gap_minutes`, used by suggested queue times when a day's configured schedule slots are already occupied.
 
 ### Changed
+- Settings now include account-security controls, while login can require a second factor when TOTP or passkeys are enabled.
 - Optimized GitHub Actions CI by priming a shared Nix store cache before lint/test jobs, caching Go/lint/Bun dependencies, skipping unaffected backend/frontend jobs, and moving Go race tests off pull request runs.
 - README reduced to a shorter front door that points detailed setup and operations content at the docs site.
 - Docs site base-path handling now defaults to `/` for custom-domain hosting, with `OPENPOST_DOCS_BASE` available as an explicit override for repository-path deployments like `/openpost/`.

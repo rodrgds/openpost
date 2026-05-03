@@ -6,7 +6,7 @@ Symptoms: container exits or the binary returns immediately.
 
 Likely cause: bad env file, missing write permissions, or invalid path settings.
 
-How to check: inspect logs and confirm `OPENPOST_DB_PATH` and `OPENPOST_MEDIA_PATH`.
+How to check: inspect logs and confirm `OPENPOST_DATABASE_PATH` and `OPENPOST_MEDIA_PATH`.
 
 How to fix: correct the env vars and ensure the process can write to the target directories.
 
@@ -26,7 +26,7 @@ Symptoms: provider rejects the redirect or returns an invalid redirect error.
 
 Likely cause: your public URL or callback path does not match exactly.
 
-How to check: verify `OPENPOST_FRONTEND_URL`, provider callback settings, and any explicit redirect URI env vars.
+How to check: verify `OPENPOST_APP_URL`, provider callback settings, and any explicit redirect URI env vars.
 
 How to fix: set the exact public callback URL and restart OpenPost.
 
@@ -34,7 +34,7 @@ How to fix: set the exact public callback URL and restart OpenPost.
 
 Symptoms: browser console shows blocked API requests.
 
-Likely cause: incorrect `OPENPOST_FRONTEND_URL` or missing `OPENPOST_CORS_EXTRA_ORIGINS`.
+Likely cause: incorrect `OPENPOST_APP_URL` or missing `OPENPOST_EXTRA_CORS_ORIGINS`.
 
 How to check: inspect browser dev tools and confirm the origin OpenPost is serving.
 
@@ -78,7 +78,7 @@ Likely cause: database stored in the wrong path or on ephemeral storage.
 
 How to check: confirm the actual file path mounted into the container or host.
 
-How to fix: move to a persistent path and update `OPENPOST_DB_PATH`.
+How to fix: move to a persistent path and update `OPENPOST_DATABASE_PATH`.
 
 ## Database locked
 
@@ -96,7 +96,7 @@ Symptoms: auth callbacks or login flows bounce to the wrong host.
 
 Likely cause: mismatch between proxy hostname and OpenPost URL config.
 
-How to check: compare browser URL, proxy config, and `OPENPOST_FRONTEND_URL`.
+How to check: compare browser URL, proxy config, and `OPENPOST_APP_URL`.
 
 How to fix: normalize the public hostname and restart.
 
@@ -106,6 +106,6 @@ Symptoms: pages work locally but provider callbacks or shared media links fail.
 
 Likely cause: localhost or internal hostnames leaked into public-facing settings.
 
-How to check: inspect `OPENPOST_FRONTEND_URL`, `OPENPOST_MEDIA_URL`, and provider callback entries.
+How to check: inspect `OPENPOST_APP_URL`, `OPENPOST_MEDIA_URL`, and provider callback entries.
 
 How to fix: replace internal URLs with the real public HTTPS domain.

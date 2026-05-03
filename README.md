@@ -83,7 +83,7 @@ cp backend/.env.example .env
 docker compose up -d
 ```
 
-Set fresh values for `JWT_SECRET` and `ENCRYPTION_KEY` before using OpenPost outside local testing. For the full install path, reverse proxy setup, provider OAuth guides, and operations docs, use the docs site.
+Set fresh values for `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY` before using OpenPost outside local testing. The first account created on an instance becomes the instance admin automatically. For the full install path, reverse proxy setup, provider OAuth guides, and operations docs, use the docs site.
 
 ## Supported Platforms
 

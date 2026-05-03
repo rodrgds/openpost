@@ -5,12 +5,12 @@ HTTPS and a stable public URL matter for provider OAuth and for Threads media pu
 ## Why it matters
 
 - Providers validate callback URLs exactly.
-- `OPENPOST_FRONTEND_URL` should match what users open in the browser.
+- `OPENPOST_APP_URL` should match what users open in the browser.
 - `OPENPOST_MEDIA_URL` must be public for Threads media publishing.
 
 ## Required app settings
 
-- `OPENPOST_FRONTEND_URL=https://openpost.example.com`
+- `OPENPOST_APP_URL=https://openpost.example.com`
 - `OPENPOST_MEDIA_URL=https://openpost.example.com/media`
 
 ## Caddy example

@@ -56,12 +56,12 @@ When an AI agent is invoked to assist with this repository, it MUST adhere to th
 - **ORM Patterns:** Always use `github.com/uptrace/bun` for database operations. Do not write raw SQL strings unless doing complex SQLite pragmas or advanced queue polling.
 
 ### B. State Management & Single Binary Constraints
-- **Filesystem Constraints:** OpenPost is meant to be highly portable. Local file storage (e.g., SQLite DB file, local media uploads) should be configurable via environment variables (e.g., `OPENPOST_DB_PATH`, `OPENPOST_MEDIA_PATH`).
+- **Filesystem Constraints:** OpenPost is meant to be highly portable. Local file storage (e.g., SQLite DB file, local media uploads) should be configurable via environment variables (e.g., `OPENPOST_DATABASE_PATH`, `OPENPOST_MEDIA_PATH`).
 - **Asset Embedding:** Do not modify the SvelteKit build pipeline in a way that breaks `adapter-static`. The backend relies on a static `build/` directory to embed into the binary.
 
 ### C. Security & Credentials
 - Tokens for social accounts (Access Tokens, Refresh Tokens) MUST ALWAYS be encrypted at rest using the `TokenEncryptor` service (AES-256-GCM).
-- Do NOT hardcode cryptographic secrets in the codebase. Always load from environment variables (e.g., `ENCRYPTION_KEY`, `JWT_SECRET`).
+- Do NOT hardcode cryptographic secrets in the codebase. Always load from environment variables (e.g., `OPENPOST_ENCRYPTION_KEY`, `OPENPOST_JWT_SECRET`).
 
 ### D. Workflow for Feature Implementation
 1. **Model First:** If a feature requires data, update the `models.go` and `database.go` schema creation first.

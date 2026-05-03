@@ -27,6 +27,7 @@ import (
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mediastore"
+	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/publisher"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 )
@@ -60,6 +61,14 @@ func main() {
 
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
+	mfaService, err := mfa.NewService("OpenPost", mfa.RelyingPartyConfig{
+		Name:    "OpenPost",
+		ID:      cfg.WebAuthnRPID,
+		Origins: []string{cfg.PublicURL},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	publishSvc := publisher.NewService(db, tokenManager)
 	publishSvc.SetDisableLinkedInThreadReplies(cfg.DisableLinkedInThreadReplies)
@@ -152,10 +161,20 @@ func main() {
 	e.GET("/robots.txt", robotsHandler)
 	e.HEAD("/robots.txt", robotsHandler)
 
-	authHandler := handlers.NewAuthHandler(db, authService)
+	authHandler := handlers.NewAuthHandler(db, authService, tokenEncryptor, mfaService, cfg.DisableRegistrations)
 	authHandler.Register(api)
 	authHandler.Login(api)
+	authHandler.VerifyTOTPLogin(api)
+	authHandler.BeginPasskeyLogin(api)
+	authHandler.FinishPasskeyLogin(api)
 	authHandler.Me(api)
+	authHandler.SecurityStatus(api)
+	authHandler.BeginTOTPSetup(api)
+	authHandler.ConfirmTOTPSetup(api)
+	authHandler.DisableTOTP(api)
+	authHandler.BeginPasskeyRegistration(api)
+	authHandler.FinishPasskeyRegistration(api)
+	authHandler.RemovePasskey(api)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authService)
 	workspaceHandler.CreateWorkspace(api)

@@ -12,10 +12,10 @@ LinkedIn uses OAuth 2.0 and has more approval friction than most other providers
 ## Relevant setting
 
 ```sh
-OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES=false
+LINKEDIN_DISABLE_THREAD_REPLIES=false
 ```
 
-If your LinkedIn app cannot obtain the permissions required for comment-style replies, set `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES=true`.
+If your LinkedIn app cannot obtain the permissions required for comment-style replies, set `LINKEDIN_DISABLE_THREAD_REPLIES=true`.
 
 ## Threading caveat
 

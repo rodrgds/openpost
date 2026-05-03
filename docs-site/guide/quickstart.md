@@ -18,7 +18,7 @@ services:
       - openpost_data:/data
     environment:
       - OPENPOST_PORT=8080
-      - OPENPOST_DB_PATH=/data/db/openpost.db
+      - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
       - OPENPOST_MEDIA_URL=http://localhost:8080/media
 
@@ -39,7 +39,7 @@ openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-Set the generated values as `JWT_SECRET` and `ENCRYPTION_KEY`.
+Set the generated values as `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY`.
 
 ::: warning
 Do not use placeholder secrets in production.
@@ -58,9 +58,12 @@ Visit `http://localhost:8080`.
 ## 6. Finish setup
 
 1. Create your OpenPost account.
+   The first account on the instance becomes the instance admin automatically.
 2. Create or select a workspace.
 3. Connect your first provider.
 4. Publish a test post.
+
+If you want to close self-service signups after setup, set `OPENPOST_DISABLE_REGISTRATIONS=true` and restart OpenPost. The first account is still allowed on a brand-new instance even when that flag is enabled.
 
 ## Next steps
 
