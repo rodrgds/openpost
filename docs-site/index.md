@@ -17,25 +17,63 @@ hero:
       link: https://github.com/rodrgds/openpost
 
 features:
-  - icon: 🧡
-    title: Self-hosted
-    details: Run OpenPost on your own server with Docker Compose or a single binary.
-  - icon: 🗃️
-    title: SQLite by default
-    details: No Postgres, Redis, or external queue required for a simple deployment.
-  - icon: 🔐
-    title: Encrypted tokens
-    details: OAuth tokens are encrypted at rest with your own encryption key.
-  - icon: 📅
-    title: Scheduling built in
-    details: Queue posts, use posting schedules, and keep work durable across restarts.
+  - icon: 🌐
+    title: One post, many networks
+    details: Publish from one place to X, Mastodon, Bluesky, Threads, and LinkedIn.
+  - icon: ✍️
+    title: Provider-specific variants
+    details: Start from one canonical post, then tailor copy where each network needs its own version.
   - icon: 🧵
-    title: Thread support
-    details: Publish multi-post threads in sequence across supported providers.
+    title: Thread composer
+    details: Build multi-post threads and publish them in sequence instead of stitching replies together manually.
+  - icon: 📅
+    title: Scheduling that stays queued
+    details: Plan posts ahead, use posting schedules, and keep jobs durable through restarts.
   - icon: 🖼️
-    title: Media library
-    details: Store reusable media locally and attach it to scheduled posts.
+    title: Reusable media library
+    details: Upload once, reuse across drafts and scheduled posts, and keep media close to your content workflow.
+  - icon: 🗂️
+    title: Workspaces for separate brands
+    details: Keep accounts, media, prompts, and schedules organized per workspace.
+  - icon: 🔐
+    title: Your server, your credentials
+    details: Keep content, schedules, and connected account tokens under your own control.
+  - icon: ⚡
+    title: Fast to deploy
+    details: Run OpenPost with Docker Compose or a single binary without turning setup into a platform project.
 ---
+
+<p>
+  <img
+    src="/assets/screenshots/main-dark.png"
+    alt="OpenPost main dashboard"
+    style="width: 100%; max-width: 1200px; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
+  >
+</p>
+
+<div
+  style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start;"
+>
+  <div>
+    <img
+      src="/assets/screenshots/settings-dark.png"
+      alt="OpenPost settings page"
+      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
+    >
+  </div>
+  <div style="display: grid; gap: 16px;">
+    <img
+      src="/assets/screenshots/accounts-dark.png"
+      alt="OpenPost accounts page"
+      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
+    >
+    <img
+      src="/assets/screenshots/media-dark.png"
+      alt="OpenPost media page"
+      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
+    >
+  </div>
+</div>
 
 ## Install in a minute
 

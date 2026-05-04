@@ -67,6 +67,10 @@
   <a href="https://github.com/rodrgds/openpost/releases"><strong>Releases</strong></a>
 </p>
 
+<p align="center">
+  <img alt="OpenPost main dashboard screenshot" src="./assets/screenshots/main-dark.png" width="960">
+</p>
+
 ## Why OpenPost
 
 - Self-hosted: your data stays on your server.

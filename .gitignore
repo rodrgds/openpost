@@ -46,7 +46,11 @@ frontend/package-lock.json
 frontend/yarn.lock
 frontend/pnpm-lock.yaml
 frontend/bun.lock
-docs-site/public/assets/
+docs-site/public/assets/*
+!docs-site/public/assets/screenshots/
+docs-site/public/assets/screenshots/*
+!docs-site/public/assets/screenshots/.gitkeep
+!docs-site/public/assets/screenshots/*.png
 docs-site/public/openapi.json
 docs-site/.generated/openapi.json
 docs-site/.vitepress/dist/
