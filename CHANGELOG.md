@@ -4,11 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-05-04
+
+### Fixed
+- Restored authenticated media rendering in the frontend by allowing media image requests to authorize with the current JWT and updating UI image URLs to include that access token.
+
+## [1.0.2] - 2026-05-04
+
 ### Fixed
 - Restored Mastodon OAuth validation and callback state handling so missing `server_name` requests fail cleanly and browser redirects can complete without requiring the callback query to repeat the server selection.
 - Corrected workspace-scoped job listing to apply visibility filtering before `limit`, so non-admin users get full pages of jobs from accessible workspaces.
 - Signed Threads media URLs now target the app media endpoint by media ID instead of the underlying file basename.
-- Restored authenticated media rendering in the frontend by allowing media image requests to authorize with the current JWT and updating UI image URLs to include that access token.
 
 ## [1.0.1] - 2026-05-03
 

@@ -78,6 +78,7 @@
 - SQLite-backed scheduling: queued posts survive restarts.
 - Multi-platform publishing: X, Mastodon, Bluesky, Threads, and LinkedIn.
 - Encrypted tokens: OAuth tokens are encrypted at rest with AES-256-GCM.
+- Security-first: Account-level MFA with TOTP and Passkeys support.
 - Thread support: publish multi-post threads in sequence.
 
 ## Quickstart
