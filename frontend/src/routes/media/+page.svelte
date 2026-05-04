@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { client, type Workspace, getToken } from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { getAuthenticatedMediaURL } from '$lib/media-url';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -550,7 +551,7 @@
 					<div class="relative aspect-square overflow-hidden bg-muted/30">
 						{#if isImage(media.mime_type)}
 							<img
-								src={media.thumbnail_url || media.url}
+								src={getAuthenticatedMediaURL(media.thumbnail_url || media.url)}
 								alt={media.alt_text || 'Media'}
 								class="size-full object-cover transition-transform group-hover:scale-105"
 							/>

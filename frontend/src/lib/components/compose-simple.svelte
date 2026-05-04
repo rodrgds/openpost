@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, tick, type Snippet } from 'svelte';
 	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
-	import { getApiBase, getMediaBase } from '$lib/stores/instance.svelte';
+	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { getAuthenticatedMediaByID } from '$lib/media-url';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Calendar } from '$lib/components/ui/calendar';
@@ -1733,7 +1734,7 @@
 															: ''}"
 													>
 														<img
-															src="{getMediaBase()}/media/{mediaId}"
+															src={getAuthenticatedMediaByID(mediaId)}
 															alt={mediaAltTexts.get(mediaId) || ''}
 															class="{post.mediaIds.length === 1
 																? 'aspect-video'

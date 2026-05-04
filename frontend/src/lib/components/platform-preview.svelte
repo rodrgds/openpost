@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getMediaBase } from '$lib/stores/instance.svelte';
+	import { getAuthenticatedMediaByID } from '$lib/media-url';
 	import { getPlatformKey, getPlatformName } from '$lib/utils';
 	import PlatformIcon from './platform-icon.svelte';
 	import HeartIcon from 'lucide-svelte/icons/heart';
@@ -85,7 +85,7 @@
 					<div class="mt-3 overflow-hidden rounded-xl border border-border/60">
 						{#if mediaLayout === 'single'}
 							<img
-								src="{getMediaBase()}/media/{mediaIds[0]}"
+								src={getAuthenticatedMediaByID(mediaIds[0])}
 								alt=""
 								class="h-auto w-full object-cover"
 							/>
@@ -93,7 +93,7 @@
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
 									<img
-										src="{getMediaBase()}/media/{id}"
+										src={getAuthenticatedMediaByID(id)}
 										alt=""
 										class="aspect-square w-full object-cover"
 									/>
@@ -102,17 +102,17 @@
 						{:else if mediaLayout === 'grid-3'}
 							<div class="grid grid-cols-2 gap-0.5">
 								<img
-									src="{getMediaBase()}/media/{mediaIds[0]}"
+									src={getAuthenticatedMediaByID(mediaIds[0])}
 									alt=""
 									class="col-span-2 aspect-video w-full object-cover"
 								/>
 								<img
-									src="{getMediaBase()}/media/{mediaIds[1]}"
+									src={getAuthenticatedMediaByID(mediaIds[1])}
 									alt=""
 									class="aspect-square w-full object-cover"
 								/>
 								<img
-									src="{getMediaBase()}/media/{mediaIds[2]}"
+									src={getAuthenticatedMediaByID(mediaIds[2])}
 									alt=""
 									class="aspect-square w-full object-cover"
 								/>
@@ -121,7 +121,7 @@
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
 									<img
-										src="{getMediaBase()}/media/{id}"
+										src={getAuthenticatedMediaByID(id)}
 										alt=""
 										class="aspect-square w-full object-cover"
 									/>
@@ -180,7 +180,7 @@
 					<div class="mt-3 grid grid-cols-2 gap-2">
 						{#each mediaIds as id (id)}
 							<img
-								src="{getMediaBase()}/media/{id}"
+								src={getAuthenticatedMediaByID(id)}
 								alt=""
 								class="rounded-lg object-cover"
 								style="max-height: 260px;"
@@ -246,7 +246,7 @@
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 						{#if mediaLayout === 'single'}
 							<img
-								src="{getMediaBase()}/media/{mediaIds[0]}"
+								src={getAuthenticatedMediaByID(mediaIds[0])}
 								alt=""
 								class="h-auto w-full object-cover"
 							/>
@@ -254,7 +254,7 @@
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
 									<img
-										src="{getMediaBase()}/media/{id}"
+										src={getAuthenticatedMediaByID(id)}
 										alt=""
 										class="aspect-square w-full object-cover"
 									/>
@@ -313,7 +313,11 @@
 		</div>
 		{#if mediaIds.length > 0}
 			<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
-				<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
+				<img
+					src={getAuthenticatedMediaByID(mediaIds[0])}
+					alt=""
+					class="h-auto w-full object-cover"
+				/>
 			</div>
 			{#if mediaIds.length > 1}
 				<div class="mt-2 text-xs text-muted-foreground">
@@ -376,7 +380,7 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 						<img
-							src="{getMediaBase()}/media/{mediaIds[0]}"
+							src={getAuthenticatedMediaByID(mediaIds[0])}
 							alt=""
 							class="h-auto w-full object-cover"
 						/>
@@ -424,7 +428,7 @@
 		{#if mediaIds.length > 0}
 			<div class="mt-3 grid grid-cols-2 gap-2">
 				{#each mediaIds as id (id)}
-					<img src="{getMediaBase()}/media/{id}" alt="" class="rounded-lg object-cover" />
+					<img src={getAuthenticatedMediaByID(id)} alt="" class="rounded-lg object-cover" />
 				{/each}
 			</div>
 		{/if}

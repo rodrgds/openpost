@@ -895,17 +895,28 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 	}
 
 	if userID, _ := c.Get(string(middleware.UserIDKey)).(string); userID != "" {
-		memberCount, err := h.db.NewSelect().
-			Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-			Count(c.Request().Context())
+		allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, userID)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
 		}
-		if memberCount == 0 {
+		if !allowed {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
 		}
 		return nil
+	}
+
+	if token := c.QueryParam("token"); token != "" {
+		claims, err := h.auth.ValidateToken(token)
+		if err == nil && claims != nil && claims.UserID != "" {
+			allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, claims.UserID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+			}
+			if allowed {
+				return nil
+			}
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+		}
 	}
 
 	expiresAtUnix, _ := strconv.ParseInt(c.QueryParam("exp"), 10, 64)
@@ -915,4 +926,16 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 	}
 
 	return nil
+}
+
+func (h *MediaHandler) userCanAccessWorkspace(ctx context.Context, workspaceID, userID string) (bool, error) {
+	memberCount, err := h.db.NewSelect().
+		Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return memberCount > 0, nil
 }
