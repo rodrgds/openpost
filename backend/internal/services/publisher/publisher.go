@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
@@ -26,6 +27,7 @@ type Service struct {
 	providers                    map[string]platform.Adapter
 	disableLinkedInThreadReplies bool
 	publicMediaURL               string
+	mediaSigner                  *mediasigner.Signer
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -42,6 +44,10 @@ func (s *Service) SetDisableLinkedInThreadReplies(disable bool) {
 
 func (s *Service) SetPublicMediaURL(url string) {
 	s.publicMediaURL = url
+}
+
+func (s *Service) SetMediaSigner(signer *mediasigner.Signer) {
+	s.mediaSigner = signer
 }
 
 func (s *Service) SetProvider(platformName string, adapter platform.Adapter) {
@@ -438,11 +444,15 @@ func (s *Service) loadVariant(ctx context.Context, postID, socialAccountID strin
 }
 
 func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
-	fileName := filepath.Base(media.FilePath)
-	if s.publicMediaURL != "" {
-		return s.publicMediaURL + "/" + fileName
+	signedQuery := ""
+	if s.mediaSigner != nil {
+		expiresAt := time.Now().UTC().Add(15 * time.Minute)
+		signedQuery = fmt.Sprintf("?exp=%d&sig=%s", expiresAt.Unix(), s.mediaSigner.Sign(media.ID, expiresAt))
 	}
-	return "/media/" + fileName
+	if s.publicMediaURL != "" {
+		return s.publicMediaURL + "/" + media.ID + signedQuery
+	}
+	return "/media/" + media.ID + signedQuery
 }
 
 func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {

@@ -8,15 +8,15 @@ This page summarizes the env vars used by the backend. Some values in `backend/.
 |---|---:|---|---|
 | `OPENPOST_PORT` | No | `8080` | HTTP server port. |
 | `OPENPOST_DATABASE_PATH` | No | `file:openpost.db?cache=shared&mode=rwc` | SQLite database path or DSN. |
-| `OPENPOST_APP_URL` | No, but set it in real deployments | `http://localhost:5173` | Public frontend origin used for CORS and auth flow assumptions. |
+| `OPENPOST_APP_URL` | No, but set it in real deployments | `http://localhost:8080` | Public frontend origin used for CORS and auth flow assumptions. |
 | `OPENPOST_PUBLIC_URL` | No | falls back to `OPENPOST_APP_URL` | Canonical browser origin used when configuring WebAuthn/passkeys. Set this to your real app URL in production. |
 | `OPENPOST_EXTRA_CORS_ORIGINS` | No | empty | Extra comma-separated origins to allow. |
 | `OPENPOST_DISABLE_REGISTRATIONS` | No | `false` | Disables new self-service signups after setup. The first account on a fresh instance is still allowed and becomes the instance admin automatically. |
-| `OPENPOST_JWT_SECRET` | Yes for production | development fallback in code | Secret used to sign JWTs. |
-| `OPENPOST_ENCRYPTION_KEY` | Yes for production | development fallback in code | Secret used to encrypt stored OAuth tokens. |
+| `OPENPOST_JWT_SECRET` | Yes | none | Secret used to sign JWTs. Must be at least 32 characters. |
+| `OPENPOST_ENCRYPTION_KEY` | Yes | none | Secret used to encrypt stored OAuth tokens. Must be at least 32 characters. |
 | `OPENPOST_MEDIA_PATH` | No | `./media` | Local directory for uploaded media. |
 | `OPENPOST_MEDIA_URL` | No, but required for Threads production use | `/media` | Public base URL for media files. |
-| `OPENPOST_ENV` | No | empty | Set to `production` or `prod` to enforce production secret validation. |
+| `OPENPOST_ENV` | No | empty | Optional deployment label. Secret validation is enforced regardless of environment mode. |
 
 ## X
 
@@ -24,7 +24,7 @@ This page summarizes the env vars used by the backend. Some values in `backend/.
 |---|---:|---|---|
 | `X_CLIENT_ID` | Yes for X | empty | X OAuth client ID. |
 | `X_CLIENT_SECRET` | Yes for X | empty | X OAuth client secret. |
-| `X_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/x/callback` | X callback URL override. |
+| `X_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/x/callback` | X OAuth 1.0a callback URL override. |
 
 ## Mastodon
 

@@ -32,10 +32,30 @@ func NewAccountSaver(db *bun.DB, crypto *crypto.TokenEncryptor) *AccountSaver {
 // SaveAccount saves a social account with encrypted tokens.
 // It handles the common logic of extracting account info, encrypting tokens,
 // and inserting into the social_accounts table.
-func (s *AccountSaver) SaveAccount(ctx context.Context, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*models.SocialAccount, error) {
+//
+//nolint:gocyclo
+func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*models.SocialAccount, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
+	if userID == "" {
+		return nil, fmt.Errorf("user id is required")
+	}
+	if workspaceID == "" {
+		return nil, fmt.Errorf("workspace id is required")
+	}
+
+	memberCount, err := s.db.NewSelect().
+		Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("validating workspace membership: %w", err)
+	}
+	if memberCount == 0 {
+		return nil, fmt.Errorf("workspace not accessible")
+	}
+
 	// For Threads, the account ID comes from the token response extra
 	if tokenResp.Extra != nil {
 		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {

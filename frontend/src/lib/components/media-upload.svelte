@@ -39,6 +39,7 @@
 	let _isDragging = $state(false);
 	let editingAltId = $state<string | null>(null);
 	let editingAltText = $state('');
+	let savingAltId = $state<string | null>(null);
 
 	let inputElement: HTMLInputElement | null = null;
 	let uploadSeq = 0;
@@ -112,10 +113,40 @@
 		editingAltText = item.altText;
 	}
 
-	function saveAlt(item: MediaItem) {
-		item.altText = editingAltText;
-		editingAltId = null;
-		editingAltText = '';
+	async function saveAlt(item: MediaItem) {
+		if (!item.id) {
+			item.altText = editingAltText;
+			editingAltId = null;
+			editingAltText = '';
+			return;
+		}
+
+		savingAltId = item.id;
+		try {
+			const token = getToken();
+			const resp = await fetch(`${getApiBase()}/media/${item.id}`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {})
+				},
+				body: JSON.stringify({ alt_text: editingAltText })
+			});
+
+			if (!resp.ok) {
+				throw new Error(`Alt text save failed (${resp.status})`);
+			}
+
+			items = items.map((current) =>
+				current.id === item.id ? { ...current, altText: editingAltText } : current
+			);
+			editingAltId = null;
+			editingAltText = '';
+		} catch (error) {
+			console.error('Failed to save media alt text', error);
+		} finally {
+			savingAltId = null;
+		}
 	}
 
 	$effect(() => {
@@ -172,9 +203,14 @@
 										variant="ghost"
 										size="icon-xs"
 										class="h-5 w-5"
+										disabled={savingAltId === item.id}
 										onclick={() => saveAlt(item)}
 									>
-										<CheckIcon class="h-3 w-3" />
+										{#if savingAltId === item.id}
+											<LoaderIcon class="h-3 w-3 animate-spin" />
+										{:else}
+											<CheckIcon class="h-3 w-3" />
+										{/if}
 									</Button>
 								</div>
 							</div>

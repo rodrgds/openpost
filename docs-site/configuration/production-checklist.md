@@ -2,7 +2,7 @@
 
 - [ ] Generate fresh `OPENPOST_JWT_SECRET`
 - [ ] Generate fresh `OPENPOST_ENCRYPTION_KEY`
-- [ ] Set `OPENPOST_ENV=production`
+- [ ] Use secrets that are at least 32 characters long
 - [ ] Set `OPENPOST_APP_URL`
 - [ ] Set `OPENPOST_MEDIA_URL`
 - [ ] Decide whether to set `OPENPOST_DISABLE_REGISTRATIONS=true` after creating the first admin account

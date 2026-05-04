@@ -26,6 +26,7 @@ import (
 	"github.com/openpost/backend/internal/queue"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/publisher"
@@ -61,6 +62,7 @@ func main() {
 
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
+	mediaSigner := mediasigner.New(cfg.EncryptionKey)
 	mfaService, err := mfa.NewService("OpenPost", mfa.RelyingPartyConfig{
 		Name:    "OpenPost",
 		ID:      cfg.WebAuthnRPID,
@@ -72,6 +74,7 @@ func main() {
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	publishSvc := publisher.NewService(db, tokenManager)
 	publishSvc.SetDisableLinkedInThreadReplies(cfg.DisableLinkedInThreadReplies)
+	publishSvc.SetMediaSigner(mediaSigner)
 	if cfg.MediaURL != "" && !strings.HasPrefix(cfg.MediaURL, "/") {
 		publishSvc.SetPublicMediaURL(cfg.MediaURL)
 	}
@@ -136,7 +139,7 @@ func main() {
 	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
 		log.Printf("Warning: could not create media directory %s: %v", cfg.MediaPath, err)
 	}
-	mediaHandler := handlers.NewMediaHandler(db, storage, authService)
+	mediaHandler := handlers.NewMediaHandler(db, storage, authService, mediaSigner)
 
 	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, tokenManager, storage)
 

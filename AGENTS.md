@@ -28,7 +28,7 @@ All social platform integrations follow a unified `PlatformAdapter` interface de
 
 | File | Platform | Auth Method |
 |------|----------|-------------|
-| `x.go` | Twitter/X | OAuth 2.0 PKCE |
+| `x.go` | Twitter/X | OAuth 1.0a |
 | `mastodon.go` | Mastodon | OAuth 2.0 (per-instance) |
 | `bluesky.go` | Bluesky | App Passwords |
 | `linkedin.go` | LinkedIn | OAuth 2.0 |

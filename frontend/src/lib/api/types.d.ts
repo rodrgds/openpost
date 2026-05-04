@@ -1704,9 +1704,9 @@ export type $defs = Record<string, never>;
 export interface operations {
     "list-accounts": {
         parameters: {
-            query?: {
+            query: {
                 /** @description Filter by workspace ID */
-                workspace_id?: string;
+                workspace_id: string;
             };
             header?: never;
             path?: never;
@@ -1910,9 +1910,9 @@ export interface operations {
     };
     "get-auth-url": {
         parameters: {
-            query?: {
+            query: {
                 /** @description Workspace ID to link account to */
-                workspace_id?: string;
+                workspace_id: string;
                 /** @description Mastodon server name from config (required for mastodon) */
                 server_name?: string;
             };
@@ -2168,9 +2168,9 @@ export interface operations {
     };
     "list-media": {
         parameters: {
-            query?: {
+            query: {
                 /** @description Filter by workspace ID (required) */
-                workspace_id?: string;
+                workspace_id: string;
                 /** @description Filter: all, used, unused, favorites */
                 filter?: string;
                 /** @description Sort: newest, oldest, size */

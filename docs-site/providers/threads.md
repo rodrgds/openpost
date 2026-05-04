@@ -10,6 +10,7 @@ Threads is workable, but the media URL requirement makes deployment details matt
 - `THREADS_CLIENT_SECRET`
 - Callback URL: `https://your-domain.com/api/v1/accounts/threads/callback`
 - Public `OPENPOST_MEDIA_URL`
+- Scopes: `threads_basic`, `threads_content_publish`, `threads_manage_replies`
 
 ## Important requirement
 

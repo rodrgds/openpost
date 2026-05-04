@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -18,6 +19,7 @@ const (
 	UserIDKey      contextKey = "user_id"
 	EmailKey       contextKey = "email"
 	WorkspaceIDKey contextKey = "workspace_id"
+	ClientIPKey    contextKey = "client_ip"
 )
 
 func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Context, next func(huma.Context)) {
@@ -59,6 +61,19 @@ func GetWorkspaceID(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+func GetClientIP(ctx context.Context) string {
+	if v, ok := ctx.Value(ClientIPKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func RequestMetadataMiddleware() func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		next(huma.WithValue(ctx, ClientIPKey, requestClientIP(ctx)))
+	}
 }
 
 // WorkspaceAccessMiddleware validates that the user has access to the workspace specified in the request.
@@ -114,4 +129,17 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+func requestClientIP(ctx huma.Context) string {
+	if forwarded := strings.TrimSpace(strings.Split(ctx.Header("X-Forwarded-For"), ",")[0]); forwarded != "" {
+		return forwarded
+	}
+	if realIP := strings.TrimSpace(ctx.Header("X-Real-Ip")); realIP != "" {
+		return realIP
+	}
+	if addr, err := netip.ParseAddrPort(ctx.RemoteAddr()); err == nil {
+		return addr.Addr().String()
+	}
+	return ctx.RemoteAddr()
 }

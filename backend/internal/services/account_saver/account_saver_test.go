@@ -30,12 +30,26 @@ func createTestDB(t *testing.T) *bun.DB {
 		Exec(context.Background())
 	require.NoError(t, err)
 	_, err = db.NewCreateTable().
+		Model((*models.WorkspaceMember)(nil)).
+		IfNotExists().
+		Exec(context.Background())
+	require.NoError(t, err)
+	_, err = db.NewCreateTable().
 		Model((*models.Job)(nil)).
 		IfNotExists().
 		Exec(context.Background())
 	require.NoError(t, err)
 
 	return db
+}
+
+func seedWorkspaceMember(t *testing.T, db *bun.DB, workspaceID, userID string) {
+	_, err := db.NewInsert().Model(&models.WorkspaceMember{
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		Role:        "admin",
+	}).Exec(context.Background())
+	require.NoError(t, err)
 }
 
 // openInMemorySQLite creates an in-memory SQLite database.
@@ -53,6 +67,7 @@ func TestSaveAccount_X(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "test-workspace-123"
+	userID := "user-123"
 	platformName := "x"
 	accountID := "1234567890"
 	accountUsername := "testuser"
@@ -66,7 +81,8 @@ func TestSaveAccount_X(t *testing.T) {
 		Extra:        map[string]string{},
 	}
 
-	account, err := saver.SaveAccount(ctx, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	account, err := saver.SaveAccount(ctx, userID, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
 	require.NoError(t, err)
 	require.NotNil(t, account)
 
@@ -112,6 +128,7 @@ func TestSaveAccount_Mastodon(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "test-workspace-456"
+	userID := "user-456"
 	platformName := "mastodon"
 	accountID := "mastodon-user-123"
 	accountUsername := "mastodonuser"
@@ -124,7 +141,8 @@ func TestSaveAccount_Mastodon(t *testing.T) {
 		Extra:        map[string]string{},
 	}
 
-	account, err := saver.SaveAccount(ctx, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	account, err := saver.SaveAccount(ctx, userID, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
 	require.NoError(t, err)
 	require.NotNil(t, account)
 
@@ -155,6 +173,7 @@ func TestSaveAccount_Threads(t *testing.T) {
 
 	ctx := context.Background()
 	workspaceID := "test-workspace-789"
+	userID := "user-789"
 	platformName := "threads"
 	// This accountID will be overridden by user_id from token extra
 	initialAccountID := "initial-account-id"
@@ -170,7 +189,8 @@ func TestSaveAccount_Threads(t *testing.T) {
 		},
 	}
 
-	account, err := saver.SaveAccount(ctx, platformName, workspaceID, initialAccountID, accountUsername, instanceURL, tokenResp)
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	account, err := saver.SaveAccount(ctx, userID, platformName, workspaceID, initialAccountID, accountUsername, instanceURL, tokenResp)
 	require.NoError(t, err)
 	require.NotNil(t, account)
 
@@ -189,20 +209,20 @@ func TestSaveAccount_EncryptionError(t *testing.T) {
 	t.Parallel()
 
 	db := createTestDB(t)
-	// Create a crypto service that will fail by passing an empty key
-	// Passing an empty master key still derives a key via SHA-256; encryption
-	// should succeed. Verify SaveAccount stores encrypted tokens when key is empty.
-	crypto := crypto.NewTokenEncryptor("")
+	crypto := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
 	saver := NewAccountSaver(db, crypto)
 
 	ctx := context.Background()
+	workspaceID := "workspace"
+	userID := "user"
+	seedWorkspaceMember(t, db, workspaceID, userID)
 	tokenResp := &platform.TokenResult{
 		AccessToken:  "some-token",
 		RefreshToken: "some-refresh",
 		ExpiresIn:    3600,
 	}
 
-	acct, err := saver.SaveAccount(ctx, "x", "workspace", "account", "user", "", tokenResp)
+	acct, err := saver.SaveAccount(ctx, userID, "x", workspaceID, "account", "user", "", tokenResp)
 	require.NoError(t, err)
 	require.NotNil(t, acct)
 	// Ensure tokens are stored encrypted and decryptable
@@ -226,6 +246,6 @@ func TestSaveAccount_DatabaseError(t *testing.T) {
 		ExpiresIn:    3600,
 	}
 
-	_, err := saver.SaveAccount(ctx, "x", "workspace", "account", "user", "", tokenResp)
+	_, err := saver.SaveAccount(ctx, "user", "x", "workspace", "account", "user", "", tokenResp)
 	require.Error(t, err)
 }

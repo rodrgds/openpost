@@ -19,6 +19,7 @@ import (
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mfa"
+	"github.com/openpost/backend/internal/services/ratelimit"
 	"github.com/uptrace/bun"
 )
 
@@ -39,6 +40,7 @@ type AuthHandler struct {
 	encryptor             *crypto.TokenEncryptor
 	mfa                   *mfa.Service
 	registrationsDisabled bool
+	limiter               *ratelimit.Limiter
 }
 
 func NewAuthHandler(db *bun.DB, authService *auth.Service, encryptor *crypto.TokenEncryptor, mfaService *mfa.Service, registrationsDisabled bool) *AuthHandler {
@@ -48,6 +50,7 @@ func NewAuthHandler(db *bun.DB, authService *auth.Service, encryptor *crypto.Tok
 		encryptor:             encryptor,
 		mfa:                   mfaService,
 		registrationsDisabled: registrationsDisabled,
+		limiter:               ratelimit.New(),
 	}
 }
 
@@ -203,8 +206,16 @@ func (h *AuthHandler) Register(api huma.API) {
 		Path:        "/auth/register",
 		Summary:     "Register a new user",
 		Tags:        []string{"Auth"},
+		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{400, 409},
 	}, func(ctx context.Context, input *RegisterInput) (*AuthOutput, error) {
+		if !h.allowAuthAttempt(clientIP(ctx), "register:ip", 10, time.Hour) {
+			return nil, huma.Error429TooManyRequests("too many registration attempts")
+		}
+		if !h.allowAuthAttempt(strings.TrimSpace(strings.ToLower(input.Body.Email)), "register:email", 5, time.Hour) {
+			return nil, huma.Error429TooManyRequests("too many registration attempts")
+		}
+
 		user, err := h.registerUser(ctx, input.Body.Email, input.Body.Password)
 		if errors.Is(err, errEmailAlreadyRegistered) {
 			return nil, huma.Error409Conflict("email already registered")
@@ -271,11 +282,20 @@ func (h *AuthHandler) Login(api huma.API) {
 		Path:        "/auth/login",
 		Summary:     "Login with email and password",
 		Tags:        []string{"Auth"},
+		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{401},
 	}, func(ctx context.Context, input *LoginInput) (*AuthOutput, error) {
+		normalizedEmail := strings.TrimSpace(strings.ToLower(input.Body.Email))
+		if !h.allowAuthAttempt(clientIP(ctx), "login:ip", 20, 15*time.Minute) {
+			return nil, huma.Error429TooManyRequests("too many login attempts")
+		}
+		if !h.allowAuthAttempt(normalizedEmail, "login:email", 10, 15*time.Minute) {
+			return nil, huma.Error429TooManyRequests("too many login attempts")
+		}
+
 		user := new(models.User)
 		err := h.db.NewSelect().Model(user).
-			Where("email = ?", strings.TrimSpace(strings.ToLower(input.Body.Email))).
+			Where("email = ?", normalizedEmail).
 			Scan(ctx)
 		if err != nil {
 			return nil, huma.Error401Unauthorized("invalid credentials")
@@ -315,11 +335,18 @@ func (h *AuthHandler) VerifyTOTPLogin(api huma.API) {
 		Path:        "/auth/login/totp",
 		Summary:     "Complete MFA login with a TOTP code",
 		Tags:        []string{"Auth"},
+		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *VerifyTOTPLoginInput) (*AuthOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.MFAToken, authChallengeLoginMFA)
 		if err != nil {
 			return nil, huma.Error401Unauthorized("invalid or expired MFA token")
+		}
+		if !h.allowAuthAttempt(clientIP(ctx), "mfa:ip", 20, 15*time.Minute) {
+			return nil, huma.Error429TooManyRequests("too many MFA attempts")
+		}
+		if !h.allowAuthAttempt(challenge.UserID, "mfa:user", 10, 15*time.Minute) {
+			return nil, huma.Error429TooManyRequests("too many MFA attempts")
 		}
 
 		user, err := h.getUserByID(ctx, challenge.UserID)
@@ -346,6 +373,20 @@ func (h *AuthHandler) VerifyTOTPLogin(api huma.API) {
 
 		return h.issueAuthResponse(user)
 	})
+}
+
+func (h *AuthHandler) allowAuthAttempt(identifier, prefix string, limit int, window time.Duration) bool {
+	if h == nil || h.limiter == nil || identifier == "" {
+		return true
+	}
+	return h.limiter.Allow(prefix+":"+identifier, limit, window)
+}
+
+func clientIP(ctx context.Context) string {
+	if ip := middleware.GetClientIP(ctx); ip != "" {
+		return ip
+	}
+	return "unknown"
 }
 
 func (h *AuthHandler) BeginPasskeyLogin(api huma.API) {

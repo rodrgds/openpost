@@ -25,6 +25,7 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
+	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/uptrace/bun"
 )
@@ -38,10 +39,11 @@ type MediaHandler struct {
 	db      *bun.DB
 	storage mediastore.BlobStorage
 	auth    *auth.Service
+	signer  *mediasigner.Signer
 }
 
-func NewMediaHandler(db *bun.DB, storage mediastore.BlobStorage, authService *auth.Service) *MediaHandler {
-	return &MediaHandler{db: db, storage: storage, auth: authService}
+func NewMediaHandler(db *bun.DB, storage mediastore.BlobStorage, authService *auth.Service, signer *mediasigner.Signer) *MediaHandler {
+	return &MediaHandler{db: db, storage: storage, auth: authService, signer: signer}
 }
 
 type Thumbnails struct {
@@ -74,7 +76,7 @@ type MediaListItem struct {
 }
 
 type ListMediaInput struct {
-	WorkspaceID string `query:"workspace_id" doc:"Filter by workspace ID (required)"`
+	WorkspaceID string `query:"workspace_id" required:"true" doc:"Filter by workspace ID"`
 	Filter      string `query:"filter" doc:"Filter: all, used, unused, favorites"`
 	Sort        string `query:"sort" doc:"Sort: newest, oldest, size"`
 	Limit       int    `query:"limit" doc:"Limit (default 50, max 200)"`
@@ -545,10 +547,10 @@ func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {
 func (h *MediaHandler) RegisterLegacyRoutes(e *echo.Echo) {
 	e.POST("/api/v1/media/upload", h.uploadMedia, middleware.JWTMiddleware(h.auth))
 	e.POST("/api/v1/media/batch-upload", h.batchUploadMedia, middleware.JWTMiddleware(h.auth))
-	e.GET("/media/:id", h.serveMedia)
-	e.HEAD("/media/:id", h.serveMedia)
-	e.GET("/media/:id/thumb/:size", h.serveThumbnailSize)
-	e.HEAD("/media/:id/thumb/:size", h.serveThumbnailSize)
+	e.GET("/media/:id", h.serveMedia, h.optionalMediaAuth())
+	e.HEAD("/media/:id", h.serveMedia, h.optionalMediaAuth())
+	e.GET("/media/:id/thumb/:size", h.serveThumbnailSize, h.optionalMediaAuth())
+	e.HEAD("/media/:id/thumb/:size", h.serveThumbnailSize, h.optionalMediaAuth())
 }
 
 func (h *MediaHandler) uploadMedia(c echo.Context) error {
@@ -794,6 +796,9 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 	if err := h.db.NewSelect().Model(media).Where("id = ?", mediaID).Scan(c.Request().Context()); err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
 	}
+	if err := h.authorizeMediaAccess(c, media); err != nil {
+		return err
+	}
 
 	file, err := h.storage.Open(filepath.Base(media.FilePath))
 	if err != nil {
@@ -831,6 +836,9 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 	if err := h.db.NewSelect().Model(media).Where("id = ?", mediaID).Scan(c.Request().Context()); err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
 	}
+	if err := h.authorizeMediaAccess(c, media); err != nil {
+		return err
+	}
 
 	var thumbs Thumbnails
 	if media.ThumbnailsJSON != "" {
@@ -867,4 +875,44 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 	c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 
 	return c.Stream(http.StatusOK, "image/jpeg", file)
+}
+
+func (h *MediaHandler) optionalMediaAuth() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader != "" {
+				return middleware.JWTMiddleware(h.auth)(next)(c)
+			}
+			return next(c)
+		}
+	}
+}
+
+func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaAttachment) error {
+	if media == nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
+	}
+
+	if userID, _ := c.Get(string(middleware.UserIDKey)).(string); userID != "" {
+		memberCount, err := h.db.NewSelect().
+			Model((*models.WorkspaceMember)(nil)).
+			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
+			Count(c.Request().Context())
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+		}
+		if memberCount == 0 {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+		}
+		return nil
+	}
+
+	expiresAtUnix, _ := strconv.ParseInt(c.QueryParam("exp"), 10, 64)
+	signature := c.QueryParam("sig")
+	if signature == "" || h.signer == nil || !h.signer.Verify(media.ID, signature, expiresAtUnix) {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	}
+
+	return nil
 }

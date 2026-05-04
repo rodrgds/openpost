@@ -91,7 +91,7 @@
 							/>
 						{:else if mediaLayout === 'grid-2'}
 							<div class="grid grid-cols-2 gap-0.5">
-								{#each mediaIds as id}
+								{#each mediaIds as id (id)}
 									<img
 										src="{getMediaBase()}/media/{id}"
 										alt=""
@@ -119,7 +119,7 @@
 							</div>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
-								{#each mediaIds as id}
+								{#each mediaIds as id (id)}
 									<img
 										src="{getMediaBase()}/media/{id}"
 										alt=""
@@ -178,7 +178,7 @@
 				</div>
 				{#if mediaIds.length > 0}
 					<div class="mt-3 grid grid-cols-2 gap-2">
-						{#each mediaIds as id}
+						{#each mediaIds as id (id)}
 							<img
 								src="{getMediaBase()}/media/{id}"
 								alt=""
@@ -252,7 +252,7 @@
 							/>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
-								{#each mediaIds as id}
+								{#each mediaIds as id (id)}
 									<img
 										src="{getMediaBase()}/media/{id}"
 										alt=""
@@ -313,24 +313,13 @@
 		</div>
 		{#if mediaIds.length > 0}
 			<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
-				{#if mediaLayout === 'single'}
-					<img
-						src="{getMediaBase()}/media/{mediaIds[0]}"
-						alt=""
-						class="h-auto w-full object-cover"
-					/>
-				{:else}
-					<div class="grid grid-cols-2 gap-0.5">
-						{#each mediaIds as id}
-							<img
-								src="{getMediaBase()}/media/{id}"
-								alt=""
-								class="aspect-square w-full object-cover"
-							/>
-						{/each}
-					</div>
-				{/if}
+				<img src="{getMediaBase()}/media/{mediaIds[0]}" alt="" class="h-auto w-full object-cover" />
 			</div>
+			{#if mediaIds.length > 1}
+				<div class="mt-2 text-xs text-muted-foreground">
+					Preview shows the first attachment. LinkedIn publishing currently sends one media item.
+				</div>
+			{/if}
 		{/if}
 		<div class="mt-3 flex items-center gap-4 border-t pt-3 text-sm text-muted-foreground">
 			<span class="flex items-center gap-1.5 hover:text-blue-600">
@@ -386,24 +375,17 @@
 				</div>
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
-						{#if mediaLayout === 'single'}
-							<img
-								src="{getMediaBase()}/media/{mediaIds[0]}"
-								alt=""
-								class="h-auto w-full object-cover"
-							/>
-						{:else}
-							<div class="grid grid-cols-2 gap-0.5">
-								{#each mediaIds as id}
-									<img
-										src="{getMediaBase()}/media/{id}"
-										alt=""
-										class="aspect-square w-full object-cover"
-									/>
-								{/each}
-							</div>
-						{/if}
+						<img
+							src="{getMediaBase()}/media/{mediaIds[0]}"
+							alt=""
+							class="h-auto w-full object-cover"
+						/>
 					</div>
+					{#if mediaIds.length > 1}
+						<div class="mt-2 text-xs text-muted-foreground">
+							Preview shows the first attachment. Threads publishing currently sends one media item.
+						</div>
+					{/if}
 				{/if}
 				<div class="mt-3 flex items-center gap-6 text-muted-foreground">
 					<div class="flex items-center gap-1.5 hover:text-foreground">
@@ -441,7 +423,7 @@
 		</div>
 		{#if mediaIds.length > 0}
 			<div class="mt-3 grid grid-cols-2 gap-2">
-				{#each mediaIds as id}
+				{#each mediaIds as id (id)}
 					<img src="{getMediaBase()}/media/{id}" alt="" class="rounded-lg object-cover" />
 				{/each}
 			</div>

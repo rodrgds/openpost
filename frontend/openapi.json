@@ -1502,6 +1502,7 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
+						"required": true,
 						"schema": { "description": "Filter by workspace ID", "type": "string" }
 					}
 				],
@@ -1698,6 +1699,7 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
+						"required": true,
 						"schema": { "description": "Workspace ID to link account to", "type": "string" }
 					},
 					{
@@ -1955,6 +1957,7 @@
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
+						"required": true,
 						"schema": { "description": "Filter by workspace ID (required)", "type": "string" }
 					},
 					{

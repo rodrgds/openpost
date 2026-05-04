@@ -40,7 +40,7 @@ func DoRequest(ctx context.Context, method, url string, body io.Reader, headers 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s %s returned %d: %s", method, url, resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%s %s returned %d: %s", method, sanitizeURL(url), resp.StatusCode, string(respBody))
 	}
 
 	return respBody, nil
@@ -151,3 +151,19 @@ func encodeFormValues(values map[string]string) []byte {
 
 // jsonMarshal is a thin wrapper to allow overriding in tests if needed.
 var jsonMarshal = json.Marshal
+
+func sanitizeURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	query := parsed.Query()
+	for _, key := range []string{"access_token", "token", "refresh_token", "client_secret"} {
+		if query.Has(key) {
+			query.Set(key, "[redacted]")
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}

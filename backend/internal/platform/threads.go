@@ -218,9 +218,11 @@ func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken,
 	)
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		statusURL := "https://graph.threads.net/v1.0/" + containerID + "?fields=status,error_message&access_token=" + url.QueryEscape(accessToken)
+		statusURL := "https://graph.threads.net/v1.0/" + containerID + "?fields=status,error_message"
 
-		respBody, err := DoRequest(ctx, "GET", statusURL, nil, nil)
+		respBody, err := DoRequest(ctx, "GET", statusURL, nil, map[string]string{
+			"Authorization": "Bearer " + accessToken,
+		})
 		if err != nil {
 			if attempt == maxAttempts {
 				return fmt.Errorf("threads container status check: %w", err)

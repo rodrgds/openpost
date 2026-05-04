@@ -21,8 +21,8 @@ features:
     title: One post, many networks
     details: Publish from one place to X, Mastodon, Bluesky, Threads, and LinkedIn.
   - icon: ✍️
-    title: Provider-specific variants
-    details: Start from one canonical post, then tailor copy where each network needs its own version.
+    title: Account-specific variants
+    details: Start from one canonical post, then tailor copy per connected destination account when needed.
   - icon: 🧵
     title: Thread composer
     details: Build multi-post threads and publish them in sequence instead of stitching replies together manually.

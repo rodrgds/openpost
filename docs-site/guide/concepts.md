@@ -20,7 +20,7 @@ A chain of posts published in sequence. OpenPost maps thread replies to each pro
 
 ## Variant
 
-Provider-specific content for a post when one message does not fit every network equally well.
+Account-specific content for a post when one message does not fit every connected destination equally well.
 
 ## Media
 

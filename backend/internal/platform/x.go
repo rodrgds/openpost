@@ -27,13 +27,14 @@ type XAdapter struct {
 }
 
 type XRequestStore interface {
-	Save(requestToken, requestSecret, workspaceID string, createdAt time.Time) error
+	Save(requestToken, requestSecret, workspaceID, userID string, createdAt time.Time) error
 	Consume(requestToken string, maxAge time.Duration) (XRequestMeta, bool, error)
 }
 
 type XRequestMeta struct {
 	Secret      string
 	WorkspaceID string
+	UserID      string
 	CreatedAt   time.Time
 }
 
@@ -82,14 +83,14 @@ func (x *XAdapter) purgeOldEntries() {
 }
 
 func (x *XAdapter) GenerateAuthURL(state string) (string, map[string]string) {
-	authURL, err := x.GenerateAuthURLWithError(state)
+	authURL, err := x.GenerateAuthURLWithError("", state)
 	if err != nil {
 		return "", nil
 	}
 	return authURL, nil
 }
 
-func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) {
+func (x *XAdapter) GenerateAuthURLWithError(userID, workspaceID string) (string, error) {
 	callback := x.redirectURI
 
 	config := oauth1.Config{
@@ -107,9 +108,14 @@ func (x *XAdapter) GenerateAuthURLWithError(workspaceID string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("x oauth1 request token failed: %w", err)
 	}
-	meta := XRequestMeta{Secret: requestSecret, WorkspaceID: workspaceID, CreatedAt: time.Now().UTC()}
+	meta := XRequestMeta{
+		Secret:      requestSecret,
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		CreatedAt:   time.Now().UTC(),
+	}
 	if x.requestStore != nil {
-		if saveErr := x.requestStore.Save(requestToken, meta.Secret, meta.WorkspaceID, meta.CreatedAt); saveErr != nil {
+		if saveErr := x.requestStore.Save(requestToken, meta.Secret, meta.WorkspaceID, meta.UserID, meta.CreatedAt); saveErr != nil {
 			return "", fmt.Errorf("x oauth1 request token persist failed: %w", saveErr)
 		}
 	} else {
@@ -199,6 +205,9 @@ func (x *XAdapter) ExchangeCode(_ context.Context, _ string, extra map[string]st
 	resultExtra := map[string]string{}
 	if meta.WorkspaceID != "" {
 		resultExtra["_workspace_id"] = meta.WorkspaceID
+	}
+	if meta.UserID != "" {
+		resultExtra["_user_id"] = meta.UserID
 	}
 
 	return &TokenResult{

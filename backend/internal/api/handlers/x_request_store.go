@@ -19,11 +19,12 @@ func newXRequestStore(db *bun.DB) *xRequestStore {
 	return &xRequestStore{db: db}
 }
 
-func (s *xRequestStore) Save(requestToken, requestSecret, workspaceID string, createdAt time.Time) error {
+func (s *xRequestStore) Save(requestToken, requestSecret, workspaceID, userID string, createdAt time.Time) error {
 	record := &models.XOAuthRequestToken{
 		RequestToken:  requestToken,
 		RequestSecret: requestSecret,
 		WorkspaceID:   workspaceID,
+		UserID:        userID,
 		CreatedAt:     createdAt.UTC(),
 	}
 
@@ -56,6 +57,7 @@ func (s *xRequestStore) Consume(requestToken string, maxAge time.Duration) (plat
 	return platform.XRequestMeta{
 		Secret:      record.RequestSecret,
 		WorkspaceID: record.WorkspaceID,
+		UserID:      record.UserID,
 		CreatedAt:   record.CreatedAt,
 	}, true, nil
 }

@@ -153,6 +153,35 @@ func (h *PostHandler) validateAccountsBelongToWorkspace(ctx context.Context, wor
 	return nil
 }
 
+func (h *PostHandler) validateMediaBelongsToWorkspace(ctx context.Context, workspaceID string, mediaIDs []string) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+
+	uniqueIDs := make([]string, 0, len(mediaIDs))
+	seen := make(map[string]struct{}, len(mediaIDs))
+	for _, mediaID := range mediaIDs {
+		if _, ok := seen[mediaID]; ok {
+			continue
+		}
+		seen[mediaID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, mediaID)
+	}
+
+	count, err := h.db.NewSelect().
+		Model((*models.MediaAttachment)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("id IN (?)", bun.List(uniqueIDs)).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to validate media attachments")
+	}
+	if count != len(uniqueIDs) {
+		return huma.Error400BadRequest("one or more media attachments are invalid or outside this workspace")
+	}
+	return nil
+}
+
 // applyRandomDelay applies a random delay of ±N minutes to the scheduled time.
 func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
 	if randomDelayMinutes <= 0 {
@@ -193,6 +222,9 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			return nil, err
 		}
 		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
+			return nil, err
+		}
+		if err := h.validateMediaBelongsToWorkspace(ctx, input.Body.WorkspaceID, input.Body.MediaIDs); err != nil {
 			return nil, err
 		}
 
@@ -307,6 +339,10 @@ func (h *PostHandler) ListPosts(api huma.API) {
 
 		var workspaceIDs []string
 		if input.WorkspaceID != "" {
+			userID := middleware.GetUserID(ctx)
+			if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+				return nil, err
+			}
 			workspaceIDs = []string{input.WorkspaceID}
 		} else {
 			var workspaceMembers []models.WorkspaceMember
@@ -760,6 +796,17 @@ func (h *PostHandler) CreateThread(api huma.API) {
 			return nil, err
 		}
 
+		var allMediaIDs []string
+		for _, threadPost := range input.Body.Posts {
+			allMediaIDs = append(allMediaIDs, threadPost.MediaIDs...)
+		}
+		if err := h.validateMediaBelongsToWorkspace(ctx, input.Body.WorkspaceID, allMediaIDs); err != nil {
+			return nil, err
+		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
+			return nil, err
+		}
+
 		if len(input.Body.Posts) < 2 {
 			return nil, huma.Error400BadRequest("a thread must have at least 2 posts")
 		}
@@ -1101,6 +1148,23 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 		if input.Body.SocialAccountIDs != nil {
 			if err := h.validateAccountsBelongToWorkspace(ctx, post.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
 				return nil, err
+			}
+		}
+		if input.Body.MediaIDs != nil {
+			if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, input.Body.MediaIDs); err != nil {
+				return nil, err
+			}
+		}
+		if input.Body.Content != nil && isThreadDraft(*input.Body.Content) {
+			var draft threadDraftData
+			if err := json.Unmarshal([]byte((*input.Body.Content)[len(threadDraftPrefix):]), &draft); err == nil {
+				var draftMediaIDs []string
+				for _, item := range draft.P {
+					draftMediaIDs = append(draftMediaIDs, item.M...)
+				}
+				if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, draftMediaIDs); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -1562,6 +1626,24 @@ func (h *PostHandler) UpsertVariants(api huma.API) {
 		}
 
 		if err := h.checkWorkspaceAccess(ctx, post.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+		accountIDs := make([]string, 0, len(input.Body.Variants))
+		var variantMediaIDs []string
+		for _, v := range input.Body.Variants {
+			accountIDs = append(accountIDs, v.SocialAccountID)
+			if v.MediaIDs != nil && *v.MediaIDs != "" {
+				var mediaIDs []string
+				if err := json.Unmarshal([]byte(*v.MediaIDs), &mediaIDs); err != nil {
+					return nil, huma.Error400BadRequest("variant media_ids must be a JSON array of media IDs")
+				}
+				variantMediaIDs = append(variantMediaIDs, mediaIDs...)
+			}
+		}
+		if err := h.validateAccountsBelongToWorkspace(ctx, post.WorkspaceID, accountIDs); err != nil {
+			return nil, err
+		}
+		if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, variantMediaIDs); err != nil {
 			return nil, err
 		}
 

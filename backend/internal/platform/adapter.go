@@ -55,11 +55,11 @@ type RefreshTokenInput struct {
 type Adapter interface {
 	// Auth flow
 	// GenerateAuthURL returns the OAuth authorization URL.
-	// extra contains platform-specific params (e.g. PKCE code_challenge for X).
+	// extra contains platform-specific params.
 	GenerateAuthURL(state string) (authURL string, extra map[string]string)
 
 	// ExchangeCode exchanges an authorization code for tokens.
-	// extra contains platform-specific params (e.g. PKCE verifier for X, server_name for Mastodon).
+	// extra contains platform-specific params (for example OAuth 1.0a verifier data for X or server_name for Mastodon).
 	ExchangeCode(ctx context.Context, code string, extra map[string]string) (*TokenResult, error)
 
 	// RefreshCapability declares whether a platform supports token refresh and

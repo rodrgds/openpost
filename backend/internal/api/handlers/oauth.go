@@ -19,6 +19,7 @@ import (
 	account_saver "github.com/openpost/backend/internal/services/account_saver"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/oauthstate"
 	"github.com/uptrace/bun"
 )
 
@@ -31,6 +32,7 @@ type OAuthHandler struct {
 	auth                         *auth.Service
 	disableLinkedInThreadReplies bool
 	accountSaver                 *account_saver.AccountSaver
+	oauthStates                  *oauthstate.Store
 }
 
 func mastodonInstanceURL(adapter platform.Adapter) string {
@@ -61,6 +63,7 @@ func NewOAuthHandler(
 		auth:                         authService,
 		disableLinkedInThreadReplies: disableLinkedInThreadReplies,
 		accountSaver:                 account_saver.NewAccountSaver(db, encryptor),
+		oauthStates:                  oauthstate.NewStore(db),
 	}
 }
 
@@ -75,7 +78,7 @@ type ListMastodonServersOutput struct {
 
 type GetAuthURLInput struct {
 	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads)"`
-	WorkspaceID string `query:"workspace_id" doc:"Workspace ID to link account to"`
+	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
 	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
 }
 
@@ -88,7 +91,7 @@ type GetAuthURLOutput struct {
 type OAuthCallbackInput struct {
 	Platform         string `path:"platform" doc:"Social platform"`
 	Code             string `query:"code" doc:"OAuth authorization code" required:"false"`
-	State            string `query:"state" doc:"OAuth state (workspace ID)"`
+	State            string `query:"state" doc:"OAuth state"`
 	OAuthToken       string `query:"oauth_token" doc:"OAuth 1.0a request token (X)" required:"false"`
 	Verifier         string `query:"oauth_verifier" doc:"OAuth 1.0a verifier (X)" required:"false"`
 	ServerName       string `query:"server_name" doc:"Mastodon server name (required for mastodon)" required:"false"`
@@ -105,7 +108,7 @@ type ExchangeCodeInput struct {
 }
 
 type ListAccountsInput struct {
-	WorkspaceID string `query:"workspace_id" doc:"Filter by workspace ID"`
+	WorkspaceID string `query:"workspace_id" required:"true" doc:"Filter by workspace ID"`
 }
 
 type AccountResponse struct {
@@ -187,14 +190,32 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		Tags:        []string{"Accounts"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
-	}, func(_ context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
+	}, func(ctx context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
 		if input.Platform == "bluesky" {
 			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
 		}
+		if input.WorkspaceID == "" {
+			return nil, huma.Error400BadRequest("workspace_id is required")
+		}
 
-		adapter, err := h.getProvider(input.Platform, input.ServerName)
-		if err != nil {
-			return nil, huma.Error400BadRequest(err.Error())
+		userID := middleware.GetUserID(ctx)
+		if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		if input.Platform == mastodonProvider && input.ServerName == "" {
+			return nil, huma.Error400BadRequest("server_name required for mastodon")
+		}
+
+		var (
+			adapter platform.Adapter
+			err     error
+		)
+		if input.Platform != mastodonProvider || input.ServerName != "" {
+			adapter, err = h.getProvider(input.Platform, input.ServerName)
+			if err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
 		}
 
 		if input.Platform == "x" {
@@ -202,7 +223,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			if !ok {
 				return nil, huma.Error500InternalServerError("x adapter type mismatch")
 			}
-			authURL, err := xAdapter.GenerateAuthURLWithError(input.WorkspaceID)
+			authURL, err := xAdapter.GenerateAuthURLWithError(userID, input.WorkspaceID)
 			if err != nil {
 				log.Printf("[X OAuth] auth url generation failed: %v", err)
 				return nil, huma.Error400BadRequest(fmt.Sprintf("x auth url generation failed: %s", err.Error()))
@@ -212,10 +233,17 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return resp, nil
 		}
 
-		authURL, _ := adapter.GenerateAuthURL(input.WorkspaceID)
-		if input.Platform == mastodonProvider && input.ServerName != "" {
-			authURL, _ = adapter.GenerateAuthURL(input.ServerName + ":" + input.WorkspaceID)
+		state, err := h.oauthStates.Create(ctx, oauthstate.Payload{
+			UserID:      userID,
+			WorkspaceID: input.WorkspaceID,
+			Platform:    input.Platform,
+			ServerName:  input.ServerName,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to create oauth state")
 		}
+
+		authURL, _ := adapter.GenerateAuthURL(state)
 		if authURL == "" {
 			return nil, huma.Error400BadRequest(fmt.Sprintf("%s does not support OAuth redirect", input.Platform))
 		}
@@ -250,34 +278,48 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			return h.redirectWithError("missing authorization code")
 		}
 
-		workspaceID := input.State
-		if input.Platform == mastodonProvider && input.ServerName == "" && input.State != "" {
-			parts := strings.SplitN(input.State, ":", 2)
-			if len(parts) == 2 {
-				input.ServerName = parts[0]
-				workspaceID = parts[1]
-			}
-		}
-
-		adapter, err := h.getProvider(input.Platform, input.ServerName)
-		if err != nil {
-			return nil, huma.Error400BadRequest(err.Error())
-		}
+		workspaceID := ""
+		userID := ""
+		var adapter platform.Adapter
 
 		extra := make(map[string]string)
 		if input.Platform == "x" {
+			var err error
+			adapter, err = h.getProvider(input.Platform, input.ServerName)
+			if err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
 			extra["oauth_token"] = input.OAuthToken
 			extra["oauth_verifier"] = input.Verifier
 		}
 
-		if input.Platform == "threads" {
-			if threadsAdapter, ok := adapter.(*platform.ThreadsAdapter); ok {
-				ws, ok := threadsAdapter.GetWorkspaceID(input.State)
-				if !ok {
-					return nil, huma.Error400BadRequest("invalid or expired state")
-				}
-				workspaceID = ws
-				extra["_workspace_id"] = workspaceID
+		if input.Platform == "x" {
+			xAdapter, ok := adapter.(*platform.XAdapter)
+			if !ok {
+				return nil, huma.Error500InternalServerError("x adapter type mismatch")
+			}
+			ws, ok := xAdapter.GetWorkspaceIDForRequestToken(input.OAuthToken)
+			if !ok {
+				return nil, huma.Error400BadRequest("invalid or expired oauth request token")
+			}
+			workspaceID = ws
+		} else {
+			statePayload, err := h.oauthStates.Consume(ctx, input.State)
+			if err != nil {
+				return nil, huma.Error400BadRequest("invalid or expired state")
+			}
+			if statePayload.Platform != input.Platform {
+				return nil, huma.Error400BadRequest("oauth state platform mismatch")
+			}
+			userID = statePayload.UserID
+			workspaceID = statePayload.WorkspaceID
+			if input.Platform == mastodonProvider {
+				input.ServerName = statePayload.ServerName
+			}
+
+			adapter, err = h.getProvider(input.Platform, input.ServerName)
+			if err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
 			}
 		}
 
@@ -298,9 +340,15 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		if ws, ok := extra["_workspace_id"]; ok {
 			workspaceID = ws
 		}
+		if uid, ok := extra["_user_id"]; ok {
+			userID = uid
+		}
 		if tokenResp.Extra != nil {
 			if ws, ok := tokenResp.Extra["_workspace_id"]; ok && ws != "" {
 				workspaceID = ws
+			}
+			if uid, ok := tokenResp.Extra["_user_id"]; ok && uid != "" {
+				userID = uid
 			}
 		}
 
@@ -309,7 +357,11 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			instanceRef = mastodonInstanceURL(adapter)
 		}
 
-		return h.saveAccountAndRedirect(ctx, input.Platform, workspaceID, profile.ID, profile.Username, instanceRef, tokenResp)
+		if err := h.checkWorkspaceAccess(ctx, workspaceID, userID); err != nil {
+			return nil, err
+		}
+
+		return h.saveAccountAndRedirect(ctx, userID, input.Platform, workspaceID, profile.ID, profile.Username, instanceRef, tokenResp)
 	})
 }
 
@@ -322,7 +374,7 @@ func (h *OAuthHandler) redirectWithError(msg string) (*huma.StreamResponse, erro
 	}, nil
 }
 
-func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*huma.StreamResponse, error) {
+func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, userID, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*huma.StreamResponse, error) {
 	// For Threads, the account ID comes from the token response extra
 	if tokenResp.Extra != nil {
 		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
@@ -330,7 +382,7 @@ func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, platformName,
 		}
 	}
 
-	account, err := h.accountSaver.SaveAccount(ctx, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
+	account, err := h.accountSaver.SaveAccount(ctx, userID, platformName, workspaceID, accountID, accountUsername, instanceURL, tokenResp)
 	if err != nil {
 		log.Printf("[Callback] Failed to save account: %v", err)
 		return nil, huma.Error500InternalServerError("failed to save account")
@@ -354,8 +406,14 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Path:        "/accounts/mastodon/exchange",
 		Summary:     "Exchange Mastodon OOB authorization code",
 		Tags:        []string{"Accounts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
+		userID := middleware.GetUserID(ctx)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
 		adapter, err := h.getProvider(mastodonProvider, input.Body.ServerName)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
@@ -374,7 +432,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		instanceURL := mastodonInstanceURL(adapter)
 
 		// Delegate saving the account (encrypting tokens and inserting) to AccountSaver
-		if _, err := h.accountSaver.SaveAccount(ctx, mastodonProvider, input.Body.WorkspaceID, profile.ID, profile.Username, instanceURL, tokenResp); err != nil {
+		if _, err := h.accountSaver.SaveAccount(ctx, userID, mastodonProvider, input.Body.WorkspaceID, profile.ID, profile.Username, instanceURL, tokenResp); err != nil {
 			log.Printf("[ExchangeCode] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to save account: %s", err.Error()))
 		}
@@ -400,8 +458,14 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 		Path:        "/accounts/bluesky/login",
 		Summary:     "Connect Bluesky account using app password",
 		Tags:        []string{"Accounts"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *BlueskyLoginInput) (*struct{}, error) {
+		userID := middleware.GetUserID(ctx)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+
 		adapter, ok := h.providers["bluesky"]
 		if !ok {
 			return nil, huma.Error400BadRequest("bluesky not configured")
@@ -425,13 +489,27 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 			Extra:        nil,
 		}
 
-		if _, err := h.accountSaver.SaveAccount(ctx, "bluesky", input.Body.WorkspaceID, did, input.Body.Handle, "https://bsky.social", tokenResp); err != nil {
+		if _, err := h.accountSaver.SaveAccount(ctx, userID, "bluesky", input.Body.WorkspaceID, did, input.Body.Handle, "https://bsky.social", tokenResp); err != nil {
 			log.Printf("[BlueskyLogin] Failed to save account: %v", err)
 			return nil, huma.Error500InternalServerError("failed to save account")
 		}
 
 		return nil, nil
 	})
+}
+
+func (h *OAuthHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	memberCount, err := h.db.NewSelect().
+		Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to check workspace access")
+	}
+	if memberCount == 0 {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
+	return nil
 }
 
 func (h *OAuthHandler) ListAccounts(api huma.API) {
